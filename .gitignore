@@ -5,6 +5,8 @@ Move.lock
 
 # Node / JS
 node_modules/
+dist/
+
 
 # OS generated files
 .DS_Store

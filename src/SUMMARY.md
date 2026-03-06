@@ -62,6 +62,10 @@
 - [Chapter 34: 技术架构与开发部署](chapter-34.md)
 - [Chapter 35: dApp 集成实战](chapter-35.md)
 
+# 实战案例与 dApp 运行指南
+
+- [运行指南: 如何启动案例 dApp](code/README.md)
+
 # 初级案例（Example 1-3）——基础组件应用
 
 - [Example 1: 炮塔白名单](example-01.md)
