@@ -6,6 +6,39 @@
 
 ---
 
+> 状态：基础章节。正文以 Move 语言、对象模型和最小示例为主。
+
+## 前置依赖
+
+- 建议先读 [Chapter 1](./chapter-01.md)
+- 建议先读 [Chapter 2](./chapter-02.md)
+
+## 源码位置
+
+- [book/src/code/chapter-03](./code/chapter-03)
+
+## 关键测试文件
+
+- 当前目录以示例和片段为主；可优先对照 `sources/` 与 `snippets/`。
+
+## 推荐阅读顺序
+
+1. 先读对象模型与 abilities
+2. 再打开 [book/src/code/chapter-03](./code/chapter-03) 对照最小模块
+3. 最后用本章概念回看后续 Chapter 6/7
+
+## 验证步骤
+
+1. 能解释 `key/store/copy/drop` 的含义
+2. 能分辨对象 ID、共享对象和能力对象
+3. 能读懂 `chapter-03` 里的最小 Move 模块
+
+## 常见报错
+
+- 把 Move 资源对象当成 Solidity 风格的账户余额来理解
+
+---
+
 ## 3.1 Move 语言概览
 
 Move 是 Sui 使用的智能合约语言，专为数字资产安全设计。它最大的特点是：**资产是一等公民**，语言层面就保证了资产不会被意外复制或丢失。

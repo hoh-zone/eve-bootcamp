@@ -6,6 +6,39 @@
 
 ---
 
+> 状态：工程章节。正文以赞助交易、服务端校验和链上链下协同为主。
+
+## 前置依赖
+
+- 建议先读 [Chapter 4](./chapter-04.md)
+- 建议先读 [Chapter 5](./chapter-05.md)
+
+## 源码位置
+
+- [book/src/code/chapter-11](./code/chapter-11)
+
+## 关键测试文件
+
+- 当前目录以赞助交易片段为主；建议与 Chapter 35 的前端接入一起验证。
+
+## 推荐阅读顺序
+
+1. 先读赞助交易角色分工
+2. 再对照 [book/src/code/chapter-11](./code/chapter-11)
+3. 最后和 [Chapter 35](./chapter-35.md) 一起看完整链路
+
+## 验证步骤
+
+1. 能解释 sender 与 gas owner 分离后的签名顺序
+2. 能说清服务器需要验证什么业务条件
+3. 能将本章与位置证明、保险理赔等案例串起来
+
+## 常见报错
+
+- 把服务器签名和赞助交易混为一件事，导致边界模糊
+
+---
+
 ## 11.1 什么是赞助交易？
 
 在普通的 Sui 交易中，**发起者**（Sender）和 **Gas 付款人**（Gas Owner）是同一个人。赞助交易允许这两个角色分离：
@@ -349,6 +382,6 @@ const result = await signAndExecuteSponsoredTransaction({
 
 ## 📚 延伸阅读
 
-- [Interfacing with the World](../smart-contracts/interfacing-with-the-eve-frontier-world.md)
+- [Interfacing with the World](https://github.com/evefrontier/builder-documentation/blob/main/smart-contracts/interfacing-with-the-eve-frontier-world.md)
 - [Sui 赞助交易文档](https://docs.sui.io/guides/developer/advanced/sponsored-transactions)
-- [ownership-model.md](../smart-contracts/ownership-model.md)
+- [ownership-model.md](https://github.com/evefrontier/builder-documentation/blob/main/smart-contracts/ownership-model.md)

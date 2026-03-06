@@ -6,6 +6,39 @@
 
 ---
 
+> 状态：教学示例章节。正文以位置隐私、服务器证明和未来 ZK 方向为主。
+
+## 前置依赖
+
+- 建议先读 [Chapter 11](./chapter-11.md)
+- 建议先读 [Chapter 13](./chapter-13.md)
+
+## 源码位置
+
+- [book/src/code/chapter-15](./code/chapter-15)
+
+## 关键测试文件
+
+- 当前目录以位置相关片段为主；协议验收请结合本章新增的消息体和失败场景。
+
+## 推荐阅读顺序
+
+1. 先读位置哈希与服务器签名模式
+2. 再打开 [book/src/code/chapter-15](./code/chapter-15) 对照片段
+3. 最后结合本章协议闭环和 [Chapter 25](./chapter-25.md)
+
+## 验证步骤
+
+1. 能描述位置证明从客户端到链上的完整消息流
+2. 能列出至少三个失败场景及其防御方式
+3. 能判断何时需要服务器证明、何时可以迁移到 ZK
+
+## 常见报错
+
+- 只在链上校验赞助者地址，不校验具体 payload、时间窗和对象绑定
+
+---
+
 ## 15.1 空间游戏的链上挑战
 
 一个传统MMORPG游戏中，位置信息由游戏服务器统一管理。在链上，这带来两个矛盾：
@@ -75,6 +108,99 @@ public fun link_gates(
     // ...
 }
 ```
+
+### 15.3.1 建议的最小证明消息体
+
+不要把“附近证明”做成一个只有服务器自己看得懂的黑盒字节串。最小可落地的 payload 至少要绑定以下字段：
+
+```json
+{
+  "proof_type": "assembly_proximity",
+  "player": "0xPLAYER",
+  "assembly_id": "0xASSEMBLY",
+  "location_hash": "0xHASH",
+  "max_distance_m": 20000,
+  "issued_at_ms": 1735689600000,
+  "expires_at_ms": 1735689660000,
+  "nonce": "4d2f1c..."
+}
+```
+
+每个字段的职责：
+
+- `player`：防止别的玩家复用证明
+- `assembly_id`：防止把 A 星门的证明拿去调用 B 星门
+- `location_hash`：把链上当前位置状态绑定进证明
+- `issued_at_ms` / `expires_at_ms`：限制重放窗口
+- `nonce`：防止同一窗口内多次重放
+
+### 15.3.2 服务端签名与链上校验的最小闭环
+
+链下服务至少要做两件事：先验证真实坐标关系，再对明确的 payload 签名。
+
+```ts
+type ProximityProofPayload = {
+  proofType: "assembly_proximity";
+  player: string;
+  assemblyId: string;
+  locationHash: string;
+  maxDistanceM: number;
+  issuedAtMs: number;
+  expiresAtMs: number;
+  nonce: string;
+};
+
+async function issueProximityProof(input: {
+  player: string;
+  assemblyId: string;
+  expectedHash: string;
+}) {
+  const location = await getPlayerLocationFromGameServer(input.player);
+  const assembly = await getAssemblyLocation(input.assemblyId);
+
+  assert(hash(location) === input.expectedHash);
+  assert(distance(location, assembly) <= 20_000);
+
+  const payload: ProximityProofPayload = {
+    proofType: "assembly_proximity",
+    player: input.player,
+    assemblyId: input.assemblyId,
+    locationHash: input.expectedHash,
+    maxDistanceM: 20_000,
+    issuedAtMs: Date.now(),
+    expiresAtMs: Date.now() + 60_000,
+    nonce: crypto.randomUUID(),
+  };
+
+  return signPayload(payload);
+}
+```
+
+链上侧至少要校验四层：
+
+```move
+// 简化伪代码：真实实现应把 payload 反序列化后逐字段比对
+public fun verify_proximity_proof(
+    assembly_id: ID,
+    expected_player: address,
+    expected_hash: vector<u8>,
+    proof_bytes: vector<u8>,
+    admin_acl: &AdminACL,
+    clock: &Clock,
+    ctx: &TxContext,
+) {
+    verify_sponsor(admin_acl, ctx);
+
+    let payload = decode_proximity_payload(proof_bytes);
+    assert!(payload.assembly_id == assembly_id, EWrongAssembly);
+    assert!(payload.player == expected_player, EWrongPlayer);
+    assert!(payload.location_hash == expected_hash, EWrongLocationHash);
+    assert!(clock.timestamp_ms() <= payload.expires_at_ms, EProofExpired);
+    assert!(check_and_consume_nonce(payload.nonce), EReplay);
+}
+```
+
+这里真正重要的是：`verify_sponsor(admin_acl, ctx)` 只证明“这笔交易来自授权服务端”，还不够证明“这条位置声明本身是针对当前对象、当前玩家、当前时间窗的”。
 
 ---
 
@@ -162,9 +288,19 @@ client.subscribeEvent({
 - 理论上可以证明任意复杂的空间关系
 
 **实际开发建议**：
-- 当前阶段，与服务器集成时设计好接口（见 Chapter 11）
-- 合约中用 `AdminACL.verify_sponsor()` 作为验证占位符
-- 未来 ZK 上线后，只需改变验证机制，业务逻辑不变
+- 当前阶段，与服务器集成时就把 payload 结构、时间窗、nonce 和对象绑定设计清楚（见 Chapter 11）
+- `AdminACL.verify_sponsor()` 只能当“来源验证”的一层，不能替代 payload 校验
+- 未来 ZK 上线后，尽量只替换“证明机制”，不要重写上层业务状态机
+
+### 15.5.1 失败场景与防御清单
+
+| 失败场景 | 典型原因 | 最小防御 |
+|------|------|------|
+| 重放证明 | payload 没有 `nonce` 或过期时间 | 加 `nonce` + 短有效期 + 链上消费 |
+| 错对象复用 | 证明没有绑定 `assembly_id` | payload 强绑定目标对象 |
+| 错人复用 | 证明没有绑定 `player` | payload 强绑定调用者地址 |
+| 旧位置复用 | 没有绑定 `location_hash` | 把当前链上哈希写入 payload |
+| 服务端时钟偏差 | 过期判断不一致 | 用链上 `Clock` 做最终裁决 |
 
 ---
 
@@ -220,6 +356,6 @@ async function getAssemblyDisplayInfo(assemblyId: string): Promise<AssemblyDispl
 
 ## 📚 延伸阅读
 
-- [EVE World Explainer - Privacy](../smart-contracts/eve-frontier-world-explainer.md#privacy-location-obfuscation)
+- [EVE World Explainer - Privacy](https://github.com/evefrontier/builder-documentation/blob/main/smart-contracts/eve-frontier-world-explainer.md#privacy-location-obfuscation)
 - [Sui ZK Login（相关 ZK 技术背景）](https://docs.sui.io/concepts/cryptography/zklogin)
-- [Constraints 文档](../welcome/contstraints.md)
+- [Constraints 文档](https://github.com/evefrontier/builder-documentation/blob/main/welcome/contstraints.md)

@@ -6,6 +6,39 @@
 
 ---
 
+> 状态：设计进阶章节。正文以 OwnerCap、委托与所有权生命周期为主。
+
+## 前置依赖
+
+- 建议先读 [Chapter 3](./chapter-03.md)
+- 建议先读 [Chapter 4](./chapter-04.md)
+
+## 源码位置
+
+- [book/src/code/chapter-06](./code/chapter-06)
+
+## 关键测试文件
+
+- 当前目录以所有权片段为主；建议重点对照 `snippets/`。
+
+## 推荐阅读顺序
+
+1. 先读 OwnerCap 生命周期
+2. 再打开 [book/src/code/chapter-06](./code/chapter-06) 对照 Borrow-Use-Return 片段
+3. 最后回看 [Chapter 30](./chapter-30.md) 的访问控制源码精读
+
+## 验证步骤
+
+1. 能画出 OwnerCap 借出和归还链路
+2. 能区分所有权转移与临时借用
+3. 能识别不安全的权限设计
+
+## 常见报错
+
+- 借出能力对象后忘记归还，导致后续事务逻辑不成立
+
+---
+
 ## 6.1 为什么要有专门的所有权模型？
 
 在传统区块链（如 Ethereum），所有权验证通常是：
@@ -261,8 +294,8 @@ sui keytool multi-sig-address \
 
 ## 📚 延伸阅读
 
-- [Ownership Model 文档](../smart-contracts/ownership-model.md)
-- [Smart Character 文档](../smart-assemblies/smart-character.md)
+- [Ownership Model 文档](https://github.com/evefrontier/builder-documentation/blob/main/smart-contracts/ownership-model.md)
+- [Smart Character 文档](https://github.com/evefrontier/builder-documentation/blob/main/smart-assemblies/smart-character.md)
 - [character.move 源码](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/character/character.move)
 - [Sui 多签文档](https://docs.sui.io/guides/developer/cryptography/multisig)
 - [Receiving 对象模式](https://docs.sui.io/guides/developer/objects/transfers/transfer-to-object)

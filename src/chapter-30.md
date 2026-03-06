@@ -4,6 +4,71 @@
 
 ---
 
+> 状态：教学示例。访问控制细节较多，建议直接对照源码与测试逐段阅读，而不是只看概念图。
+
+## 前置依赖
+
+- 建议先读 [Chapter 6](./chapter-06.md)、[Chapter 11](./chapter-11.md)
+- 需要熟悉 `OwnerCap`、`AdminACL`、shared object、object-owned object
+
+## 源码位置
+
+- [access_control.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/access/access_control.move)
+
+## 关键测试文件
+
+- [access_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/tests/access/access_tests.move)
+
+## 推荐阅读顺序
+
+1. 先看 [access_control.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/access/access_control.move) 的能力对象定义
+2. 再看 [access_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/tests/access/access_tests.move) 理解正反授权路径
+3. 最后回到业务模块检查自己究竟需要 `ctx.sender()`、`OwnerCap` 还是 `AdminACL`
+
+## 最小调用链
+
+`调用入口 -> 权限对象/授权列表校验 -> 借出或消费 capability -> 执行业务动作 -> 归还或销毁能力对象`
+
+## 验证步骤
+
+1. 进入 [world-contracts/contracts/world](https://github.com/evefrontier/world-contracts/tree/main/contracts/world)
+2. 运行 `sui move test access`
+3. 对照测试逐项检查 owner、governor、server sponsor、receiving 模式
+
+## 常见报错
+
+- 误把 `ctx.sender()` 当成唯一权限来源
+- 借出了 `OwnerCap` 却没有按 Borrow-Use-Return 归还
+- object-owned 资产仍按 address-owned 方式做校验
+
+## 对应代码目录
+
+- [world-contracts/contracts/world](https://github.com/evefrontier/world-contracts/tree/main/contracts/world)
+
+## 关键 Struct
+
+| 类型 | 作用 | 阅读重点 |
+|------|------|------|
+| `AdminACL` | 服务器授权白名单 | 看 sponsor 白名单如何维护 |
+| `GovernorCap` | 系统级最高权限能力 | 看哪些动作必须走 governor 而不是 owner |
+| `OwnerCap<T>` | 泛型所有权凭证 | 看借出、归还、转移三种生命周期 |
+| `Receiving` 相关模式 | 安全借用 object-owned 资产 | 看 object-owned 和 address-owned 的差异 |
+| `ServerAddressRegistry` | 服务端地址注册表 | 看签名身份和业务权限如何串起来 |
+
+## 关键入口函数
+
+| 入口 | 作用 | 你要确认什么 |
+|------|------|------|
+| `verify_sponsor` | 校验提交者是否在服务器白名单 | 它解决的是身份来源，不是全部业务约束 |
+| `borrow_owner_cap` / `return_owner_cap` | 借出与归还所有权凭证 | 是否严格遵守 Borrow-Use-Return |
+| governor / registry 管理入口 | 维护系统级权限配置 | 是否把系统管理权限错误下放给普通 owner |
+
+## 最容易误读的点
+
+- `ctx.sender()` 在 EVE Frontier 里通常不够用，很多场景必须看 capability 或 sponsor
+- `OwnerCap<T>` 不是一次性消耗品，很多时候是临时借用后再归还
+- object-owned 资产不能照搬 address-owned 的权限判断方式
+
 ## 1. 为什么访问控制系统复杂？
 
 传统智能合约的权限通常只有两层：owner（所有者）和 public（公开）。EVE Frontier 需要更精密的控制：

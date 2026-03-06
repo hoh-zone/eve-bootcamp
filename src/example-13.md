@@ -6,6 +6,51 @@
 
 ---
 
+> 状态：教学示例。正文聚焦订阅模型，完整目录以 `book/src/code/example-13/` 为准。
+
+## 前置依赖
+
+- 建议先读 [Example 2](./example-02.md)、[Chapter 14](./chapter-14.md)
+- 需要本地 `sui` CLI 与 `pnpm`
+- 需要一个可连钱包的前端开发环境
+
+## 对应代码目录
+
+- [example-13](./code/example-13)
+- [example-13/dapp](./code/example-13/dapp)
+
+## 源码位置
+
+- [Move.toml](./code/example-13/Move.toml)
+- [gate_pass.move](./code/example-13/sources/gate_pass.move)
+- [dapp/readme.md](./code/example-13/dapp/readme.md)
+
+## 关键测试文件
+
+- 当前目录未附独立 Move 测试；建议优先补购买、过期、续费、转让四条路径
+
+## 推荐阅读顺序
+
+1. 先看 `Move.toml`
+2. 再读 [gate_pass.move](./code/example-13/sources/gate_pass.move)
+3. 最后启动 dApp 验证购买与续费
+
+## 最小调用链
+
+`选择套餐 -> 支付订阅费 -> 铸造/更新 GatePassNFT -> 星门校验 pass 是否有效`
+
+## 验证步骤
+
+1. 在 [example-13](./code/example-13) 运行 `sui move build`
+2. 在 [example-13/dapp](./code/example-13/dapp) 运行 `pnpm install && pnpm dev`
+3. 验证月票、季票、过期后的限制逻辑
+
+## 常见报错
+
+- 套餐价格单位与前端显示单位不一致
+- 续费逻辑直接重铸，导致旧 pass 状态丢失
+- 星门侧验证仍按“按次付费”路径执行
+
 ## 需求分析
 
 **场景：** 你的联盟控制 5 个星门，希望建立月度会员制：

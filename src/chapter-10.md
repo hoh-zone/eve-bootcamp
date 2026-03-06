@@ -6,6 +6,39 @@
 
 ---
 
+> 状态：发布与运营章节。正文以上线流程、维护和 Builder 协作为主。
+
+## 前置依赖
+
+- 建议先读 [Chapter 4](./chapter-04.md)
+- 建议先读 [Chapter 9](./chapter-09.md)
+
+## 源码位置
+
+- [book/src/code/chapter-10](./code/chapter-10)
+
+## 关键测试文件
+
+- 当前目录以发布片段为主；重点是发布前验收清单。
+
+## 推荐阅读顺序
+
+1. 先读发布 checklist
+2. 再对照 [book/src/code/chapter-10](./code/chapter-10) 中的片段
+3. 最后把本章与 [Chapter 23](./chapter-23.md) 的产品化章节一起理解
+
+## 验证步骤
+
+1. 能列出上线前必须完成的 3-5 个验收动作
+2. 能描述升级、回滚和沟通的基本策略
+3. 能识别哪些事项应写进发布文档
+
+## 常见报错
+
+- 把“发布成功”等同于“产品完成”，忽略后续运维和社区协作
+
+---
+
 ## 10.1 发布 checklist 全览
 
 从本地开发到正式上线，需要经历以下阶段：
@@ -301,7 +334,7 @@ git checkout -b feat/add-auction-tutorial
 
 ## 📚 延伸阅读
 
-- [Builder 约束文档](../welcome/contstraints.md)
-- [Contributing Guide](../CONTRIBUTING.md)
+- [Builder 约束文档](https://github.com/evefrontier/builder-documentation/blob/main/welcome/contstraints.md)
+- [Contributing Guide](https://github.com/evefrontier/builder-documentation/blob/main/CONTRIBUTING.md)
 - [Sui Package 升级](https://docs.sui.io/guides/developer/packages/upgrade)
 - [EVE Frontier 开发路线图（community channels）]

@@ -6,6 +6,58 @@
 
 ---
 
+> 状态：教学示例。正文强调理赔流程与资金池设计，完整目录以 `book/src/code/example-15/` 为准。
+
+## 前置依赖
+
+- 建议先读 [Chapter 11](./chapter-11.md)、[Chapter 25](./chapter-25.md)
+- 需要本地 `sui` CLI 与 `pnpm`
+- 需要理解 `AdminACL` 与链下证明流
+
+## 对应代码目录
+
+- [example-15](./code/example-15)
+- [example-15/dapp](./code/example-15/dapp)
+
+## 源码位置
+
+- [Move.toml](./code/example-15/Move.toml)
+- [pvp_shield.move](./code/example-15/sources/pvp_shield.move)
+- [dapp/readme.md](./code/example-15/dapp/readme.md)
+
+## 关键测试文件
+
+- [tests/README.md](./code/example-15/tests/README.md)
+
+## 推荐阅读顺序
+
+1. 先看 `Move.toml`
+2. 再读 [pvp_shield.move](./code/example-15/sources/pvp_shield.move)
+3. 最后启动 dApp 验证报价和投保交互
+
+## 最小调用链
+
+`用户购买保单 -> 服务器出具战损证明 -> 合约验证保单与签名 -> 保险池赔付`
+
+## 验证步骤
+
+1. 在 [example-15](./code/example-15) 运行 `sui move build`
+2. 在 [example-15/dapp](./code/example-15/dapp) 运行 `pnpm install && pnpm dev`
+3. 验证投保、有效期内理赔、过期理赔失败
+
+## 常见报错
+
+- 理赔证明没有绑定具体保单或物品 ID
+- 赔付比例和保费计算单位不一致
+- 前端只展示保额，没有同步显示赔付上限与保费来源
+
+## 测试闭环
+
+- 投保成功：确认 `claims_pool` / `reserve` 的 70/30 分账正确
+- 有效期内理赔：确认赔付金额等于 `coverage_amount`
+- 过期拒赔：确认过期保单无法再次发起理赔
+- 理赔池不足：确认不会发生负余额或重复扣款
+
 ## 需求分析
 
 **场景：** 玩家带着价值 500 SUI 的稀有护盾出征 PvP。他花 15 SUI 购买 30 天物品险，若战斗中护盾被摧毁：

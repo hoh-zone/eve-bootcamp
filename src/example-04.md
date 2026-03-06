@@ -6,6 +6,52 @@
 
 ---
 
+> 状态：已映射到本地代码目录。正文以任务状态和条件星门解耦为核心，适合做权限型玩法入口。
+
+## 前置依赖
+
+- 建议先读 [Chapter 7](./chapter-07.md)、[Chapter 13](./chapter-13.md)
+- 需要本地 `sui` CLI 与 `pnpm`
+
+## 对应代码目录
+
+- [example-04](./code/example-04)
+- [example-04/dapp](./code/example-04/dapp)
+
+## 源码位置
+
+- [Move.toml](./code/example-04/Move.toml)
+- [registry.move](./code/example-04/sources/registry.move)
+- [quest_gate.move](./code/example-04/sources/quest_gate.move)
+- [dapp/readme.md](./code/example-04/dapp/readme.md)
+
+## 关键测试文件
+
+- [tests/README.md](./code/example-04/tests/README.md)
+
+## 推荐阅读顺序
+
+1. 先看任务注册与状态存储
+2. 再读星门如何读取任务完成状态
+3. 最后启动 dApp 验证任务进度追踪
+
+## 最小调用链
+
+`注册任务 -> 玩家完成任务 -> 链上记录状态 -> 星门读取任务状态 -> 放行或拒绝`
+
+## 验证步骤
+
+1. 在 [example-04](./code/example-04) 运行 `sui move build`
+2. 在 [example-04/dapp](./code/example-04/dapp) 运行 `pnpm install && pnpm dev`
+3. 按测试矩阵验证任务完成和条件放行
+
+## 常见报错
+
+- 任务状态写在一个合约里，星门却读取另一份状态
+- 前端显示完成，但链上状态未真正更新
+
+---
+
 ## 需求分析
 
 **场景：** 你运营着一个星门，通向一个高价值矿区。想要进入的玩家必须先完成一系列"入会考核"：
@@ -420,4 +466,4 @@ dApp 层
 
 - [Chapter 6：OwnerCap 与 Keychain](./chapter-06.md)
 - [Chapter 7：位标志与 Table](./chapter-07.md)
-- [Smart Gate 文档](../smart-assemblies/gate/README.md)
+- [Smart Gate 文档](https://github.com/evefrontier/builder-documentation/blob/main/smart-assemblies/gate/README.md)

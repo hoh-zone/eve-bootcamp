@@ -6,6 +6,39 @@
 
 ---
 
+> 状态：集成章节。正文以游戏内 WebView、浮层 UI 和事件通信为主。
+
+## 前置依赖
+
+- 建议先读 [Chapter 5](./chapter-05.md)
+- 建议先读 [Chapter 11](./chapter-11.md)
+
+## 源码位置
+
+- 当前章无独立代码目录；建议直接结合 [Example 17](./example-17.md) 与其 dApp 代码。
+
+## 关键测试文件
+
+- 本章以集成链路为主，无独立测试文件。
+
+## 推荐阅读顺序
+
+1. 先读外部浏览器与游戏内浮层的差异
+2. 再结合 [Example 17](./example-17.md) 的 dApp 代码
+3. 最后回看消息通信与钱包签名的切换点
+
+## 验证步骤
+
+1. 能描述 `postMessage`、浮层状态和签名请求如何衔接
+2. 能分辨哪些页面适合放在游戏内，哪些应保留外部浏览器
+3. 能为自己的 dApp 设计最小游戏内入口
+
+## 常见报错
+
+- 把完整后台面板直接塞进游戏内浮层，忽略交互上下文
+
+---
+
 ## 21.1 两种 dApp 访问模式
 
 EVE Frontier 支持两种访问你的 dApp 的方式：
@@ -314,7 +347,7 @@ https://your-dapp.com?env=ingame
 
 ## 📚 延伸阅读
 
-- [dapp-kit 文档](../dapp-kit/dapp-kit.md)
-- [EVE Vault 介绍](../eve-vault/introduction-to-eve-vault.md)
+- [dapp-kit 文档](https://github.com/evefrontier/builder-documentation/blob/main/dapp-kit/dapp-kit.md)
+- [EVE Vault 介绍](https://github.com/evefrontier/builder-documentation/blob/main/eve-vault/introduction-to-eve-vault.md)
 - [Chapter 5：dApp 前端开发](./chapter-05.md)
 - [Chapter 18：全栈 dApp 架构](./chapter-18.md)

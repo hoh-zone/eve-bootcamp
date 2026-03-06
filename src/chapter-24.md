@@ -4,6 +4,73 @@
 
 ---
 
+> 状态：教学示例。正文代码为便于讲解而做了精简，源码验收请以仓库内实际 `world-contracts` 文件为准。
+
+## 前置依赖
+
+- 先理解 Sui 对象模型、`Shared Object`、`derived_object`
+- 建议先读 [Chapter 6](./chapter-06.md) 与 [Chapter 25](./chapter-25.md)
+- 本章默认你已能进入 [world-contracts/contracts/world](https://github.com/evefrontier/world-contracts/tree/main/contracts/world)
+
+## 源码位置
+
+- [killmail.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/killmail/killmail.move)
+- [killmail_registry.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/registry/killmail_registry.move)
+
+## 关键测试文件
+
+- [killmail_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/tests/killmail/killmail_tests.move)
+- [killmail_registry_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/tests/registry/killmail_registry_tests.move)
+
+## 推荐阅读顺序
+
+1. 先看 [killmail_registry.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/registry/killmail_registry.move) 理解注册表职责
+2. 再看 [killmail.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/killmail/killmail.move) 读创建流程
+3. 最后跑 [killmail_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/tests/killmail/killmail_tests.move) 对照断言
+
+## 最小调用链
+
+`游戏服务器 -> AdminACL 校验 -> create_killmail -> derived_object::claim -> share_object -> emit event`
+
+## 验证步骤
+
+1. 进入 [world-contracts/contracts/world](https://github.com/evefrontier/world-contracts/tree/main/contracts/world)
+2. 运行 `sui move test killmail`
+3. 对照测试中注册表、防重放、重复 key 报错的断言回看正文
+
+## 常见报错
+
+- `EKillmailAlreadyExists`：同一个业务 key 被重复创建
+- `verify_sponsor` 失败：提交者不在 `AdminACL` 授权列表
+- `tenant/item_id` 取值不一致：链下业务 ID 与链上映射规则没有对齐
+
+## 对应代码目录
+
+- [world-contracts/contracts/world](https://github.com/evefrontier/world-contracts/tree/main/contracts/world)
+
+## 关键 Struct
+
+| 类型 | 作用 | 阅读重点 |
+|------|------|------|
+| `Killmail` | 链上击杀记录共享对象 | 看唯一 key、时间戳、击杀双方与发生地如何落盘 |
+| `LossType` | 区分飞船/建筑损失 | 看它如何影响上层业务解释 |
+| `KillmailRegistry` | 注册表与索引入口 | 看它如何避免重复创建、如何定位记录 |
+| `TenantItemId` | 游戏内对象到链上映射键 | 看 tenant + item_id 如何形成稳定业务键 |
+
+## 关键入口函数
+
+| 入口 | 作用 | 你要确认什么 |
+|------|------|------|
+| `create_killmail` | 创建击杀记录 | 是否先做 sponsor 校验、唯一性校验、防重放 |
+| `derived_object::claim` 相关路径 | 生成确定性对象 ID | 业务 key 是否稳定、是否会被重复 claim |
+| registry 读写入口 | 建立查找关系 | Registry 是否只是索引，而不是记录本体 |
+
+## 最容易误读的点
+
+- `Killmail` 不是单纯事件日志，而是可查询、可索引的共享对象
+- `Registry` 不是为了“多存一份数据”，而是为了稳定检索和唯一性约束
+- 唯一性来自业务 key + `derived_object` 路径，不是随手生成一个新 UID 就完事
+
 ## 2.1 什么是 KillMail？
 
 在 EVE Frontier 中，每一次玩家对玩家（PvP）的击杀事件都会在链上生成一条不可篡改的记录，称为 **KillMail（击杀邮件）**。这不只是一个日志——它是一个具有唯一对象 ID 的共享对象，任何人都可以在链上查询。

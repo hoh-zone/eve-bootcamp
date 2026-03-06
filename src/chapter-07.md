@@ -6,6 +6,39 @@
 
 ---
 
+> 状态：设计进阶章节。正文以泛型、动态字段、事件和 Table/VecMap 为主。
+
+## 前置依赖
+
+- 建议先读 [Chapter 3](./chapter-03.md)
+- 建议先读 [Chapter 6](./chapter-06.md)
+
+## 源码位置
+
+- [book/src/code/chapter-07](./code/chapter-07)
+
+## 关键测试文件
+
+- 当前目录以 `auction.move` 与片段为主；建议用本地 `sui move build` 做结构验证。
+
+## 推荐阅读顺序
+
+1. 先读泛型与动态字段
+2. 再对照 [book/src/code/chapter-07](./code/chapter-07)
+3. 最后把事件和数据结构映射到后续案例
+
+## 验证步骤
+
+1. 能说清何时用 Table、VecMap、动态字段
+2. 能读懂 `auction.move` 的基本状态存储
+3. 能识别事件适合承载什么信息
+
+## 常见报错
+
+- 把历史记录无限堆进单个对象，导致读写与 Gas 成本失控
+
+---
+
 ## 7.1 泛型（Generics）
 
 泛型让你的代码可以适用于多种类型，同时保持类型安全。这在 EVE Frontier 的 OwnerCap 中被广泛使用。

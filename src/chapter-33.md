@@ -4,6 +4,53 @@
 
 ---
 
+> 状态：源码导读。密码学细节以 EVE Vault 当前实现和 Sui zkLogin 机制为准，正文偏重架构理解。
+
+## 前置依赖
+
+- 了解 OAuth、JWT、临时密钥对、Sui 地址派生
+- 建议先读 [术语表](./glossary.md) 中 `zkLogin`、`Epoch`
+- 需要能打开 [evevault](https://github.com/evefrontier/evevault) 仓库
+
+## 源码位置
+
+- [evevault/README.md](https://github.com/evefrontier/evevault/blob/main/README.md)
+- [zkProof.ts](https://github.com/evefrontier/evevault/blob/main/packages/shared/src/wallet/zkProof.ts)
+- [authConfig.ts](https://github.com/evefrontier/evevault/blob/main/packages/shared/src/auth/authConfig.ts)
+- [useAuth.ts](https://github.com/evefrontier/evevault/blob/main/packages/shared/src/auth/hooks/useAuth.ts)
+- [LoginScreen.tsx](https://github.com/evefrontier/evevault/blob/main/apps/web/src/features/auth/components/LoginScreen.tsx)
+- [CallbackScreen.tsx](https://github.com/evefrontier/evevault/blob/main/apps/web/src/features/auth/components/CallbackScreen.tsx)
+
+## 关键测试文件
+
+- [authStore.logout.test.ts](https://github.com/evefrontier/evevault/blob/main/packages/shared/src/auth/stores/__tests__/authStore.logout.test.ts)
+
+## 推荐阅读顺序
+
+1. 先看 [evevault/README.md](https://github.com/evefrontier/evevault/blob/main/README.md)
+2. 再读 `authConfig.ts`、`useAuth.ts`
+3. 最后看 `zkProof.ts` 与登录/回调页面
+
+## 最小调用链
+
+`FusionAuth/OAuth 登录 -> 回调拿 code -> 交换 token -> 派生 zkLogin 地址 -> 保存登录态 -> 钱包可签名`
+
+## 验证步骤
+
+1. 打开 [evevault](https://github.com/evefrontier/evevault) 的 README 与 docs
+2. 对照登录页面与回调页面追踪 code exchange 流程
+3. 重点核对 proof、salt、maxEpoch 三个概念在实现里的位置
+
+## 常见报错
+
+- OAuth 回调地址与配置不一致
+- proof 过期但前端仍使用旧登录态
+- 把钱包地址派生逻辑和用户会话逻辑混在一起，难以定位问题
+
+## 对应代码目录
+
+- [evevault](https://github.com/evefrontier/evevault)
+
 ## 1. EVE Vault 是什么？
 
 EVE Vault 是 EVE Frontier 的专属 **Chrome 浏览器扩展钱包**，基于以下技术栈构建：

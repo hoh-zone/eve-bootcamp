@@ -4,6 +4,72 @@
 
 ---
 
+> 状态：已映射到官方示例目录。正文是结构化讲解，建议边读边打开扩展示例源码。
+
+## 前置依赖
+
+- 建议先读 [Chapter 4](./chapter-04.md)、[Chapter 24](./chapter-24.md)、[Chapter 31](./chapter-31.md)
+- 需要理解 `Typed Witness`、`AdminCap`、动态字段配置
+
+## 源码位置
+
+- [config.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/extension_examples/sources/config.move)
+- [tribe_permit.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/extension_examples/sources/tribe_permit.move)
+- [corpse_gate_bounty.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/extension_examples/sources/corpse_gate_bounty.move)
+- [turret.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/extension_examples/sources/turret.move)
+
+## 关键测试文件
+
+- [gate_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/extension_examples/tests/gate_tests.move)
+
+## 推荐阅读顺序
+
+1. 先看 [config.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/extension_examples/sources/config.move)
+2. 再看 `tribe_permit` 与 `corpse_gate_bounty` 两个 Gate 示例
+3. 最后对照 [gate_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/extension_examples/tests/gate_tests.move) 理解授权与配置写法
+
+## 最小调用链
+
+`authorize_extension<XAuth> -> 写入 ExtensionConfig -> 业务入口校验规则 -> 调用 World Assembly API`
+
+## 验证步骤
+
+1. 进入 [extension_examples](https://github.com/evefrontier/world-contracts/tree/main/contracts/extension_examples)
+2. 运行 `sui move test`
+3. 重点观察 `config.move` 如何把规则和 witness 绑在一起
+
+## 常见报错
+
+- witness 类型不一致，导致授权过的扩展无法调用
+- 规则写进配置对象了，但入口函数没有读取同一个 key
+- 没有把共享配置和 AdminCap 初始化完整
+
+## 对应代码目录
+
+- [world-contracts/contracts/extension_examples](https://github.com/evefrontier/world-contracts/tree/main/contracts/extension_examples)
+
+## 关键 Struct
+
+| 类型 | 作用 | 阅读重点 |
+|------|------|------|
+| `AdminCap` | 配置扩展规则的管理能力 | 看谁能写配置、谁只能读配置 |
+| `XAuth` / witness 类型 | 绑定扩展授权身份 | 看 witness 类型如何成为扩展开关 |
+| 配置对象 / 动态字段键 | 保存扩展规则 | 看规则 key 与业务入口读取是否一致 |
+
+## 关键入口函数
+
+| 入口 | 作用 | 你要确认什么 |
+|------|------|------|
+| `authorize_extension<XAuth>` | 把 witness 授权到 World 建筑 | 授权类型和扩展包类型是否完全一致 |
+| 配置写入入口 | 初始化 tribe / bounty 等规则 | 写入 key 和读取 key 是否匹配 |
+| 扩展业务入口 | 实际执行业务规则 | 是否只读自己配置，不假设 World 内核被改写 |
+
+## 最容易误读的点
+
+- Extension 模式不是“改 World 合约源码”，而是通过 witness 和配置对象挂接行为
+- 授权成功不代表业务就能跑，配置 key 不一致一样会读不到规则
+- witness 类型一旦写错，问题通常不在逻辑，而在授权链本身
+
 ## 1. Extension 模式是什么？
 
 EVE Frontier 的 Builder 扩展系统允许任何开发者修改游戏建筑（Gate、Turret、StorageUnit 等）的行为，而无需修改 World 合约本身。

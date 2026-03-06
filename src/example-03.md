@@ -6,6 +6,52 @@
 
 ---
 
+> 状态：已附合约、dApp 与 Move 测试文件。正文已经接近完整案例，适合作为“定价策略 + 前端倒计时”范例。
+
+## 前置依赖
+
+- 建议先读 [Chapter 7](./chapter-07.md)、[Chapter 8](./chapter-08.md)
+- 需要本地 `sui` CLI 与 `pnpm`
+
+## 对应代码目录
+
+- [example-03](./code/example-03)
+- [example-03/dapp](./code/example-03/dapp)
+
+## 源码位置
+
+- [Move.toml](./code/example-03/Move.toml)
+- [auction.move](./code/example-03/sources/auction.move)
+- [auction_tests.move](./code/example-03/sources/auction_tests.move)
+- [dapp/readme.md](./code/example-03/dapp/readme.md)
+
+## 关键测试文件
+
+- [auction_tests.move](./code/example-03/sources/auction_tests.move)
+
+## 推荐阅读顺序
+
+1. 先看 `auction.move` 的价格递减公式
+2. 再读 `auction_tests.move` 校验成交与时间边界
+3. 最后启动 dApp 对照倒计时与价格展示
+
+## 最小调用链
+
+`Owner 创建拍卖 -> 时间递减价格 -> 买家支付当前价 -> 拍卖结算 -> 物品流转`
+
+## 验证步骤
+
+1. 在 [example-03](./code/example-03) 运行 `sui move build` 与 `sui move test`
+2. 在 [example-03/dapp](./code/example-03/dapp) 运行 `pnpm install && pnpm dev`
+3. 人工验证起拍价、最低价、成交后三类状态
+
+## 常见报错
+
+- 前端倒计时与链上当前价格计算不一致
+- 最后一秒竞价没有重新读取当前价格
+
+---
+
 ## 需求分析
 
 **场景：** 你控制着一个存储着珍稀矿石的智能存储箱。相比固定价格，你希望通过荷兰式拍卖（价格从高到低递减）来最大化销售收益，并让价格发现更加透明：
@@ -485,4 +531,4 @@ dApp 层
 
 - [Chapter 7：事件系统](./chapter-07.md#74-事件系统events)
 - [Chapter 8：定价策略](./chapter-08.md#84-动态定价策略)
-- [Smart Storage Unit](../smart-assemblies/storage-unit/README.md)
+- [Smart Storage Unit](https://github.com/evefrontier/builder-documentation/blob/main/smart-assemblies/storage-unit/README.md)

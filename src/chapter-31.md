@@ -4,6 +4,79 @@
 
 ---
 
+> 状态：已映射到本地脚手架目录。正文命令以本仓库现有 `builder-scaffold` 目录为准。
+
+## 前置依赖
+
+- Docker 或本机 `sui` CLI + Node.js 环境
+- 已能访问 [builder-scaffold](https://github.com/evefrontier/builder-scaffold) 与 [world-contracts](https://github.com/evefrontier/world-contracts)
+- 建议先读 [Chapter 4](./chapter-04.md) 与 [Chapter 28](./chapter-28.md)
+
+## 源码位置
+
+- [builder-scaffold/README.md](https://github.com/evefrontier/builder-scaffold/blob/main/README.md)
+- [builder-scaffold/docker/readme.md](https://github.com/evefrontier/builder-scaffold/blob/main/docker/readme.md)
+- [builder-scaffold/move-contracts/smart_gate/Move.toml](https://github.com/evefrontier/builder-scaffold/blob/main/move-contracts/smart_gate/Move.toml)
+- [config.move](https://github.com/evefrontier/builder-scaffold/blob/main/move-contracts/smart_gate/sources/config.move)
+- [tribe_permit.move](https://github.com/evefrontier/builder-scaffold/blob/main/move-contracts/smart_gate/sources/tribe_permit.move)
+- [corpse_gate_bounty.move](https://github.com/evefrontier/builder-scaffold/blob/main/move-contracts/smart_gate/sources/corpse_gate_bounty.move)
+
+## 关键测试文件
+
+- [gate_tests.move](https://github.com/evefrontier/builder-scaffold/blob/main/move-contracts/smart_gate/tests/gate_tests.move)
+
+## 推荐阅读顺序
+
+1. 先看 [builder-scaffold/README.md](https://github.com/evefrontier/builder-scaffold/blob/main/README.md) 与 Docker 文档
+2. 再读 `smart_gate` 的 `Move.toml`、`config.move`
+3. 最后看 `tribe_permit`、`corpse_gate_bounty` 和测试
+
+## 最小调用链
+
+`启动本地链 -> 编译 smart_gate -> 发布 -> 记录 package/object id -> 配置规则 -> 发 permit`
+
+## 验证步骤
+
+1. 启动 Docker 或本机本地链
+2. 进入 [builder-scaffold/move-contracts/smart_gate](https://github.com/evefrontier/builder-scaffold/tree/main/move-contracts/smart_gate)
+3. 运行 `sui move build -e testnet` 与 `sui move test -e testnet`
+4. 记录发布后的 package id 与配置对象 id
+
+## 发布后必须记录的产物
+
+第一次发布成功后，最容易丢的是对象 ID，而不是命令本身。建议至少记录这四类值：
+
+- `builder package id`
+- `world package id`
+- 关键共享对象 ID（如配置对象、registry、规则对象）
+- 当前发布网络与 `tenant` 名称
+
+推荐用一份最小发布记录表保存：
+
+| 字段 | 示例 | 后续用途 |
+|------|------|------|
+| `NETWORK` | `testnet` | 保证脚本和 dApp 走同一网络 |
+| `BUILDER_PACKAGE_ID` | `0x...` | TS 脚本、dApp 查询、升级 |
+| `WORLD_PACKAGE_ID` | `0x...` | World 依赖调用 |
+| `CONFIG_OBJECT_ID` | `0x...` | 后续配置规则和授权 |
+
+## Docker 与本机流程对照
+
+| 方案 | 优点 | 代价 | 适合场景 |
+|------|------|------|------|
+| Docker | 环境一致、上手快 | 调试路径更绕 | 初次接触脚手架 |
+| 本机 CLI | 命令直观、便于 IDE 调试 | 环境污染风险更高 | 已熟悉 Sui/Move 工作流 |
+
+## 常见报错
+
+- `Unpublished dependencies: World`：World 依赖未部署或路径不对
+- `Move.lock wrong env`：构建环境与 lock 中记录的环境不一致
+- `.env` / 发布产物不同步：后续脚本和 dApp 使用了旧对象 ID
+
+## 对应代码目录
+
+- [builder-scaffold](https://github.com/evefrontier/builder-scaffold)
+
 ## 1. 什么是 Builder Scaffold？
 
 `builder-scaffold` 是 EVE Frontier 官方提供的**一站式 Builder 开发脚手架**，包含：
@@ -128,16 +201,14 @@ name = "smart_gate"
 edition = "2024"
 
 [dependencies]
-# 本地依赖（开发时）
-world = { local = "../../../world-contracts/contracts/world" }
-# 或 Git 依赖（生产时，推荐锁定 tag）
-# world = { git = "...", rev = "v0.0.14" }
+# Git 依赖（推荐锁定稳定 tag）
+world = { git = "https://github.com/evefrontier/world-contracts.git", subdir = "contracts/world", rev = "v0.0.14" }
 
 [addresses]
 smart_gate = "0x0"   # 发布时自动替换为实际地址
 ```
 
-> **重要**：本地开发用 `local` 依赖，生产发布务必切换为 git 依赖并锁定 `rev`（如 `v0.0.14`），否则 world-contracts 主分支的 Breaking Change 会导致编译失败。
+> **重要**：建议直接使用 git 依赖并锁定 `rev`（如 `v0.0.14`），不要追踪 `main`，否则 world-contracts 主分支的 Breaking Change 会直接影响编译结果。
 
 ---
 

@@ -6,6 +6,39 @@
 
 ---
 
+> 状态：工程章节。正文以 Gas、批处理和对象设计优化为主。
+
+## 前置依赖
+
+- 建议先读 [Chapter 4](./chapter-04.md)
+- 建议先读 [Chapter 12](./chapter-12.md)
+
+## 源码位置
+
+- [book/src/code/chapter-17](./code/chapter-17)
+
+## 关键测试文件
+
+- 当前目录以性能优化片段为主；建议用本章新增的测量表记录真实 Gas。
+
+## 推荐阅读顺序
+
+1. 先读 Gas 成本模型
+2. 再对照 [book/src/code/chapter-17](./code/chapter-17) 片段
+3. 最后完成本章新增的对比测量流程
+
+## 验证步骤
+
+1. 能做一次单笔交易与批处理的 Gas 对比
+2. 能说清大对象、动态字段、事件三者的成本差异
+3. 能为后续案例给出至少一条实际优化建议
+
+## 常见报错
+
+- 只讲“优化”，却没有基线数据和对比记录
+
+---
+
 ## 17.1 Gas 成本模型
 
 Sui 的 Gas 由两部分组成：
@@ -20,6 +53,18 @@ Gas 费 = (计算单元 + 存储差额) × Gas 价格
 - 读取数据是**免费的**（GraphQL/RPC 读取不上链）
 - 动态字段的增删有显著 Gas 成本
 - 发射事件几乎免费（不占用链上存储）
+
+### 17.1.1 一组可以复用的 Gas 对比记录模板
+
+这一章最容易流于口号。建议至少拿一组固定操作记录“优化前/后”数据：
+
+| 操作 | 低效写法 | 优化写法 | 你要记录的字段 |
+|------|------|------|------|
+| 两个星门上线 + 链接 | 3 笔独立交易 | 1 笔 PTB 批处理 | `gasUsed`、对象写入数、总耗时 |
+| 市场创建挂单 | 大对象追加 `vector` | 独立对象或动态字段 | 对象大小、写入次数、存储退款 |
+| 历史记录 | 持久化到共享对象 | 改发事件 + 链下索引 | 事件数、对象增长字节 |
+
+> 这些数字不需要追求“绝对标准值”，但必须留下同环境下的对比记录，否则优化结论没有说服力。
 
 ---
 
@@ -51,6 +96,24 @@ tx.moveCall({ target: `${PKG}::character::return_owner_cap`, arguments: [..., re
 
 await client.signAndExecuteTransaction({ transaction: tx });
 // 节省 2/3 的 Gas 基础费！
+```
+
+### 17.2.1 如何记录一次真实 Gas 对比
+
+1. 先固定输入：同一网络、同一对象数量、同一批操作
+2. 记录低效版本的执行结果：`digest`、`gasUsed`、`effects` 中的写对象数
+3. 再执行 PTB 版本，记录同样字段
+4. 把结果整理成一张对比表，写进你的发布或优化笔记
+
+推荐至少记录这些字段：
+
+```text
+- digest
+- computationCost
+- storageCost
+- storageRebate
+- nonRefundableStorageFee
+- changedObjects count
 ```
 
 ---
@@ -210,4 +273,4 @@ public entry fun buy_item_sharded(
 
 - [Sui Gas 文档](https://docs.sui.io/concepts/tokenomics/gas-in-sui)
 - [PTB 编程指南](https://docs.sui.io/concepts/transactions/prog-txn-blocks)
-- [Sui 对象限制](../welcome/contstraints.md)
+- [Sui 对象限制](https://github.com/evefrontier/builder-documentation/blob/main/welcome/contstraints.md)

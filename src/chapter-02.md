@@ -6,6 +6,38 @@
 
 ---
 
+> 状态：基础章节。正文以本地环境搭建和工具链认知为主。
+
+## 前置依赖
+
+- 建议先读 [Chapter 1](./chapter-01.md)
+
+## 源码位置
+
+- 当前章无独立代码目录；主要参考 [builder-scaffold](https://github.com/evefrontier/builder-scaffold) 与后续 Chapter 31 的工程章节。
+
+## 关键测试文件
+
+- 本章以环境验收为主，无独立测试文件。
+
+## 推荐阅读顺序
+
+1. 先安装 CLI、Docker、Node.js
+2. 再确认钱包与网络配置
+3. 最后为 Chapter 31 的脚手架开发做好准备
+
+## 验证步骤
+
+1. 确认本机可用 `sui` CLI
+2. 确认 Docker 或本地链方案可选其一跑通
+3. 确认钱包和网络端点配置完成
+
+## 常见报错
+
+- 本地链、测试网、钱包网络配置不一致
+
+---
+
 ## 2.1 工具清单
 
 在开始之前，确认你需要安装的工具：
@@ -237,7 +269,7 @@ sui move build
 2. 输入你的 Sui 地址请求测试代币
 3. LUX 会出现在你的 EVE Vault 余额中
 
-详细说明见：[GAS Faucet 文档](../eve-vault/gas-faucet.md)
+详细说明见：[GAS Faucet 文档](https://github.com/evefrontier/builder-documentation/blob/main/eve-vault/gas-faucet.md)
 
 ---
 
@@ -253,7 +285,7 @@ sui move build
 
 ## 📚 延伸阅读
 
-- [Environment Setup 文档](../tools/environment-setup.md)
+- [Environment Setup 文档](https://github.com/evefrontier/builder-documentation/blob/main/tools/environment-setup.md)
 - [builder-scaffold GitHub](https://github.com/evefrontier/builder-scaffold)
 - [Sui CLI 完整文档](https://docs.sui.io/references/cli)
 - [Sui 客户端配置指南](https://docs.sui.io/guides/developer/getting-started/configure-sui-client)

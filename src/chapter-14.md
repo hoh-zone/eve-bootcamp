@@ -6,6 +6,39 @@
 
 ---
 
+> 状态：设计进阶章节。正文以 NFT 标准、动态元数据和 Collection 模式为主。
+
+## 前置依赖
+
+- 建议先读 [Chapter 3](./chapter-03.md)
+- 建议先读 [Chapter 7](./chapter-07.md)
+
+## 源码位置
+
+- [book/src/code/chapter-14](./code/chapter-14)
+
+## 关键测试文件
+
+- 当前目录以 `space_badge.move`、`evolving_ship.move` 等示例为主。
+
+## 推荐阅读顺序
+
+1. 先读 Display 与元数据模型
+2. 再打开 [book/src/code/chapter-14](./code/chapter-14)
+3. 最后结合 [Example 6](./example-06.md) 与 [Example 13](./example-13.md)
+
+## 验证步骤
+
+1. 能区分静态 NFT、动态 NFT 和权限 NFT 的不同设计
+2. 能定位元数据更新责任在链上还是链下
+3. 能理解 Collection/Badge 两层结构
+
+## 常见报错
+
+- 把所有展示字段都固化上链，导致后续演进成本很高
+
+---
+
 ## 14.1 Sui 的 NFT 模型
 
 在 Sui 上，NFT 就是一个带有 `key` ability 的唯一对象。没有特殊的 "NFT 合约"——任何带有唯一 ObjectID 的对象都天然是 NFT：

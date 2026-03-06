@@ -6,6 +6,40 @@
 
 ---
 
+> 状态：工程保障章节。正文以排错路径和调试习惯为主。
+
+## 前置依赖
+
+- 建议先读 [Chapter 4](./chapter-04.md)
+- 建议先读 [Chapter 5](./chapter-05.md)
+- 建议先读 [Chapter 11](./chapter-11.md)
+
+## 源码位置
+
+- [book/src/code/chapter-22](./code/chapter-22)
+
+## 关键测试文件
+
+- 当前目录以错误片段与修复示例为主。
+
+## 推荐阅读顺序
+
+1. 先读错误分类
+2. 再对照 [book/src/code/chapter-22](./code/chapter-22) 片段
+3. 最后把本章排错顺序应用到一个真实案例
+
+## 验证步骤
+
+1. 能按“读错误 -> 缩范围 -> 验证输入输出”走一遍调试流程
+2. 能从常见报错中快速定位到网络、对象 ID、权限、签名等层面
+3. 能把一类错误归到合约、交易或前端
+
+## 常见报错
+
+- 看到报错后直接改代码，不先确认输入、环境和对象 ID 是否正确
+
+---
+
 ## 22.1 错误分类总览
 
 ```
@@ -48,9 +82,7 @@ error[E02001]: unbound module
 ```toml
 # Move.toml
 [dependencies]
-World = { local = "../world-contracts" }
-# 或者指向 Git 仓库
-World = { git = "https://github.com/evefrontier/world-contracts", subdir = "contracts/world", rev = "main" }
+World = { git = "https://github.com/evefrontier/world-contracts.git", subdir = "contracts/world", rev = "v0.0.14" }
 ```
 
 ---

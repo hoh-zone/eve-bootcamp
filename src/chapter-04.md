@@ -6,6 +6,39 @@
 
 ---
 
+> 状态：基础章节。正文以部署工作流和链上组件操作为主。
+
+## 前置依赖
+
+- 建议先读 [Chapter 2](./chapter-02.md)
+- 建议先读 [Chapter 3](./chapter-03.md)
+
+## 源码位置
+
+- [book/src/code/chapter-04](./code/chapter-04)
+
+## 关键测试文件
+
+- 当前目录以部署片段为主；建议用本地链完成手工验收。
+
+## 推荐阅读顺序
+
+1. 先通读部署全流程
+2. 再打开 [book/src/code/chapter-04](./code/chapter-04) 对照片段
+3. 最后进入 Chapter 31 学习工程化脚手架
+
+## 验证步骤
+
+1. 能说清角色、节点、组件、发布之间的先后顺序
+2. 能用本章流程检查一次部署前置条件
+3. 能定位部署失败时缺的是哪一环
+
+## 常见报错
+
+- 跳过角色或网络节点准备，直接尝试部署组件
+
+---
+
 ## 4.1 完整的部署工作流
 
 在你的代码能在真实游戏中生效之前，需要完成以下完整链路：
@@ -324,7 +357,7 @@ const query = `
 
 ## 📚 延伸阅读
 
-- [Smart Storage Unit 文档](../smart-assemblies/storage-unit/README.md)
-- [Smart Gate 文档](../smart-assemblies/gate/README.md)
-- [Interfacing with the World](../smart-contracts/interfacing-with-the-eve-frontier-world.md)
+- [Smart Storage Unit 文档](https://github.com/evefrontier/builder-documentation/blob/main/smart-assemblies/storage-unit/README.md)
+- [Smart Gate 文档](https://github.com/evefrontier/builder-documentation/blob/main/smart-assemblies/gate/README.md)
+- [Interfacing with the World](https://github.com/evefrontier/builder-documentation/blob/main/smart-contracts/interfacing-with-the-eve-frontier-world.md)
 - [builder-scaffold ts-scripts](https://github.com/evefrontier/builder-scaffold/tree/main/ts-scripts)

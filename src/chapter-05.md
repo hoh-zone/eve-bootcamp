@@ -6,6 +6,39 @@
 
 ---
 
+> 状态：基础章节。正文以钱包接入、前端状态读取和交易发起为主。
+
+## 前置依赖
+
+- 建议先读 [Chapter 3](./chapter-03.md)
+- 建议先读 [Chapter 4](./chapter-04.md)
+
+## 源码位置
+
+- 当前章无独立代码目录；建议结合 [Chapter 35](./chapter-35.md) 与案例 dApp 一起阅读。
+
+## 关键测试文件
+
+- 本章以界面与交易链路理解为主，无独立测试文件。
+
+## 推荐阅读顺序
+
+1. 先理解 dApp 在 Builder 体系中的位置
+2. 再阅读状态读取与交易发起部分
+3. 最后与 [Example 1](./example-01.md) / [Example 2](./example-02.md) 的 dApp 代码对照
+
+## 验证步骤
+
+1. 能解释读取链上对象和发起交易的基本流程
+2. 能分辨钱包连接、对象查询、交易签名三个环节
+3. 能为后续案例 dApp 阅读建立基础
+
+## 常见报错
+
+- 把前端查询和链上写操作混在同一层处理
+
+---
+
 ## 5.1 dApp 在 EVE Frontier 中的角色
 
 当你完成了 Move 合约开发后，玩家需要一个界面来与你的设施交互。dApp（去中心化应用）就是这个界面，它可以：
@@ -386,7 +419,7 @@ export default function App() {
 2. 在组件配置中设置你的 dApp URL
 3. 游戏客户端会在玩家交互时自动打开并传入 `?itemId=...&tenant=...` 参数
 
-相关文档：[Connecting In-Game](../dapps/connecting-in-game.md) | [Customizing External dApps](../dapps/customizing-external-dapps.md)
+相关文档：[Connecting In-Game](https://github.com/evefrontier/builder-documentation/blob/main/dapps/connecting-in-game.md) | [Customizing External dApps](https://github.com/evefrontier/builder-documentation/blob/main/dapps/customizing-external-dapps.md)
 
 ---
 
@@ -404,7 +437,7 @@ export default function App() {
 
 ## 📚 延伸阅读
 
-- [dapp-kit 完整文档](../dapp-kit/dapp-kit.md)
+- [dapp-kit 完整文档](https://github.com/evefrontier/builder-documentation/blob/main/dapp-kit/dapp-kit.md)
 - [TypeDoc API 文档](http://sui-docs.evefrontier.com/)
-- [Connecting from an External Browser](../dapps/connecting-from-an-external-browser.md)
+- [Connecting from an External Browser](https://github.com/evefrontier/builder-documentation/blob/main/dapps/connecting-from-an-external-browser.md)
 - [@mysten/dapp-kit-react 文档](https://sdk.mystenlabs.com/dapp-kit)

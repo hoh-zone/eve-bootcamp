@@ -6,6 +6,39 @@
 
 ---
 
+> 状态：设计进阶章节。正文以升级兼容、迁移和时间锁控制为主。
+
+## 前置依赖
+
+- 建议先读 [Chapter 7](./chapter-07.md)
+- 建议先读 [Chapter 9](./chapter-09.md)
+
+## 源码位置
+
+- [book/src/code/chapter-19](./code/chapter-19)
+
+## 关键测试文件
+
+- 当前目录包含 `market_v1` / `market` / `market_migration` 等升级示例。
+
+## 推荐阅读顺序
+
+1. 先读升级约束
+2. 再打开 [book/src/code/chapter-19](./code/chapter-19) 对照版本化代码
+3. 最后回看 Chapter 9 的升级测试要求
+
+## 验证步骤
+
+1. 能解释为何结构体不能随意改字段
+2. 能说清版本迁移与并存策略的差异
+3. 能识别哪些升级需要 timelock 或分阶段迁移
+
+## 常见报错
+
+- 试图通过一次升级直接替换老数据结构，忽略迁移成本
+
+---
+
 ## 19.1 升级兼容性问题的本质
 
 Move 合约升级面临两个核心约束：
@@ -256,4 +289,4 @@ async function runMigration(stateId: string) {
 
 - [Sui Package 升级](https://docs.sui.io/guides/developer/packages/upgrade)
 - [Chapter 9：安全审计](./chapter-09.md)
-- [EVE Builder 约束](../welcome/contstraints.md)
+- [EVE Builder 约束](https://github.com/evefrontier/builder-documentation/blob/main/welcome/contstraints.md)

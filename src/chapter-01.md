@@ -6,6 +6,38 @@
 
 ---
 
+> 状态：基础章节。正文以宏观架构和术语建立为主，适合作为全书入口。
+
+## 前置依赖
+
+- 无
+
+## 源码位置
+
+- 当前章无独立代码目录；建议结合 [课程简介](./index.md) 与后续 Chapter 3/4 的代码章节一起阅读。
+
+## 关键测试文件
+
+- 本章以概念建立为主，无独立测试文件。
+
+## 推荐阅读顺序
+
+1. 先理解三层架构与 Builder 角色
+2. 再对照后续 Chapter 3/4 的对象模型与部署流程
+3. 最后回看本章中的术语表述，建立全书坐标系
+
+## 验证步骤
+
+1. 能解释 EVE Frontier、Sui、Builder 三者的关系
+2. 能说清智能组件和游戏服务器的分工
+3. 能从本章跳转到后续基础章节继续学习
+
+## 常见报错
+
+- 把 EVE Frontier 当成普通 MOD 系统，而不是链上可编程规则系统
+
+---
+
 ## 1.1 为什么 EVE Frontier 不一样？
 
 传统网络游戏的世界规则由开发商独断——经济系统、战斗公式、内容更新，玩家只是参与者。EVE Frontier 挑战了这一范式：游戏的核心机制是**开放的**，开发者（Builders）可以在游戏服务器限定的框架内，真正**重写和扩展游戏规则**。
@@ -165,7 +197,7 @@ EVE Frontier 迁移到 Sui 不是偶然，而是深思熟虑的技术选型。
 
 ## 📚 延伸阅读
 
-- [Why Build on EVE Frontier?](../README.md)
-- [Smart Infrastructure](../welcome/smart-infrastructure.md)
-- [EVE Frontier World Explainer](../smart-contracts/eve-frontier-world-explainer.md)
+- [Why Build on EVE Frontier?](https://github.com/evefrontier/builder-documentation/blob/main/README.md)
+- [Smart Infrastructure](https://github.com/evefrontier/builder-documentation/blob/main/welcome/smart-infrastructure.md)
+- [EVE Frontier World Explainer](https://github.com/evefrontier/builder-documentation/blob/main/smart-contracts/eve-frontier-world-explainer.md)
 - [Sui 文档：对象模型](https://docs.sui.io/concepts/object-ownership)

@@ -6,6 +6,52 @@
 
 ---
 
+> 状态：教学示例。当前案例以 dApp 浮层改造为主，合约部分沿用 [Example 2](./example-02.md)。
+
+## 前置依赖
+
+- 需要先完成 [Example 2](./example-02.md)
+- 建议先读 [Chapter 21](./chapter-21.md) 与 [Chapter 35](./chapter-35.md)
+- 需要本地 `pnpm`、WebView/浏览器调试环境、EVE Vault
+
+## 对应代码目录
+
+- [example-17/dapp](./code/example-17/dapp)
+
+## 源码位置
+
+- [dapp/readme.md](./code/example-17/dapp/readme.md)
+- [src/main.tsx](./code/example-17/dapp/src/main.tsx)
+- [src/App.tsx](./code/example-17/dapp/src/App.tsx)
+- [src/AssemblyInfo.tsx](./code/example-17/dapp/src/AssemblyInfo.tsx)
+- 合约侧沿用 [Example 2](./example-02.md) 与 [example-02 code](./code/example-02)
+
+## 关键测试文件
+
+- 当前目录未附独立自动化测试；建议至少补一条 `postMessage -> 浮层渲染` 的前端测试
+
+## 推荐阅读顺序
+
+1. 先看 [Example 2](./example-02.md) 的收费站逻辑
+2. 再读 [example-17 dapp/App.tsx](./code/example-17/dapp/src/App.tsx)
+3. 最后验证 `postMessage` 与钱包签名协作
+
+## 最小调用链
+
+`游戏内事件 -> postMessage -> 浮层 dApp 更新状态 -> 用户签名 -> 购票/跳跃成功 -> 浮层关闭`
+
+## 验证步骤
+
+1. 在 [example-17/dapp](./code/example-17/dapp) 运行 `pnpm install && pnpm dev`
+2. 模拟 `postMessage` 输入，确认面板自动打开
+3. 用 EVE Vault 完成购票与跳跃闭环
+
+## 常见报错
+
+- `postMessage` 来源校验过松或过严
+- 浮层状态和钱包连接状态不同步
+- 游戏事件发生后未做幂等处理，导致重复弹窗
+
 ## 需求分析
 
 **场景：** 收费站逻辑已经存在（重用 Example 2 的合约），现在要：

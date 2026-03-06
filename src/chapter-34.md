@@ -4,6 +4,54 @@
 
 ---
 
+> 状态：源码导读。适合边读文档边打开扩展入口点与 background 代码核对消息流。
+
+## 前置依赖
+
+- 了解 Chrome MV3、content script、service worker
+- 建议先读 [Chapter 33](./chapter-33.md)
+- 需要能在本地打开 [evevault](https://github.com/evefrontier/evevault)
+
+## 源码位置
+
+- [MONOREPO_README.md](https://github.com/evefrontier/evevault/blob/main/docs/MONOREPO_README.md)
+- [background.ts](https://github.com/evefrontier/evevault/blob/main/apps/extension/entrypoints/background.ts)
+- [keeper.ts](https://github.com/evefrontier/evevault/blob/main/apps/extension/entrypoints/keeper/keeper.ts)
+- [PopupApp.tsx](https://github.com/evefrontier/evevault/blob/main/apps/extension/src/features/wallet/components/PopupApp.tsx)
+- [oauthService.ts](https://github.com/evefrontier/evevault/blob/main/apps/extension/src/lib/background/services/oauthService.ts)
+- [sponsoredTransactionHandler.ts](https://github.com/evefrontier/evevault/blob/main/apps/extension/src/lib/background/handlers/sponsoredTransactionHandler.ts)
+
+## 关键测试文件
+
+- [keeper.lock.test.ts](https://github.com/evefrontier/evevault/blob/main/apps/extension/entrypoints/keeper/__tests__/keeper.lock.test.ts)
+- [keeperService.test.ts](https://github.com/evefrontier/evevault/blob/main/packages/shared/src/services/__tests__/keeperService.test.ts)
+
+## 推荐阅读顺序
+
+1. 先读 [MONOREPO_README.md](https://github.com/evefrontier/evevault/blob/main/docs/MONOREPO_README.md)
+2. 再看 `background.ts`、`keeper.ts`
+3. 最后看 `PopupApp.tsx`、`oauthService.ts` 与赞助交易 handler
+
+## 最小调用链
+
+`页面/内容脚本请求 -> background 分发消息 -> keeper 保护敏感状态 -> 审批页签名 -> 响应回发到调用方`
+
+## 验证步骤
+
+1. 按 README 本地构建 EVE Vault
+2. 重点调试 `background`、`keeper`、审批页三类入口
+3. 对照测试确认锁屏、keeper、赞助交易消息流没有断点
+
+## 常见报错
+
+- MV3 权限或 host 权限缺失，导致注入/消息失败
+- background 生命周期被误判，状态丢失
+- keeper 与 popup 之间的消息协议字段不一致
+
+## 对应代码目录
+
+- [evevault](https://github.com/evefrontier/evevault)
+
 ## 1. 项目结构（Monorepo）
 
 ```

@@ -6,6 +6,39 @@
 
 ---
 
+> 状态：工程章节。正文以 GraphQL、事件和索引器设计为主。
+
+## 前置依赖
+
+- 建议先读 [Chapter 5](./chapter-05.md)
+- 建议先读 [Chapter 11](./chapter-11.md)
+
+## 源码位置
+
+- 当前章无独立代码目录；建议结合案例 dApp 和后续 [Chapter 18](./chapter-18.md) 阅读。
+
+## 关键测试文件
+
+- 本章以读取链路设计为主，无独立测试文件。
+
+## 推荐阅读顺序
+
+1. 先读读写分离原则
+2. 再通读 GraphQL/事件/索引器章节
+3. 最后结合具体案例验证查询模型
+
+## 验证步骤
+
+1. 能区分事件流、对象查询和自建索引器的适用场景
+2. 能给某个案例选出合适的数据读取方案
+3. 能识别“把事件当列表状态”的设计错误
+
+## 常见报错
+
+- 直接用事件重建当前状态，忽略对象才是权威数据源
+
+---
+
 ## 12.1 读写分离原则
 
 EVE Frontier 开发的黄金法则：
@@ -353,6 +386,6 @@ function Leaderboard() {
 
 ## 📚 延伸阅读
 
-- [Interfacing with the World](../smart-contracts/interfacing-with-the-eve-frontier-world.md)
+- [Interfacing with the World](https://github.com/evefrontier/builder-documentation/blob/main/smart-contracts/interfacing-with-the-eve-frontier-world.md)
 - [Sui GraphQL 文档](https://docs.sui.io/guides/developer/accessing-data/query-with-graphql)
 - [Sui Events 文档](https://docs.sui.io/guides/developer/accessing-data/using-events)

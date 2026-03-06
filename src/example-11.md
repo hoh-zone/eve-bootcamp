@@ -6,6 +6,58 @@
 
 ---
 
+> 状态：教学示例。正文解释核心业务流，完整目录以本地 `book/src/code/example-11/` 为准。
+
+## 前置依赖
+
+- 建议先读 [Chapter 7](./chapter-07.md)、[Chapter 8](./chapter-08.md)
+- 需要本地 `sui` CLI 与 `pnpm`
+- 需要可用的钱包与测试网络/本地链
+
+## 对应代码目录
+
+- [example-11](./code/example-11)
+- [example-11/dapp](./code/example-11/dapp)
+
+## 源码位置
+
+- [Move.toml](./code/example-11/Move.toml)
+- [equipment_rental.move](./code/example-11/sources/equipment_rental.move)
+- [dapp/readme.md](./code/example-11/dapp/readme.md)
+
+## 关键测试文件
+
+- [tests/README.md](./code/example-11/tests/README.md)
+
+## 推荐阅读顺序
+
+1. 先看 `Move.toml`
+2. 再读 [equipment_rental.move](./code/example-11/sources/equipment_rental.move)
+3. 最后启动 [dapp/readme.md](./code/example-11/dapp/readme.md) 对照前端
+
+## 最小调用链
+
+`创建挂单 -> 用户租用 -> 合约铸造 RentalPass -> 到期或提前归还 -> 资金结算`
+
+## 验证步骤
+
+1. 进入 [example-11](./code/example-11) 运行 `sui move build`
+2. 进入 [example-11/dapp](./code/example-11/dapp) 运行 `pnpm install && pnpm dev`
+3. 验证挂单、租用、提前归还三条路径
+
+## 常见报错
+
+- 用事件直接当作“挂单列表”数据源，导致页面读到的是历史租用记录
+- `listing_id` 与真实对象 ID 不一致
+- 退款与剩余租期计算没有放在同一事务里
+
+## 测试闭环
+
+- 挂单创建：确认 `is_available == true`，且可被前端正确查询到
+- 成功租用：确认租用者收到 `RentalPass`，出租者收到 70% 租金
+- 提前归还：确认退款按剩余天数计算，剩余押金正确流向出租者
+- 到期回收：确认未到期时回收失败，到期后回收成功
+
 ## 需求分析
 
 **场景：** 高级飞船模块价格昂贵，多数玩家买不起，但可以租用：
@@ -295,12 +347,14 @@ export function RentalMarket() {
   const { data: listings } = useQuery({
     queryKey: ['rental-listings'],
     queryFn: async () => {
-      // 通过事件获取所有挂单 ID（实际项目用 indexer）
-      const events = await client.queryEvents({
-        query: { MoveEventType: `${RENTAL_PKG}::equipment_rental::ItemRented` },
-        limit: 50,
+      // 教学示例：直接读取当前挂单对象。
+      // 真实项目里建议通过 indexer 维护“可租挂单”视图，而不是从租用事件反推列表。
+      const objects = await client.getOwnedObjects({
+        owner: '0x_RENTAL_REGISTRY_OWNER_',
+        filter: { StructType: `${RENTAL_PKG}::equipment_rental::RentalListing` },
+        options: { showContent: true },
       })
-      return events.data.map(e => e.parsedJson) as Listing[]
+      return objects.data.map(obj => (obj.data?.content as any)?.fields).filter(Boolean) as Listing[]
     },
   })
 

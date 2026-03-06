@@ -4,6 +4,73 @@
 
 ---
 
+> 状态：教学示例。正文中的能量/燃料模型用于帮助你读懂官方实现，字段和入口请以实际模块为准。
+
+## 前置依赖
+
+- 建议先读 [Chapter 4](./chapter-04.md) 和 [Chapter 17](./chapter-17.md)
+- 需要能进入 `world-contracts/contracts/world`
+- 默认你已经理解 Network Node 与 Smart Assembly 的关系
+
+## 源码位置
+
+- [energy.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/primitives/energy.move)
+- [fuel.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/primitives/fuel.move)
+
+## 关键测试文件
+
+- [energy_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/tests/primitives/energy_tests.move)
+- [fuel_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/tests/primitives/fuel_tests.move)
+
+## 推荐阅读顺序
+
+1. 先读 [energy.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/primitives/energy.move) 理解容量分配
+2. 再读 [fuel.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/primitives/fuel.move) 理解消耗与续航
+3. 最后运行相关测试并回看建筑在线/离线切换条件
+
+## 最小调用链
+
+`Network Node 分配能量 -> 建筑检查 energy/fuel 条件 -> 业务模块消耗燃料 -> 建筑状态更新`
+
+## 验证步骤
+
+1. 进入 [world-contracts/contracts/world](https://github.com/evefrontier/world-contracts/tree/main/contracts/world)
+2. 运行 `sui move test energy` 与 `sui move test fuel`
+3. 重点确认在线、断电、燃料耗尽三类状态迁移
+
+## 常见报错
+
+- 只补 fuel、不补 energy，建筑仍然离线
+- 读取旧状态缓存，误判可用容量
+- 没把燃料消耗和业务执行顺序绑在同一事务里
+
+## 对应代码目录
+
+- [world-contracts/contracts/world](https://github.com/evefrontier/world-contracts/tree/main/contracts/world)
+
+## 关键 Struct
+
+| 类型 | 作用 | 阅读重点 |
+|------|------|------|
+| `EnergyConfig` | 不同装配类型的能量配置 | 看类型到能量需求的映射如何维护 |
+| `EnergySource` | 网络节点的供能状态 | 看最大产能、当前产能、已预留能量三者关系 |
+| `Fuel` 相关结构 | 建筑燃料存量与消耗状态 | 看燃料存量和时间费率如何绑定 |
+| `FuelEfficiency` | 燃料类型与效率差异 | 看不同燃料如何影响续航和成本 |
+
+## 关键入口函数
+
+| 入口 | 作用 | 你要确认什么 |
+|------|------|------|
+| `available_energy` | 计算剩余可用能量 | 当前产能和已预留量是否同步更新 |
+| 燃料消耗入口 | 业务执行时扣减 fuel | 扣 fuel 是否与业务动作绑在同一事务 |
+| 建筑上线/离线路径 | 结合 energy + fuel 判断状态 | 是否同时满足两套条件 |
+
+## 最容易误读的点
+
+- `Energy` 更像容量/配额，不是“可以慢慢花掉的钱包余额”
+- 只补 fuel 不补 energy，建筑仍然可能离线
+- 状态判断必须和资源扣减放在同一事务，否则前端很容易读到过期状态
+
 ## 1. 为什么需要双层能源系统？
 
 EVE Frontier 的建筑（SmartAssembly）需要同时管理两种不同性质的"资源"：

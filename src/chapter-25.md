@@ -4,6 +4,71 @@
 
 ---
 
+> 状态：教学示例。正文中的验证流程是对官方实现的拆解版，落地时请优先对照实际源码和测试。
+
+## 前置依赖
+
+- 了解 `AdminACL`、`verify_sponsor` 与服务端签名场景
+- 建议先读 [Chapter 11](./chapter-11.md) 和 [Chapter 24](./chapter-24.md)
+- 默认你已经能在本地打开 `world-contracts` 源码
+
+## 源码位置
+
+- [sig_verify.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/crypto/sig_verify.move)
+- [access_control.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/access/access_control.move)
+
+## 关键测试文件
+
+- [sig_verify_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/tests/crypto/sig_verify_tests.move)
+
+## 推荐阅读顺序
+
+1. 先看 [sig_verify.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/crypto/sig_verify.move) 的输入结构
+2. 再看 [sig_verify_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/tests/crypto/sig_verify_tests.move) 理解合法/非法签名边界
+3. 最后回看你自己的业务消息编码方式是否与 intent 一致
+
+## 最小调用链
+
+`游戏服务器构造消息 -> Ed25519 签名 -> 玩家提交 bytes/signature -> sig_verify 模块校验 -> 合约继续执行`
+
+## 验证步骤
+
+1. 进入 [world-contracts/contracts/world](https://github.com/evefrontier/world-contracts/tree/main/contracts/world)
+2. 运行 `sui move test sig_verify`
+3. 重点核对消息体编码、intent 前缀、签名者地址三者是否匹配
+
+## 常见报错
+
+- 消息 bytes 与链下签名前 bytes 不一致
+- 只校验签名、不校验业务字段，导致可重放
+- 忘记给消息加过期时间或 nonce
+
+## 对应代码目录
+
+- [world-contracts/contracts/world](https://github.com/evefrontier/world-contracts/tree/main/contracts/world)
+
+## 关键 Struct / 输入
+
+| 类型或输入 | 作用 | 阅读重点 |
+|------|------|------|
+| 消息 bytes | 链下事实的原始编码 | 看链下签名和链上验证是否使用完全相同的字节序列 |
+| 签名 blob | `flag + raw_sig + public_key` | 看长度、切片顺序和签名算法标识 |
+| `AdminACL` / 授权地址 | 业务允许的服务器身份 | 看“签名正确”和“签名者有权”是两层校验 |
+
+## 关键入口函数
+
+| 入口 | 作用 | 你要确认什么 |
+|------|------|------|
+| `sig_verify` 相关校验入口 | 验证签名与消息绑定 | 是否正确加入 intent 前缀、是否严格比对 bytes |
+| 业务合约中的验证包装函数 | 把签名验证接入业务流程 | 是否同时校验 nonce、过期时间、对象绑定 |
+| sponsor / server 白名单入口 | 限制可接受的服务端身份 | 是否与签名校验分层处理 |
+
+## 最容易误读的点
+
+- 签名通过不等于业务通过，业务字段仍要单独校验
+- 链下签名前的 bytes 只要有一个字段编码不同，链上验证就必然失败
+- `AdminACL` 解决的是“谁可以提交/赞助”，不是“消息内容一定正确”
+
 ## 1. 为什么需要链下签名？
 
 EVE Frontier 的一个根本性挑战：**链上合约无法访问游戏世界的实时状态**。

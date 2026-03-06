@@ -4,6 +4,80 @@
 
 ---
 
+> 状态：已映射脚本与 dApp 目录。正文以本仓库内 `builder-scaffold` 的脚本布局为准。
+
+## 前置依赖
+
+- 已完成 [Chapter 31](./chapter-31.md) 的本地发布
+- `.env` 中已有 package id、object id、账户密钥
+- 已能运行 `pnpm` / `npm` 相关脚本
+
+## 源码位置
+
+- [builder-scaffold/ts-scripts/readme.md](https://github.com/evefrontier/builder-scaffold/blob/main/ts-scripts/readme.md)
+- [builder-scaffold/ts-scripts/smart_gate](https://github.com/evefrontier/builder-scaffold/tree/main/ts-scripts/smart_gate)
+- [builder-scaffold/ts-scripts/utils/helper.ts](https://github.com/evefrontier/builder-scaffold/blob/main/ts-scripts/utils/helper.ts)
+- [builder-scaffold/dapps/src/main.tsx](https://github.com/evefrontier/builder-scaffold/blob/main/dapps/src/main.tsx)
+- [builder-scaffold/dapps/src/App.tsx](https://github.com/evefrontier/builder-scaffold/blob/main/dapps/src/App.tsx)
+
+## 关键测试文件
+
+- 当前目录未附独立自动化测试，优先用本地链脚本闭环验证
+
+## 推荐阅读顺序
+
+1. 先读 [ts-scripts/readme.md](https://github.com/evefrontier/builder-scaffold/blob/main/ts-scripts/readme.md)
+2. 再读 `utils/helper.ts` 与 `smart_gate` 目录下具体脚本
+3. 最后打开 `dapps/src/main.tsx`、`App.tsx`、`AssemblyInfo.tsx`
+
+## 最小调用链
+
+`读取 .env -> helper.ts 初始化客户端/对象 ID -> TS 脚本发起 PTB -> 链上对象变化 -> dApp 查询并展示新状态`
+
+## 目录职责边界
+
+把 `builder-scaffold` 用顺，关键不是记住每个脚本名，而是先分清三层职责：
+
+| 目录/文件 | 责任 | 不应该承担的事 |
+|------|------|------|
+| `ts-scripts/smart_gate/*` | 组织单个业务动作，拼装 PTB | 塞大量共享工具函数 |
+| `ts-scripts/utils/helper.ts` | 初始化客户端、读取环境、封装公共查询 | 写具体业务规则 |
+| `dapps/src/*` | 展示状态、发起交互、承接钱包连接 | 直接硬编码环境和对象 ID |
+
+## 一条完整脚本链路应该长什么样
+
+```text
+.env
+  -> helper.ts 读取网络 / package id / key
+  -> 业务脚本拼装 PTB
+  -> 提交链上交易
+  -> dApp 或查询脚本刷新对象状态
+```
+
+如果一个脚本同时负责“读配置 + 查对象 + 拼复杂业务规则 + 打印 UI 文案”，基本就该拆了。
+
+## 验证步骤
+
+1. 在 [builder-scaffold](https://github.com/evefrontier/builder-scaffold) 安装依赖
+2. 逐个运行 `smart_gate` 目录下脚本完成授权、配规则、发 permit
+3. 启动 `dapps/`，确认页面能读取 Assembly 信息并发起交易
+
+## 常见报错
+
+- `.env` 不完整：脚本启动即报对象 ID 缺失
+- 发布和前端网络不一致：前端读不到对象
+- GraphQL / RPC 端点写反：页面能连钱包但查不到 World 数据
+
+## 两个常见反模式
+
+- `helper.ts` 越写越大，最后变成难以维护的“上帝文件”
+- 前端直接复制脚本里的对象 ID 和网络配置，导致脚本与页面长期漂移
+
+## 对应代码目录
+
+- [builder-scaffold/ts-scripts](https://github.com/evefrontier/builder-scaffold/tree/main/ts-scripts)
+- [builder-scaffold/dapps](https://github.com/evefrontier/builder-scaffold/tree/main/dapps)
+
 ## 1. TypeScript 脚本的使用前提
 
 在运行任何脚本之前，需要完成以下准备：

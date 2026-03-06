@@ -4,6 +4,72 @@
 
 ---
 
+> 状态：教学示例。正文关注优先级模型和扩展切入点，具体字段仍应以官方 `turret` 模块源码为准。
+
+## 前置依赖
+
+- 建议先读 [Chapter 4](./chapter-04.md) 与 [Chapter 28](./chapter-28.md)
+- 需要理解 `InProximity`、`Aggression` 这类事件语义
+
+## 源码位置
+
+- [turret.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/assemblies/turret.move)
+- [extension_examples/sources/turret.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/extension_examples/sources/turret.move)
+
+## 关键测试文件
+
+- [turret_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/tests/assemblies/turret_tests.move)
+
+## 推荐阅读顺序
+
+1. 先看 World 侧 [turret.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/assemblies/turret.move)
+2. 再看扩展示例 [extension_examples/sources/turret.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/extension_examples/sources/turret.move)
+3. 最后用 [turret_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/tests/assemblies/turret_tests.move) 校对行为预期
+
+## 最小调用链
+
+`飞船进入范围/触发 aggression -> turret 模块收集候选目标 -> 扩展规则排序 -> 执行攻击决策`
+
+## 验证步骤
+
+1. 进入 [world-contracts/contracts/world](https://github.com/evefrontier/world-contracts/tree/main/contracts/world)
+2. 运行 `sui move test turret`
+3. 对照候选目标、优先级、过滤条件三个阶段读源码
+
+## 常见报错
+
+- 只改了排序，没有改过滤条件，导致仍会打到不该打的目标
+- 扩展状态与炮塔共享对象状态不同步
+- 使用链下数据时没有给出有效证明
+
+## 对应代码目录
+
+- [world-contracts/contracts/world](https://github.com/evefrontier/world-contracts/tree/main/contracts/world)
+- [world-contracts/contracts/extension_examples](https://github.com/evefrontier/world-contracts/tree/main/contracts/extension_examples)
+
+## 关键 Struct
+
+| 类型 | 作用 | 阅读重点 |
+|------|------|------|
+| `TargetCandidate` | 炮塔决策输入候选集 | 看哪些字段参与过滤、哪些字段参与排序 |
+| `ReturnTargetPriorityList` | 扩展返回的优先级结果 | 看扩展到底返回“排序建议”还是“直接开火命令” |
+| `BehaviourChangeReason` | 触发本次重算的原因 | 看 AI 刷新来自进入范围、攻击行为还是状态变化 |
+| `OnlineReceipt` | 炮塔在线状态相关凭证 | 看扩展逻辑是否依赖在线前置条件 |
+
+## 关键入口函数
+
+| 入口 | 作用 | 你要确认什么 |
+|------|------|------|
+| 炮塔候选集计算路径 | 收集可攻击目标 | 过滤条件是否先于排序 |
+| 扩展优先级入口 | 自定义 AI 排序规则 | 返回值是否符合 World 侧预期 |
+| 授权与上线入口 | 挂接扩展到炮塔 | 扩展是否真的被启用且状态同步 |
+
+## 最容易误读的点
+
+- 炮塔 AI 的扩展点通常是“排序”，不是绕过内核直接接管开火
+- 只改优先级不改过滤条件，炮塔仍可能攻击不该攻击的目标
+- 候选目标字段来自游戏事件和内核状态，不应凭前端或链下缓存臆造
+
 ## 1. 炮塔（Turret）是什么？
 
 Smart Turret 是 EVE Frontier 中一种可编程空间建筑，可以对进入其范围的飞船自动开火。

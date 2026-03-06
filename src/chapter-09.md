@@ -6,6 +6,39 @@
 
 ---
 
+> 状态：工程保障章节。正文以测试、安全与升级风险控制为主。
+
+## 前置依赖
+
+- 建议先读 [Chapter 3](./chapter-03.md)
+- 建议先读 [Chapter 7](./chapter-07.md)
+
+## 源码位置
+
+- [book/src/code/chapter-09](./code/chapter-09)
+
+## 关键测试文件
+
+- [my_module_tests.move](./code/chapter-09/sources/my_module_tests.move)
+
+## 推荐阅读顺序
+
+1. 先读测试方法和漏洞类型
+2. 再打开 [my_module_tests.move](./code/chapter-09/sources/my_module_tests.move) 看断言写法
+3. 最后回看升级策略与 Chapter 19 建立联系
+
+## 验证步骤
+
+1. 能解释 happy path、failure path、升级兼容测试的差异
+2. 能定位 `chapter-09` 里的测试模块
+3. 能把常见漏洞映射到自己的合约中
+
+## 常见报错
+
+- 只做功能验证，不测权限边界和失败路径
+
+---
+
 ## 9.1 为什么安全测试至关重要？
 
 链上合约一旦部署，资产是真实的。以下是常见损失场景：
@@ -380,7 +413,7 @@ public entry fun migrate_add_expiry(
 
 ## 📚 延伸阅读
 
-- [Builder 约束文档](../welcome/contstraints.md)
+- [Builder 约束文档](https://github.com/evefrontier/builder-documentation/blob/main/welcome/contstraints.md)
 - [Move Prover](https://move-language.github.io/move/prover/prover-guide.html)
 - [Sui Package 升级指南](https://docs.sui.io/guides/developer/packages/upgrade)
 - [Move 测试框架](https://docs.sui.io/guides/developer/first-app/write-package#testing-with-sui-move)

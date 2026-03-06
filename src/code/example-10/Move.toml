@@ -3,10 +3,9 @@ name = "example_10"
 edition = "2024"
 
 # NOTE: Requires EVE Frontier World contracts.
-# Clone https://github.com/evefrontier/world-contracts then uncomment below.
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
-# World = { local = "../../../../world-contracts" }
+World = { git = "https://github.com/evefrontier/world-contracts.git", subdir = "contracts/world", rev = "v0.0.14" }
 
 [addresses]
 war_game = "0x0"

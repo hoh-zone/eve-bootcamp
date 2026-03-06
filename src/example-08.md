@@ -6,6 +6,62 @@
 
 ---
 
+> 状态：代码骨架。仓库内已附 `Move.toml`、`weekly_race.move` 和 dApp 目录，但积分上报授权、奖励资产类型与链下结算来源仍需按你的赛事业务补齐。
+
+## 前置依赖
+
+- 建议先读 [Chapter 11](./chapter-11.md)、[Chapter 12](./chapter-12.md)
+- 需要本地 `sui` CLI 与 `pnpm`
+- 需要能区分“链上状态机”和“链下积分聚合”的边界
+
+## 对应代码目录
+
+- [example-08](./code/example-08)
+- [example-08/dapp](./code/example-08/dapp)
+
+## 源码位置
+
+- [Move.toml](./code/example-08/Move.toml)
+- [weekly_race.move](./code/example-08/sources/weekly_race.move)
+- [dapp/readme.md](./code/example-08/dapp/readme.md)
+
+## 关键测试文件
+
+- [tests/README.md](./code/example-08/tests/README.md)
+
+## 推荐阅读顺序
+
+1. 先看 [weekly_race.move](./code/example-08/sources/weekly_race.move) 的赛事对象与结算入口
+2. 再看 [tests/README.md](./code/example-08/tests/README.md) 明确必须守住的状态流
+3. 最后打开 [dapp/readme.md](./code/example-08/dapp/readme.md) 对照前端展示和操作入口
+
+## 最小调用链
+
+`创建赛事 -> 充值奖池 -> 链下聚合积分 -> 服务器授权上报积分 -> 到期结算 -> 分发奖池与奖杯`
+
+## 验证步骤
+
+1. 在 [example-08](./code/example-08) 运行 `sui move build`
+2. 打开 [tests/README.md](./code/example-08/tests/README.md)，确认创建赛事、积分上报、结算、失败路径四组验收项
+3. 在 [example-08/dapp](./code/example-08/dapp) 运行 `pnpm install && pnpm dev`
+4. 人工核对排行榜展示、结算按钮、奖池金额和最终前三名是否一致
+
+## 常见报错
+
+- 把链下事件统计结果直接当真，不校验 `race_id`、时间窗和上报来源
+- 奖池资产类型和排行榜奖励类型混用，导致结算无法统一
+- 只在前端排序前三名，链上却没有做最基本的积分顺序校验
+
+## 链下职责边界
+
+本案例最容易写坏的地方，不是排行榜本身，而是链下协作边界。建议把职责拆清：
+
+- 链上只负责：赛事生命周期、奖池资金、最终结算、奖杯铸造
+- 服务器负责：监听跳跃事件、按赛季聚合分数、为积分上报签名
+- 前端负责：展示当前积分、触发管理员操作、读取结算结果
+
+如果你暂时补不齐服务器签名和积分聚合，不要把本案例宣传成“完整自动化比赛系统”；更准确的表述是“赛事合约骨架 + 排行榜结算模型”。
+
 ## 需求分析
 
 **场景：** 你（Builder）每周举办"矿区争夺赛"，比谁在本周通过你的星门跳跃最多次：
@@ -29,9 +85,14 @@ use sui::table::{Self, Table};
 use sui::object::{Self, UID, ID};
 use sui::clock::Clock;
 use sui::coin::{Self, Coin};
+use sui::sui::SUI;
+use sui::balance::{Self, Balance};
 use sui::event;
 use sui::transfer;
-use std::string::utf8;
+use std::string::{Self, String, utf8};
+
+// 说明：此处省略了实际项目中的 `AdminACL` / `verify_sponsor`
+// 导入与链下排行榜聚合逻辑，示例只展示合约建模方式。
 
 // ── 常量 ──────────────────────────────────────────────────
 
@@ -186,7 +247,9 @@ public entry fun settle_race(
     event::emit(RaceSettled {
         race_id: object::id(race),
         season: race.season,
-        winner: first, second, third,
+        winner: first,
+        second,
+        third,
     });
 }
 

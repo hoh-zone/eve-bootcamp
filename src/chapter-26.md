@@ -4,6 +4,71 @@
 
 ---
 
+> 状态：教学示例。位置证明的消息组织和签名流程会因业务而变，本章重点是解释协议结构和验证边界。
+
+## 前置依赖
+
+- 先理解 [Chapter 15](./chapter-15.md) 的位置系统概念
+- 建议结合 [Chapter 25](./chapter-25.md) 一起阅读链下签名流程
+- 需要能打开 World 合约与对应测试
+
+## 源码位置
+
+- [location.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/primitives/location.move)
+- [sig_verify.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/crypto/sig_verify.move)
+
+## 关键测试文件
+
+- [location_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/tests/primitives/location_tests.move)
+
+## 推荐阅读顺序
+
+1. 先读 [location.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/primitives/location.move) 中 proof 结构
+2. 再看 [location_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/tests/primitives/location_tests.move) 的正反例
+3. 最后把 proof 校验路径对照到你的 Gate / Turret / Storage Unit 业务
+
+## 最小调用链
+
+`游戏服务器观测位置 -> 生成 LocationProof -> 玩家提交 proof -> 合约反序列化并验证 -> 放行/拒绝业务动作`
+
+## 验证步骤
+
+1. 进入 [world-contracts/contracts/world](https://github.com/evefrontier/world-contracts/tree/main/contracts/world)
+2. 运行 `sui move test location`
+3. 对照测试检查 proof 中坐标、时间戳、签名者和距离阈值
+
+## 常见报错
+
+- BCS 编码顺序和链上定义不一致
+- 证明里没有时间窗口，导致旧 proof 可复用
+- 只校验“在场”，没有校验“与哪个对象临近”
+
+## 对应代码目录
+
+- [world-contracts/contracts/world](https://github.com/evefrontier/world-contracts/tree/main/contracts/world)
+
+## 关键 Struct
+
+| 类型 | 作用 | 阅读重点 |
+|------|------|------|
+| `Location` | 链上位置哈希容器 | 看链上只保存 hash，不保存明文坐标 |
+| `LocationProofMessage` | 服务器签名的位置证明消息体 | 看玩家、源对象、目标对象、距离、deadline 是否全部绑定 |
+| `LocationProof` | 链上提交的证明载体 | 看 bytes、签名和消息体如何组合 |
+
+## 关键入口函数
+
+| 入口 | 作用 | 你要确认什么 |
+|------|------|------|
+| `verify_proximity` | 校验“玩家是否在目标附近” | 是否同时校验签名、目标对象、距离阈值、时间窗 |
+| BCS 反序列化路径 | 从 bytes 还原 proof | 字段顺序和链下编码是否完全一致 |
+| 业务模块包装入口 | 把 proximity proof 接进 Gate / Turret / Storage | proof 是否绑定具体业务对象而不是通用复用 |
+
+## 最容易误读的点
+
+- 位置证明不是只证明“我在场”，而是证明“我在某个对象附近、在某个时间窗内”
+- 只校验距离不校验目标对象，proof 就可能被串用到别的业务入口
+- BCS 一旦字段顺序不一致，问题通常不在密码学，而在编码
+
 ## 1. 位置系统的核心问题
 
 EVE Frontier 的链上合约面临一个根本性挑战：**如何验证一个玩家（飞船）目前位于某个空间位置附近？**

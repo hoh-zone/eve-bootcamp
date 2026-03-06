@@ -6,6 +6,39 @@
 
 ---
 
+> 状态：设计进阶章节。正文以跨合约接口与可组合性为主。
+
+## 前置依赖
+
+- 建议先读 [Chapter 7](./chapter-07.md)
+- 建议先读 [Chapter 8](./chapter-08.md)
+
+## 源码位置
+
+- [book/src/code/chapter-13](./code/chapter-13)
+
+## 关键测试文件
+
+- 当前目录以组合性示例模块为主；建议重点对照 `oracle.move` 与 `market_v2.move`。
+
+## 推荐阅读顺序
+
+1. 先读组合性原则
+2. 再打开 [book/src/code/chapter-13](./code/chapter-13)
+3. 最后结合 [Example 9](./example-09.md) 看产品级组合案例
+
+## 验证步骤
+
+1. 能识别对外暴露接口应该保持什么稳定性
+2. 能解释组合性带来的依赖风险
+3. 能把价格源、市场、支付资产拆成独立模块
+
+## 常见报错
+
+- 把对外接口和内部实现耦死，导致别人无法安全集成
+
+---
+
 ## 13.1 可组合性的价值
 
 EVE Frontier 最激动人心的特性之一：**你的合约可以直接调用他人的合约，无需任何中间人**。
@@ -239,5 +272,5 @@ async function getAggregatedPrices(
 
 ## 📚 延伸阅读
 
-- [EVE World Explainer](../smart-contracts/eve-frontier-world-explainer.md)
+- [EVE World Explainer](https://github.com/evefrontier/builder-documentation/blob/main/smart-contracts/eve-frontier-world-explainer.md)
 - [Move Book：包系统](https://move-book.com/programmability/packages.html)

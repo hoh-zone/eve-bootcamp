@@ -6,6 +6,39 @@
 
 ---
 
+> 状态：架构章节。正文以多租户设计和 Registry 模式为主。
+
+## 前置依赖
+
+- 建议先读 [Chapter 4](./chapter-04.md)
+- 建议先读 [Chapter 11](./chapter-11.md)
+
+## 源码位置
+
+- [book/src/code/chapter-16](./code/chapter-16)
+
+## 关键测试文件
+
+- 当前目录以 `multi_toll.move` 与 `registry.move` 为主。
+
+## 推荐阅读顺序
+
+1. 先读单租户与多租户差异
+2. 再打开 [book/src/code/chapter-16](./code/chapter-16)
+3. 最后和 [Chapter 18](./chapter-18.md) 的全栈架构一起理解
+
+## 验证步骤
+
+1. 能解释 Registry 如何隔离多租户数据
+2. 能说明何时应该做平台型合约而不是单联盟合约
+3. 能识别多租户下最容易出错的权限边界
+
+## 常见报错
+
+- 共享一个对象服务所有租户，却没有显式的租户边界
+
+---
+
 ## 16.1 什么是多租户合约？
 
 **单租户**：一个合约只服务于一个 Owner（你的联盟）。
@@ -275,4 +308,4 @@ const treasuryId = registry?.entries?.["alliance_treasury"];
 ## 📚 延伸阅读
 
 - [Chapter 11：赞助交易](./chapter-11.md)
-- [EVE World Explainer](../smart-contracts/eve-frontier-world-explainer.md)
+- [EVE World Explainer](https://github.com/evefrontier/builder-documentation/blob/main/smart-contracts/eve-frontier-world-explainer.md)

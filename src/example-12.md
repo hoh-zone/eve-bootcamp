@@ -6,6 +6,51 @@
 
 ---
 
+> 状态：教学示例。正文展示联盟招募的最小业务闭环，完整代码以 `book/src/code/example-12/` 为准。
+
+## 前置依赖
+
+- 建议先读 [Chapter 7](./chapter-07.md)、[Chapter 14](./chapter-14.md)
+- 需要本地 `sui` CLI 与 `pnpm`
+- 需要一个可用于测试的钱包环境
+
+## 对应代码目录
+
+- [example-12](./code/example-12)
+- [example-12/dapp](./code/example-12/dapp)
+
+## 源码位置
+
+- [Move.toml](./code/example-12/Move.toml)
+- [recruitment.move](./code/example-12/sources/recruitment.move)
+- [dapp/readme.md](./code/example-12/dapp/readme.md)
+
+## 关键测试文件
+
+- 当前目录未附独立 Move 测试；建议优先补申请、投票、创始人 veto 三条路径
+
+## 推荐阅读顺序
+
+1. 先看 `Move.toml`
+2. 再读 [recruitment.move](./code/example-12/sources/recruitment.move)
+3. 最后启动 dApp 验证投票流
+
+## 最小调用链
+
+`用户申请 -> 成员投票 -> 票数达到阈值 -> 发 MemberNFT 或没收押金`
+
+## 验证步骤
+
+1. 在 [example-12](./code/example-12) 运行 `sui move build`
+2. 在 [example-12/dapp](./code/example-12/dapp) 运行 `pnpm install && pnpm dev`
+3. 验证申请、投票、通过、否决四条分支
+
+## 常见报错
+
+- dApp 没把成员身份和创始人身份拆开判断
+- 投票窗口时间和链上时间源不一致
+- 申请状态写成枚举但前端仍按字符串处理
+
 ## 需求分析
 
 **场景：** 联盟"死亡先锋"有 20 名成员，每次接纳新人需要：

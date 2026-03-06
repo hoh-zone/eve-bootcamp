@@ -6,6 +6,39 @@
 
 ---
 
+> 状态：设计进阶章节。正文以代币、市场、金库和定价机制为主。
+
+## 前置依赖
+
+- 建议先读 [Chapter 3](./chapter-03.md)
+- 建议先读 [Chapter 7](./chapter-07.md)
+
+## 源码位置
+
+- [book/src/code/chapter-08](./code/chapter-08)
+
+## 关键测试文件
+
+- 当前目录以 `alliance_token.move`、`item_market.move`、`vault.move` 为主。
+
+## 推荐阅读顺序
+
+1. 先读代币与金库设计
+2. 再打开 [book/src/code/chapter-08](./code/chapter-08) 对照市场与定价示例
+3. 最后结合 [Example 3](./example-03.md) 看完整产品化案例
+
+## 验证步骤
+
+1. 能比较固定价、荷兰拍卖和动态定价的区别
+2. 能定位金库和代币模块的职责
+3. 能把本章模型映射到拍卖或订阅类案例
+
+## 常见报错
+
+- 只描述经济模型，不给出可执行的对象与资金流设计
+
+---
+
 ## 8.1 EVE Frontier 的经济体系
 
 EVE Frontier 本身已有两种官方货币：
@@ -366,5 +399,5 @@ public entry fun distribute(
 
 - [Sui Coin 标准](https://docs.sui.io/guides/developer/sui-101/create-coin)
 - [Move Book：Coin 模块](https://move-book.com/programmability/coin.html)
-- [EVE Frontier 经济设计](../README.md)
+- [EVE Frontier 经济设计](https://github.com/evefrontier/builder-documentation/blob/main/README.md)
 - [Chapter 7：Table 与动态字段](./chapter-07.md)
