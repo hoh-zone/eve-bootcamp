@@ -1,57 +1,19 @@
 # 实战案例 5：联盟代币与自动分红系统
 
-> ⏱ 预计练习时间：2 小时
->
 > **目标：** 发行联盟专属 Coin（`ALLY Token`），构建一套自动分红合约——联盟运营的设施收入自动按持仓比例分配给代币持有者——并附带治理面板 dApp。
 
 ---
 
 > 状态：教学示例。仓库内已有联盟代币、金库和治理源码，重点在理解资金流与治理流如何并存。
 
-## 前置依赖
-
-- 建议先读 [Chapter 8](./chapter-08.md)、[Chapter 23](./chapter-23.md)
-- 需要本地 `sui` CLI 与 `pnpm`
-
 ## 对应代码目录
 
 - [example-05](./code/example-05)
 - [example-05/dapp](./code/example-05/dapp)
 
-## 源码位置
-
-- [Move.toml](./code/example-05/Move.toml)
-- [ally_token.move](./code/example-05/sources/ally_token.move)
-- [treasury.move](./code/example-05/sources/treasury.move)
-- [governance.move](./code/example-05/sources/governance.move)
-- [dapp/readme.md](./code/example-05/dapp/readme.md)
-
-## 关键测试文件
-
-- [tests/README.md](./code/example-05/tests/README.md)
-
-## 推荐阅读顺序
-
-1. 先看 `ally_token.move` 理解资产发行
-2. 再读 `treasury.move` 和 `governance.move`
-3. 最后启动治理面板 dApp 对照数据展示
-
 ## 最小调用链
 
 `发行 ALLY Token -> 收入汇入金库 -> 按持仓分红 -> 发起提案 -> 成员投票`
-
-## 验证步骤
-
-1. 在 [example-05](./code/example-05) 运行 `sui move build`
-2. 在 [example-05/dapp](./code/example-05/dapp) 运行 `pnpm install && pnpm dev`
-3. 按测试矩阵核对分红和投票两条主路径
-
-## 常见报错
-
-- 分红比例按余额快照和当前余额混用
-- 治理提案状态和金库实际执行不同步
-
----
 
 ## 需求分析
 

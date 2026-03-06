@@ -1,55 +1,19 @@
 # 实战案例 14：物品质押借贷协议
 
-> ⏱ 预计练习时间：2 小时
->
 > **目标：** 构建链上借贷协议——玩家以 NFT 或高价物品作为抵押，借取 SUI 流动性；逾期未还则抵押物被清算拍卖给出价最高者。
 
 ---
 
 > 状态：教学示例。正文覆盖核心借贷流程，完整目录以 `book/src/code/example-14/` 为准。
 
-## 前置依赖
-
-- 建议先读 [Chapter 7](./chapter-07.md)、[Chapter 8](./chapter-08.md)、[Chapter 13](./chapter-13.md)
-- 需要本地 `sui` CLI 与 `pnpm`
-- 需要对动态字段和资金池有基础理解
-
 ## 对应代码目录
 
 - [example-14](./code/example-14)
 - [example-14/dapp](./code/example-14/dapp)
 
-## 源码位置
-
-- [Move.toml](./code/example-14/Move.toml)
-- [collateral_loan.move](./code/example-14/sources/collateral_loan.move)
-- [dapp/readme.md](./code/example-14/dapp/readme.md)
-
-## 关键测试文件
-
-- 当前目录未附独立 Move 测试；建议优先补借款、还款、逾期清算三条路径
-
-## 推荐阅读顺序
-
-1. 先看 `Move.toml`
-2. 再读 [collateral_loan.move](./code/example-14/sources/collateral_loan.move)
-3. 最后启动 dApp 验证池状态和借款条件显示
-
 ## 最小调用链
 
 `出借人注入流动性 -> 借款人抵押 NFT -> 合约发放 SUI -> 到期还款或触发清算`
-
-## 验证步骤
-
-1. 在 [example-14](./code/example-14) 运行 `sui move build`
-2. 在 [example-14/dapp](./code/example-14/dapp) 运行 `pnpm install && pnpm dev`
-3. 验证建池、借款、还款、清算四条路径
-
-## 常见报错
-
-- 抵押物估值来自链下，但链上没有时间窗或签名约束
-- 还款和返还抵押物不在同一事务，留下异常中间态
-- 清算人支付金额、奖励比例、池子入账逻辑混淆
 
 ## 需求分析
 

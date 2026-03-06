@@ -1,155 +1,78 @@
-# Chapter 2：开发环境配置与工具链
+# Chapter 2：Sui 与 EVE 环境配置
 
-> ⏱ 预计学习时间：2 小时
->
-> **目标：** 从零搭建 EVE Frontier 本地开发环境，配置好 Sui CLI、EVE Vault 钱包，并跑通脚手架项目。
+> **目标：** 只完成本书最基础、最必要的两项安装：`Sui CLI` 与 `EVE Vault`。本章不再展开 Git、Docker、Node.js、pnpm 这类通用开发工具。
 
 ---
 
-> 状态：基础章节。正文以本地环境搭建和工具链认知为主。
+> 状态：基础章节。正文只保留 Sui 与 EVE Frontier 直接相关的安装与配置。
 
-## 前置依赖
+## 2.1 本章只安装什么？
 
-- 建议先读 [Chapter 1](./chapter-01.md)
-
-## 源码位置
-
-- 当前章无独立代码目录；主要参考 [builder-scaffold](https://github.com/evefrontier/builder-scaffold) 与后续 Chapter 31 的工程章节。
-
-## 关键测试文件
-
-- 本章以环境验收为主，无独立测试文件。
-
-## 推荐阅读顺序
-
-1. 先安装 CLI、Docker、Node.js
-2. 再确认钱包与网络配置
-3. 最后为 Chapter 31 的脚手架开发做好准备
-
-## 验证步骤
-
-1. 确认本机可用 `sui` CLI
-2. 确认 Docker 或本地链方案可选其一跑通
-3. 确认钱包和网络端点配置完成
-
-## 常见报错
-
-- 本地链、测试网、钱包网络配置不一致
-
----
-
-## 2.1 工具清单
-
-在开始之前，确认你需要安装的工具：
+这一章只处理两类和本书直接相关的安装项：
 
 | 工具 | 版本要求 | 用途 |
 |------|---------|------|
-| **Git** | 任意 | 代码管理 |
-| **Docker** | 最新版 | 推荐搭建本地 Sui 测试链 |
 | **Sui CLI** | testnet 版 | 编译、发布 Move 合约 |
-| **Node.js** | v24 LTS | 前端 dApp 开发 / TypeScript 脚本 |
-| **pnpm** | 最新版 | 包管理器 |
 | **EVE Vault** | 最新版 | 浏览器钱包 + 身份 |
 
 ---
 
-## 2.2 方法一（推荐）：Docker + builder-scaffold
+## 2.2 为什么先只装这两样？
 
-Docker 方法适用于所有操作系统，无需手动处理系统级依赖，是最快的上手方式。
+因为你在继续往下读之前，真正必须具备的最小能力只有两项：
 
-### 步骤一：克隆脚手架仓库
+- **本地能跑 `sui` 命令**
+  你后面所有 Move 编译、测试、发布、对象查询都依赖它
+- **浏览器里有一个可用的 EVE 钱包身份**
+  你后面所有 dApp 连接、签名、领测试资产都依赖它
 
-```bash
-git clone https://github.com/evefrontier/builder-scaffold.git
-cd builder-scaffold
-```
+像 `Git`、`Docker`、`Node.js`、`pnpm` 当然后面还会用到，但它们属于：
 
-`builder-scaffold` 是 EVE Frontier 官方提供的开发模板，包含：
-- 预配置的 Sui 本地测试网（localnet）Docker 环境
-- 示例 Move 合约（Smart Gate、Storage Unit 扩展）
-- TypeScript 交互脚本
+- 通用开发工具
+- 脚手架工程工具
+- 前端和脚本运行工具
 
-### 步骤二：启动 Docker 本地链
+这些更适合在你进入 [Chapter 31](./chapter-31.md) 和 [Chapter 32](./chapter-32.md) 时，再结合工程目录一起装。
 
-```bash
-cd docker
-# 按照 docker/readme.md 中的指引启动
-docker compose up -d
-```
+### 这一章真正要建立的，不只是两个软件
 
-启动后你会获得：
-- 一个运行中的 Sui localnet 节点
-- 预部署好的 EVE Frontier World Contracts（游戏世界合约）
-- 测试用账号和 SUI 代币
+更准确地说，这一章是在建立两套工作入口：
 
-> ✅ **验证**：打开浏览器访问 `http://localhost:9001` 确认本地节点在线
+- **命令行入口**
+  给你做编译、发布、查询、测试
+- **浏览器入口**
+  给你做钱包连接、签名、dApp 交互
+
+后面你几乎所有开发动作，都会在这两个入口之间来回切换：
+
+- 写完合约，用 CLI 编译和发布
+- 打开前端，用 EVE Vault 连接和签名
+- 查对象时可能用 CLI，也可能用前端或 GraphQL
+
+所以这章虽然看起来只是安装，实际上是在给后面全书铺“工作台”。
 
 ---
 
-## 2.3 方法二：手动安装（按操作系统）
+## 2.3 安装 Sui CLI
 
-如果你不想使用 Docker，按照你的系统逐步安装。
-
-### macOS
+推荐直接使用官方的 `suiup` 安装方式。这样本章就不需要区分 Homebrew、apt、nvm 之类系统工具链。
 
 ```bash
-# 1. 安装 Homebrew（如果没有）
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-export PATH="/opt/homebrew/bin:$PATH"
-
-# 2. 安装 Git
-brew install git
-
-# 3. 安装 Sui CLI（推荐 suiup 方式）
-curl -sSfL https://raw.githubusercontent.com/MystenLabs/suiup/main/install.sh | sh
-# 重新打开终端后执行：
-suiup install sui@testnet
-
-# 验证安装
-sui --version
-
-# 4. 安装 Node.js 和 pnpm
-brew install node@24
-npm install -g pnpm
-```
-
-### Linux (Ubuntu 22.04+)
-
-```bash
-# 1. 安装基础工具
-sudo apt-get install git curl
-
-# 2. 安装 Sui CLI
-curl -sSfL https://raw.githubusercontent.com/MystenLabs/suiup/main/install.sh | sh
-# 重启 shell 后：
-suiup install sui@testnet
-
-# 3. 安装 Node.js 和 pnpm
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.35.3/install.sh | bash && . ~/.bashrc && nvm install 24
-npm install -g pnpm
-```
-
-### Windows
-
-推荐使用 **Git Bash** 来运行脚本命令：
-
-```bash
-# 1. 安装 Git for Windows：https://git-scm.com/download/win
-# 使用 Git Bash 运行以下命令：
-
-# 2. 安装 suiup
+# 安装 suiup
 curl -sSfL https://raw.githubusercontent.com/MystenLabs/suiup/main/install.sh | sh
 
-# 在 PowerShell 中安装 Sui
+# 重新打开终端或 reload shell 后执行
 suiup install sui@testnet
 
 # 验证
 sui --version
 ```
 
+如果 `sui --version` 能正常输出版本号，本章第一步就算完成。
+
 ---
 
-## 2.4 配置 Sui 客户端
+## 2.4 初始化 Sui 客户端
 
 安装 Sui CLI 后，需要初始化客户端并连接网络：
 
@@ -167,6 +90,46 @@ sui client active-address
 sui client balance
 ```
 
+### 你在这里到底完成了什么？
+
+执行完 `sui client` 后，你本地会多出一套最基本的链上身份和网络配置：
+
+- 当前活跃地址
+- 当前默认网络
+- 与该网络对应的 RPC 配置
+- 本地 CLI 之后发交易和查对象时要用到的账户上下文
+
+也就是说，`sui client` 不是单纯“看看余额”的命令，而是在给你后续所有 Move 开发动作打地基。
+
+### `sui client` 和 EVE Vault 是什么关系？
+
+这两个东西最容易让初学者混淆：
+
+- `sui client` 是命令行环境里的身份与网络配置
+- `EVE Vault` 是浏览器环境里的身份与签名入口
+
+它们都能代表“你”，但服务的场景不同：
+
+- 你在终端里发布合约、跑测试、查对象时，主要依赖 `sui client`
+- 你在网页里连接 dApp、点击按钮、签名交易时，主要依赖 `EVE Vault`
+
+### 它们必须是同一个地址吗？
+
+不一定。
+
+很多开发者会出现这种情况：
+
+- CLI 用一个测试地址
+- EVE Vault 里是另一个 zkLogin 地址
+
+这不是绝对错误，但你必须非常清楚：
+
+- 你现在在哪个地址上发包
+- 你的设施归哪个地址或角色控制
+- 你的前端连的是哪个钱包地址
+
+只要这三件事没对齐，你就会频繁遇到“我明明发了，前端为什么看不到 / 不能操作”的问题。
+
 ### 从 Faucet 获取测试 SUI
 
 如果连接的是 testnet：
@@ -178,11 +141,9 @@ sui client faucet
 # https://faucet.testnet.sui.io
 ```
 
-如果使用本地 Docker 网络，脚手架中已经包含了 Faucet 设置，无需手动请求。
-
 ---
 
-## 2.5 安装配置 EVE Vault 浏览器钱包
+## 2.5 安装并初始化 EVE Vault
 
 **EVE Vault** 是你的浏览器身份，用于连接 dApp 和授权交易。
 
@@ -198,72 +159,64 @@ sui client faucet
 
 > **优势**：zkLogin 不需要助记词，你的 Sui 地址完全由你的 OAuth 身份唯一推导出，安全且便捷。
 
----
+这里最值得理解的不是“安装方法”，而是它为什么会极大降低新用户门槛：
 
-## 2.6 理解 builder-scaffold 项目结构
+- 不需要先教育用户保存助记词
+- 不需要先装一套传统钱包心智
+- 用户可以直接用熟悉的账号体系进入链上交互
 
-打开 `builder-scaffold`，了解目录结构：
+对 Builder 来说，这意味着你的 dApp 不必默认把用户当成“已经是资深加密用户的人”。这会直接影响你的产品设计方式：
 
-```
-builder-scaffold/
-├── docker/                   # Docker 本地链配置
-│   ├── readme.md             # 启动说明
-│   └── docker-compose.yml   # 服务定义
-│
-├── move-contracts/           # 示例 Move 合约
-│   ├── smart_gate/           # 智能星门扩展示例
-│   │   └── sources/
-│   │       └── smart_gate.move
-│   └── storage_unit/         # 智能存储箱扩展示例（如有）
-│
-├── ts-scripts/               # TypeScript 交互脚本
-│   ├── setup/                # 初始化脚本（创建角色、建设施等）
-│   └── ...
-│
-└── README.md
-```
-
-### 关键文件：`Move.toml`
-
-每个 Move 项目都有一个配置文件：
-
-```toml
-[package]
-name = "smart_gate"
-version = "0.0.1"
-
-[dependencies]
-# 指向游戏世界合约依赖
-WorldContracts = { git = "https://github.com/evefrontier/world-contracts.git", subdir = "contracts/world", rev = "main" }
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "testnet" }
-
-[addresses]
-smart_gate = "0x0"
-```
+- 登录和连接流程可以更短
+- Gas 体验可以进一步配合赞助交易优化
+- 你可以把重点放在设施体验，而不是钱包教育
 
 ---
 
-## 2.7 验证环境：编译示例合约
+## 2.6 EVE Vault 在本书里具体负责什么？
 
-```bash
-cd builder-scaffold/move-contracts/smart_gate
+安装完 EVE Vault 后，它在后续章节里会承担三类职责：
 
-# 编译合约（检查语法和类型）
-sui move build
+- **钱包**
+  持有 LUX、SUI、NFT、权限凭证
+- **身份**
+  用 EVE Frontier 账号进入链上交互体系
+- **授权入口**
+  给 dApp 提供连接、签名、赞助交易能力
 
-# 预期输出：
-# UPDATING GIT DEPENDENCY ...
-# INCLUDING DEPENDENCY ...
-# BUILDING smart_gate
-```
+你可以先把它理解成：
 
-> ✅ **如果编译成功**，说明你的 Sui CLI、Move 依赖配置都正确。
+> `sui client` 是命令行里的链上身份，`EVE Vault` 是浏览器和 dApp 里的链上身份。
+
+两者不一定是同一个地址，但它们都必须工作正常。
+
+### 什么时候该先检查 CLI，什么时候该先检查钱包？
+
+这能帮你更快定位问题：
+
+- **合约编译失败**
+  先看 CLI
+- **发布交易失败**
+  先看 CLI 当前网络和地址
+- **前端连不上钱包**
+  先看 EVE Vault
+- **前端能连钱包但按钮报权限错误**
+  先核对钱包地址、角色归属和对象权限
+
+不要把所有链上问题都归咎于“钱包坏了”或者“CLI 配错了”。大多数时候，是你没有先分清问题发生在哪一层。
 
 ---
 
-## 2.8 EVE Vault Faucet：获取 LUX 测试代币
+## 2.7 EVE Vault Faucet：获取测试资产
 
-在开发和测试阶段，你需要 LUX 来模拟游戏内经济操作：
+在开发和测试阶段，你至少会碰到两种测试资产：
+
+- **测试 SUI**
+  用于链上交易 Gas
+- **测试 LUX**
+  用于模拟 EVE Frontier 游戏内经济交互
+
+获取 LUX 的方式：
 
 1. 安装 EVE Vault 后，在扩展界面找到 **GAS Faucet**
 2. 输入你的 Sui 地址请求测试代币
@@ -271,21 +224,82 @@ sui move build
 
 详细说明见：[GAS Faucet 文档](https://github.com/evefrontier/builder-documentation/blob/main/eve-vault/gas-faucet.md)
 
+### 为什么测试阶段同时需要 SUI 和 LUX？
+
+因为它们扮演的角色不同：
+
+- **SUI**
+  是链上交易的 Gas 资源，没有它很多交易连发都发不出去
+- **LUX**
+  更像 EVE Frontier 业务环境里的经济资产，很多教程和案例会用它模拟游戏内收费、结算、许可购买
+
+如果你只有 SUI，没有 LUX：
+
+- 你能发交易
+- 但很多业务流程没法按书里的方式演练
+
+如果你只有 LUX，没有 SUI：
+
+- 你甚至很难完成最基础的链上交互
+
 ---
+
+## 2.8 最小验收清单
+
+到这里为止，你不需要马上跑脚手架，也不需要先装前端依赖。先确认下面四件事：
+
+1. `sui --version` 能输出版本
+2. `sui client active-address` 能返回当前地址
+3. `EVE Vault` 已完成 zkLogin 初始化
+4. 钱包里至少能看到测试资产或可请求 Faucet
+
+如果这四件事都成立，说明你已经具备继续学习本书前半段的最小环境。
+
+### 最常见的三种环境错位
+
+#### 1. CLI 在 testnet，钱包却切在别的网络
+
+表现：
+
+- 终端里能查到对象
+- 前端里看不到对应资产或组件
+
+#### 2. CLI 地址和钱包地址不是同一个，但自己没意识到
+
+表现：
+
+- 合约是一个地址发的
+- dApp 连的是另一个地址
+- 前端操作时提示没有权限
+
+#### 3. 水龙头领到了币，但领到了“另一套身份”上
+
+表现：
+
+- 你明明领过测试币
+- 但当前正在用的钱包或 CLI 地址余额仍然是 0
+
+一旦遇到“我明明做了，但系统说没有”这种问题，先不要急着怀疑教程。先把这三件事重新核对一遍。
+
+### 什么时候再装其他工具？
+
+- 到 [Chapter 31](./chapter-31.md)：再装和使用 `builder-scaffold`
+- 到 [Chapter 32](./chapter-32.md)：再处理脚本与 dApp 依赖
+- 到具体案例章节：再按案例需要补充前端运行环境
 
 ## 🔖 本章小结
 
 | 步骤 | 操作 |
 |------|------|
-| 克隆脚手架 | `git clone https://github.com/evefrontier/builder-scaffold.git` |
-| 启动本地链 | `cd docker && docker compose up -d` (推荐) 或手动装 Sui CLI |
+| 安装 Sui CLI | `suiup install sui@testnet` |
 | 配置 Sui 客户端 | `sui client` 选择网络并创建地址 |
 | 安装 EVE Vault | Chrome 扩展 + zkLogin 创建链上身份 |
-| 验证环境 | `sui move build` 编译示例合约通过 |
+| 获取测试资产 | SUI Faucet + EVE Vault GAS Faucet |
+| 验证环境 | CLI 地址、钱包地址、网络、余额都可见 |
 
 ## 📚 延伸阅读
 
-- [Environment Setup 文档](https://github.com/evefrontier/builder-documentation/blob/main/tools/environment-setup.md)
-- [builder-scaffold GitHub](https://github.com/evefrontier/builder-scaffold)
 - [Sui CLI 完整文档](https://docs.sui.io/references/cli)
 - [Sui 客户端配置指南](https://docs.sui.io/guides/developer/getting-started/configure-sui-client)
+- [EVE Vault](https://github.com/evefrontier/evevault)
+- [EVE Vault GAS Faucet 文档](https://github.com/evefrontier/builder-documentation/blob/main/eve-vault/gas-faucet.md)

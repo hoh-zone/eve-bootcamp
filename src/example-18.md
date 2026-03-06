@@ -1,55 +1,19 @@
 # 实战案例 18：跨联盟外交合约（停火与资源条约）
 
-> ⏱ 预计练习时间：2 小时
->
 > **目标：** 构建链上外交合约——两个联盟可以签署条约（停火、资源共享、贸易协定），条约由双方 Leader 多签生效，违约可在链上举证，有效期内强制执行。
 
 ---
 
 > 状态：教学示例。正文覆盖条约状态机，完整目录以 `book/src/code/example-18/` 为准。
 
-## 前置依赖
-
-- 建议先读 [Example 12](./example-12.md)、[Chapter 11](./chapter-11.md)
-- 需要本地 `sui` CLI 与 `pnpm`
-- 需要理解签名证明、状态机与罚没资金流
-
 ## 对应代码目录
 
 - [example-18](./code/example-18)
 - [example-18/dapp](./code/example-18/dapp)
 
-## 源码位置
-
-- [Move.toml](./code/example-18/Move.toml)
-- [treaty.move](./code/example-18/sources/treaty.move)
-- [dapp/readme.md](./code/example-18/dapp/readme.md)
-
-## 关键测试文件
-
-- [tests/README.md](./code/example-18/tests/README.md)
-
-## 推荐阅读顺序
-
-1. 先看 `Move.toml`
-2. 再读 [treaty.move](./code/example-18/sources/treaty.move)
-3. 最后启动 dApp 对照条约状态展示
-
 ## 最小调用链
 
 `一方发起提案 -> 双方存押金并签署 -> 条约生效 -> 发生违约/撕约 -> 扣罚或退还押金`
-
-## 验证步骤
-
-1. 在 [example-18](./code/example-18) 运行 `sui move build`
-2. 在 [example-18/dapp](./code/example-18/dapp) 运行 `pnpm install && pnpm dev`
-3. 验证提案、双签、违约举报、终止条约四条路径
-
-## 常见报错
-
-- 押金金额来自不同分支但没有保证对等
-- 条约生效条件和前端“已生效”标记不同步
-- 违约证明没有绑定具体 treaty id 和时间窗口
 
 ## 测试闭环
 

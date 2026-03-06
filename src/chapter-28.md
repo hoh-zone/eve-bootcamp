@@ -6,43 +6,9 @@
 
 > 状态：已映射到官方示例目录。正文是结构化讲解，建议边读边打开扩展示例源码。
 
-## 前置依赖
-
-- 建议先读 [Chapter 4](./chapter-04.md)、[Chapter 24](./chapter-24.md)、[Chapter 31](./chapter-31.md)
-- 需要理解 `Typed Witness`、`AdminCap`、动态字段配置
-
-## 源码位置
-
-- [config.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/extension_examples/sources/config.move)
-- [tribe_permit.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/extension_examples/sources/tribe_permit.move)
-- [corpse_gate_bounty.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/extension_examples/sources/corpse_gate_bounty.move)
-- [turret.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/extension_examples/sources/turret.move)
-
-## 关键测试文件
-
-- [gate_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/extension_examples/tests/gate_tests.move)
-
-## 推荐阅读顺序
-
-1. 先看 [config.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/extension_examples/sources/config.move)
-2. 再看 `tribe_permit` 与 `corpse_gate_bounty` 两个 Gate 示例
-3. 最后对照 [gate_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/extension_examples/tests/gate_tests.move) 理解授权与配置写法
-
 ## 最小调用链
 
 `authorize_extension<XAuth> -> 写入 ExtensionConfig -> 业务入口校验规则 -> 调用 World Assembly API`
-
-## 验证步骤
-
-1. 进入 [extension_examples](https://github.com/evefrontier/world-contracts/tree/main/contracts/extension_examples)
-2. 运行 `sui move test`
-3. 重点观察 `config.move` 如何把规则和 witness 绑在一起
-
-## 常见报错
-
-- witness 类型不一致，导致授权过的扩展无法调用
-- 规则写进配置对象了，但入口函数没有读取同一个 key
-- 没有把共享配置和 AdminCap 初始化完整
 
 ## 对应代码目录
 
@@ -69,6 +35,8 @@
 - Extension 模式不是“改 World 合约源码”，而是通过 witness 和配置对象挂接行为
 - 授权成功不代表业务就能跑，配置 key 不一致一样会读不到规则
 - witness 类型一旦写错，问题通常不在逻辑，而在授权链本身
+
+Extension 模式真正厉害的地方，不是“可以插一段自定义代码”，而是它把扩展能力控制在一个很清晰的边界里：**World 继续掌握核心资产和核心状态，Builder 只在被允许的切面上改写规则**。这让 EVE 的扩展更像受约束的组合，而不是任意 monkey patch。你可以改变谁能过门、过门前要交什么、满足什么配置，但不能偷偷改写 Gate 本身的底层所有权和世界规则。
 
 ## 1. Extension 模式是什么？
 
@@ -151,6 +119,8 @@ pub(package) fun x_auth(): XAuth { XAuth {} }
 ```
 
 **设计亮点**：`ExtensionConfig` 用动态字段存储不同类型的"规则"，每个规则有自己的 Key 类型（如 `TribeConfigKey`、`BountyConfigKey`），互不干扰，可以任意组合。
+
+这也是为什么这里同时用了 dynamic field 和 typed witness。dynamic field 解决的是“规则怎么存、怎么扩”，typed witness 解决的是“谁有资格触发这套规则”。前者偏数据面，后者偏权限面。很多新手第一次写扩展时只顾着把配置表建出来，却忘了最关键的那条授权链，最后表现就是配置都在、代码也能编译，但 World 根本不会认这套扩展身份。
 
 ---
 
@@ -299,6 +269,8 @@ corpse_gate_bounty（物品消耗）：
 | 可重复使用 | 是（每次需 AdminCap 签发） | 每次都需消耗物品 |
 | 适用场景 | 社交门控（如联盟专属） | 经济激励（如赏金猎人） |
 
+这两个官方例子其实对应了 Builder 最常见的两类扩展思路：**身份过滤**和**资源交换**。前者重点在“你是谁”，后者重点在“你拿什么来换”。一旦看懂这两个母模式，很多别的玩法都只是变体，例如白名单市场、战利品兑换、任务门票、会籍权限、耗材开启等，都可以沿着这两条路去组合。
+
 ---
 
 ## 7. Builder 开发清单
@@ -314,6 +286,8 @@ corpse_gate_bounty（物品消耗）：
 6. 实现核心逻辑：检查规则 → 业务逻辑 → 调用 gate::issue_jump_permit<XAuth>
 7. 在 init() 中创建并转移 ExtensionConfig 和 AdminCap
 ```
+
+真正落地时，建议再多检查一件事：**扩展失败后，World 的核心状态是否仍然安全**。一个好的扩展即使读不到配置、权限不匹配、付款不足，也应该只是让本次业务 abort，而不是让 Gate、StorageUnit、Character 进入半完成状态。这也是为什么 World 把核心资产操作口收得很紧，尽量让失败回滚停留在扩展边界内。
 
 ---
 

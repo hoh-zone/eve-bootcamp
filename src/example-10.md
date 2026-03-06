@@ -1,58 +1,19 @@
 # 实战案例 10：太空资源争夺战（综合实战）
 
-> ⏱ 预计练习时间：2 小时（建议分两次进行）
->
 > **目标：** 整合本课程所有知识，构建一个微型完整游戏：两个联盟争夺一片矿区的控制权，包含炮塔攻防、星门收费、物品存储、代币奖励和实时战报 dApp。
 
 ---
 
 > 状态：综合案例。正文整合多个模块，是检验你是否真正把全书前半段串起来的最好案例。
 
-## 前置依赖
-
-- 建议先读 [Chapter 16](./chapter-16.md)、[Chapter 18](./chapter-18.md)、[Chapter 23](./chapter-23.md)
-- 需要本地 `sui` CLI 与 `pnpm`
-
 ## 对应代码目录
 
 - [example-10](./code/example-10)
 - [example-10/dapp](./code/example-10/dapp)
 
-## 源码位置
-
-- [Move.toml](./code/example-10/Move.toml)
-- [faction_nft.move](./code/example-10/sources/faction_nft.move)
-- [faction_gate.move](./code/example-10/sources/faction_gate.move)
-- [mining_depot.move](./code/example-10/sources/mining_depot.move)
-- [war_token.move](./code/example-10/sources/war_token.move)
-- [dapp/readme.md](./code/example-10/dapp/readme.md)
-
-## 关键测试文件
-
-- [tests/README.md](./code/example-10/tests/README.md)
-
-## 推荐阅读顺序
-
-1. 先看四个合约模块分别负责什么
-2. 再画出矿区争夺战的状态流
-3. 最后启动 dApp 对照全局战场面板
-
 ## 最小调用链
 
 `发放势力 NFT -> 星门/炮塔按势力校验 -> 玩家采矿获奖 -> WAR Token 发放 -> dApp 展示战况`
-
-## 验证步骤
-
-1. 在 [example-10](./code/example-10) 运行 `sui move build`
-2. 在 [example-10/dapp](./code/example-10/dapp) 运行 `pnpm install && pnpm dev`
-3. 按测试矩阵逐项核对势力校验、采矿奖励与资源刷新
-
-## 常见报错
-
-- 多个模块状态更新不在同一事务里，导致战况面板和链上状态飘移
-- 前端把“势力归属”当作缓存字段，而不是链上可查询状态
-
----
 
 ## 项目全景
 

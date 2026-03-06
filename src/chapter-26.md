@@ -6,42 +6,9 @@
 
 > 状态：教学示例。位置证明的消息组织和签名流程会因业务而变，本章重点是解释协议结构和验证边界。
 
-## 前置依赖
-
-- 先理解 [Chapter 15](./chapter-15.md) 的位置系统概念
-- 建议结合 [Chapter 25](./chapter-25.md) 一起阅读链下签名流程
-- 需要能打开 World 合约与对应测试
-
-## 源码位置
-
-- [location.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/primitives/location.move)
-- [sig_verify.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/crypto/sig_verify.move)
-
-## 关键测试文件
-
-- [location_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/tests/primitives/location_tests.move)
-
-## 推荐阅读顺序
-
-1. 先读 [location.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/primitives/location.move) 中 proof 结构
-2. 再看 [location_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/tests/primitives/location_tests.move) 的正反例
-3. 最后把 proof 校验路径对照到你的 Gate / Turret / Storage Unit 业务
-
 ## 最小调用链
 
 `游戏服务器观测位置 -> 生成 LocationProof -> 玩家提交 proof -> 合约反序列化并验证 -> 放行/拒绝业务动作`
-
-## 验证步骤
-
-1. 进入 [world-contracts/contracts/world](https://github.com/evefrontier/world-contracts/tree/main/contracts/world)
-2. 运行 `sui move test location`
-3. 对照测试检查 proof 中坐标、时间戳、签名者和距离阈值
-
-## 常见报错
-
-- BCS 编码顺序和链上定义不一致
-- 证明里没有时间窗口，导致旧 proof 可复用
-- 只校验“在场”，没有校验“与哪个对象临近”
 
 ## 对应代码目录
 
@@ -68,6 +35,8 @@
 - 位置证明不是只证明“我在场”，而是证明“我在某个对象附近、在某个时间窗内”
 - 只校验距离不校验目标对象，proof 就可能被串用到别的业务入口
 - BCS 一旦字段顺序不一致，问题通常不在密码学，而在编码
+
+位置证明最好按协议层来理解，而不是按“一个签名对象”来理解。它至少有 4 层含义：谁在场、相对谁在场、在多长时间窗内有效、这份证明还绑定了哪些业务上下文。真正安全的 Builder 设计，不会只拿 `distance` 一个字段做判断，而是会把 `player_address`、`target_structure_id`、`target_location_hash`、`deadline_ms` 甚至 `data` 里的业务标识一起绑定成一份不可拆分的陈述。
 
 ## 1. 位置系统的核心问题
 
@@ -116,6 +85,8 @@ public struct LocationProof has drop {
     signature: vector<u8>,
 }
 ```
+
+这里最值得注意的字段其实是 `data`。它的存在不是为了“多塞点备注”，而是为了给不同业务留出扩展绑定位。比如宝箱系统可以把 chest 类型或开启轮次写进去，市场系统可以把 market_id 或订单上下文写进去。这样一份 proof 就不会只是“我在某地”，而是“我在某地，并且这份证明是给某个具体业务入口使用的”。如果放弃这层绑定，proof 很容易在多个入口间被串用。
 
 ---
 
@@ -183,6 +154,8 @@ fun validate_proof_message(
 2. ✅ 证明是为当前调用者颁发的（防抢跑）
 3. ✅ 目标位置与链上对象的位置一致（防篡改）
 
+这三重验证解决的是最基本的身份与目标绑定，但 Builder 自己往往还要补第四重验证：**业务绑定**。例如“开这个门”和“开那个宝箱”即使都在同一坐标附近，也不应该共享同一份 proof。最稳妥的做法是让 `data` 或目标对象字段能唯一指向本次业务入口，而不是只依赖空间接近这一件事。
+
 ---
 
 ## 4. BCS 反序列化：从字节还原 LocationProof
@@ -212,13 +185,13 @@ fun unpack_proof(proof_bytes: vector<u8>): (LocationProofMessage, vector<u8>) {
     // 按 BCS 字段顺序逐字段 "peel"（剥取）
     let server_address = bcs_data.peel_address();
     let player_address = bcs_data.peel_address();
-    
+
     // ID 类型通过 address 还原
     let source_structure_id = object::id_from_address(bcs_data.peel_address());
-    
+
     // vector<u8> 类型用 peel_vec! 宏
     let source_location_hash = bcs_data.peel_vec!(|bcs| bcs.peel_u8());
-    
+
     let target_structure_id = object::id_from_address(bcs_data.peel_address());
     let target_location_hash = bcs_data.peel_vec!(|bcs| bcs.peel_u8());
     let distance = bcs_data.peel_u64();
@@ -254,10 +227,10 @@ pub fun verify_distance(
     let (message, signature) = unpack_proof(proof_bytes);
     validate_proof_message(&message, location, server_registry, ctx.sender());
     let message_bytes = bcs::to_bytes(&message);
-    
+
     // 验证距离不超过 Builder 设定的阈值
     assert!(message.distance <= max_distance, EOutOfRange);
-    
+
     assert!(
         sig_verify::verify_signature(message_bytes, signature, message.server_address),
         ESignatureVerificationFailed,
@@ -360,6 +333,8 @@ fun is_deadline_valid(deadline_ms: u64, clock: &Clock): bool {
 **设计建议**：
 - 一次性行为（如开宝箱）：设置 30 秒有效期
 - 持续性行为（如采矿会话）：设置 5 分钟有效期，定期刷新
+
+过期时间本质上是在平衡两件事：安全窗口和交互成本。窗口太长，proof 被截获或被玩家延后使用的风险上升；窗口太短，又会让网络抖动、钱包确认延迟、赞助交易排队变成大量误伤。Builder 设计时不要只问“理论上多短最安全”，还要看真实交易路径里从服务器签名到链上落地通常要多久。
 
 ---
 

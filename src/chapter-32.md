@@ -6,30 +6,6 @@
 
 > 状态：已映射脚本与 dApp 目录。正文以本仓库内 `builder-scaffold` 的脚本布局为准。
 
-## 前置依赖
-
-- 已完成 [Chapter 31](./chapter-31.md) 的本地发布
-- `.env` 中已有 package id、object id、账户密钥
-- 已能运行 `pnpm` / `npm` 相关脚本
-
-## 源码位置
-
-- [builder-scaffold/ts-scripts/readme.md](https://github.com/evefrontier/builder-scaffold/blob/main/ts-scripts/readme.md)
-- [builder-scaffold/ts-scripts/smart_gate](https://github.com/evefrontier/builder-scaffold/tree/main/ts-scripts/smart_gate)
-- [builder-scaffold/ts-scripts/utils/helper.ts](https://github.com/evefrontier/builder-scaffold/blob/main/ts-scripts/utils/helper.ts)
-- [builder-scaffold/dapps/src/main.tsx](https://github.com/evefrontier/builder-scaffold/blob/main/dapps/src/main.tsx)
-- [builder-scaffold/dapps/src/App.tsx](https://github.com/evefrontier/builder-scaffold/blob/main/dapps/src/App.tsx)
-
-## 关键测试文件
-
-- 当前目录未附独立自动化测试，优先用本地链脚本闭环验证
-
-## 推荐阅读顺序
-
-1. 先读 [ts-scripts/readme.md](https://github.com/evefrontier/builder-scaffold/blob/main/ts-scripts/readme.md)
-2. 再读 `utils/helper.ts` 与 `smart_gate` 目录下具体脚本
-3. 最后打开 `dapps/src/main.tsx`、`App.tsx`、`AssemblyInfo.tsx`
-
 ## 最小调用链
 
 `读取 .env -> helper.ts 初始化客户端/对象 ID -> TS 脚本发起 PTB -> 链上对象变化 -> dApp 查询并展示新状态`
@@ -56,17 +32,12 @@
 
 如果一个脚本同时负责“读配置 + 查对象 + 拼复杂业务规则 + 打印 UI 文案”，基本就该拆了。
 
-## 验证步骤
+脚本体系真正要解决的，不是“把命令行自动化”这么简单，而是把工程动作拆成清晰职责：
 
-1. 在 [builder-scaffold](https://github.com/evefrontier/builder-scaffold) 安装依赖
-2. 逐个运行 `smart_gate` 目录下脚本完成授权、配规则、发 permit
-3. 启动 `dapps/`，确认页面能读取 Assembly 信息并发起交易
-
-## 常见报错
-
-- `.env` 不完整：脚本启动即报对象 ID 缺失
-- 发布和前端网络不一致：前端读不到对象
-- GraphQL / RPC 端点写反：页面能连钱包但查不到 World 数据
+- 配置来自哪里
+- 公共查询由谁负责
+- 单个业务动作由谁组织
+- 前端和脚本怎样共享同一套对象理解
 
 ## 两个常见反模式
 
@@ -112,6 +83,20 @@ BUILDER_PACKAGE_ID=0xdef...  # smart_gate 发布后的 Package ID
 # 租户名称（游戏世界的命名空间）
 TENANT=evefrontier
 ```
+
+### `.env` 的本质不是配置表，而是工程边界
+
+只要某个值会因为环境不同而变化，它就不该被散落在脚本正文里。
+
+最常见会漂移的值包括：
+
+- 网络
+- 包 ID
+- 管理员密钥
+- 租户名
+- 关键对象 ID
+
+一旦这些东西被脚本、前端、测试各写一份，后面排查会非常痛苦。
 
 ---
 
@@ -190,6 +175,18 @@ async function main() {
 }
 ```
 
+### 这类脚本最值得保留的结构是什么？
+
+就是这条清晰链路：
+
+1. 读环境
+2. 初始化上下文
+3. 解析链上关键对象
+4. 组装 PTB
+5. 提交并记录 digest
+
+只要你以后新增脚本也保持这个骨架，工程会稳定很多。
+
 ### 修改规则参数
 
 常见修改点：
@@ -236,6 +233,22 @@ utils/
 ├── derive-object-id.ts # 从 game item_id 推导 Sui 对象 ID（deterministic）
 └── proof.ts            # 生成 LocationProof（用于位置验证测试）
 ```
+
+### `helper.ts` 为什么既重要又危险？
+
+因为它天然会变成所有脚本都依赖的中心文件。
+
+重要在于：
+
+- 它统一了网络、客户端、配置读取
+- 它降低了重复代码
+
+危险在于：
+
+- 它很容易无限膨胀
+- 最后把一堆业务判断也吸进去
+
+所以更稳的原则是：`helper.ts` 只做“公共基础设施”，不要做“具体业务策略”。
 
 ---
 

@@ -6,31 +6,6 @@
 
 > 状态：教学示例。正文 API 说明以当前依赖版本与本仓库示例 dApp 为准，实际接入时需以本地包版本核对。
 
-## 前置依赖
-
-- 已理解 [Chapter 33](./chapter-33.md) 与 [Chapter 34](./chapter-34.md)
-- 已能运行一个最小 React dApp
-- 需要 EVE Vault 扩展或本地钱包调试环境
-
-## 源码位置
-
-- [builder-scaffold/dapps/src/main.tsx](https://github.com/evefrontier/builder-scaffold/blob/main/dapps/src/main.tsx)
-- [builder-scaffold/dapps/src/App.tsx](https://github.com/evefrontier/builder-scaffold/blob/main/dapps/src/App.tsx)
-- [builder-scaffold/dapps/src/WalletStatus.tsx](https://github.com/evefrontier/builder-scaffold/blob/main/dapps/src/WalletStatus.tsx)
-- [example-17 dapp/App.tsx](./code/example-17/dapp/src/App.tsx)
-- [sign_sponsored_transaction/main.tsx](https://github.com/evefrontier/evevault/blob/main/apps/extension/entrypoints/sign_sponsored_transaction/main.tsx)
-- [sponsoredTransactionHandler.ts](https://github.com/evefrontier/evevault/blob/main/apps/extension/src/lib/background/handlers/sponsoredTransactionHandler.ts)
-
-## 关键测试文件
-
-- 当前仓库未附独立 dApp 集成测试，优先参考 [keeper.lock.test.ts](https://github.com/evefrontier/evevault/blob/main/apps/extension/entrypoints/keeper/__tests__/keeper.lock.test.ts) 校验签名容器行为
-
-## 推荐阅读顺序
-
-1. 先看 `builder-scaffold/dapps` 的 provider 和钱包状态组件
-2. 再看 [example-17 dapp](./code/example-17/dapp) 了解游戏内浮层接法
-3. 最后看 EVE Vault 审批与 sponsored handler
-
 ## 最小调用链
 
 `dApp Provider 初始化 -> useConnection 发现钱包 -> 构建 PTB -> EVE Vault 审批/签名 -> 链上执行 -> dApp 刷新对象状态`
@@ -47,17 +22,11 @@
 
 这张表的作用不是做宣传，而是提醒你：接入层必须先探测钱包能力，再决定是否展示赞助交易入口。
 
-## 验证步骤
+这章真正该建立的意识是：
 
-1. 启动一个示例 dApp
-2. 用 EVE Vault 连接、执行普通交易、再执行赞助交易
-3. 人工验证断连、网络切换、Epoch 过期三类场景
+> 钱包接入不是“连上就行”，而是要按钱包能力差异设计完整交互降级路径。
 
-## 常见报错
-
-- `WalletSponsoredTransactionNotSupportedError`：当前钱包不是 EVE Vault
-- `maxEpoch exceeded`：zkLogin 证明过期
-- 网络与合约地址不匹配：能连钱包但交易或查询失败
+也就是说，你的 dApp 不能假设所有钱包都等价。
 
 ## 异常处理顺序
 
@@ -79,6 +48,12 @@
 因为 EVE Vault 实现了完整的 **Sui Wallet Standard**，任何使用 `@mysten/dapp-kit` 或 `@evefrontier/dapp-kit` 的 dApp 可以零配置地发现并连接 EVE Vault。
 
 同时，EVE Vault 还实现了 EVE Frontier 专有的 **赞助交易扩展**，让 Builder 可以替玩家支付 Gas。
+
+所以接入层通常至少要回答三件事：
+
+- 当前有没有钱包
+- 当前是不是 EVE Vault
+- 当前操作需不需要 Sponsored Tx 能力
 
 ---
 
@@ -118,6 +93,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 - **SmartObjectProvider**（游戏对象 GraphQL 查询）
 - **NotificationProvider**（链上操作通知）
 
+Provider 这里最关键的不是“包了多少层”，而是能力顺序。
+
+你后面的连接、签名、对象查询和通知体验，都依赖这层初始化顺序正确。
+
 ---
 
 ## 4. 连接钱包
@@ -155,6 +134,12 @@ function ConnectButton() {
 ### hasEveVault 的意义
 
 `hasEveVault` 为 `true` 时表示 EVE Vault 扩展已安装且在钱包列表中被发现。这让你可以给未安装的用户提供下载链接引导。
+
+连接流程里最容易忽视的问题，不是“按钮能不能点亮”，而是连上之后页面有没有立刻切到正确状态：
+
+- 当前地址是否刷新
+- 需要的对象查询是否重新拉取
+- 依赖钱包能力的按钮是否切换显示
 
 ---
 
@@ -198,6 +183,16 @@ function SendTxButton() {
     return <button onClick={handleSend} disabled={!isConnected}>颁发通行证</button>;
 }
 ```
+
+普通签名流程的关键不是代码能调用，而是用户能理解自己正在签什么。
+
+所以交易按钮前最好就把：
+
+- 目标对象
+- 关键成本
+- 预期结果
+
+尽量讲清楚，而不是把一切都留给钱包审批页。
 
 ---
 
@@ -263,6 +258,16 @@ app.post("/sponsor-tx", async (req, res) => {
     res.json({ sponsorSignature, serializedTx: tx.serialize() });
 });
 ```
+
+Sponsored Tx 的接入重点不是“省 Gas”，而是“前后端协同”。
+
+它要求至少三层都配合正确：
+
+- 前端能识别钱包能力
+- 后端能正确补 Gas 和签名
+- 钱包能完成对应审批流程
+
+只要其中一层口径不一致，用户看到的就会是“能连上，但怎么都发不出去”。
 
 ---
 

@@ -1,10 +1,16 @@
 # EVE Frontier 构建者完整课程
 
-> 每节课约 **2 小时**，共 **53 节**：35 个基础章节 + 18 个实战案例 ≈ **106 小时**完整学习内容。
+> 每节课约 **2 小时**，共 **54 节**：36 个基础章节 + 18 个实战案例 ≈ **108 小时**完整学习内容。
 
 ---
 
 ## 📖 章节主线（按建议学习顺序排列，每节约 2 小时）
+
+### 前置章节
+
+| 章节 | 文件 | 主题摘要 |
+|------|------|--------|
+| Prelude | [chapter-00.md](./chapter-00.md) | 先读懂 EVE Frontier 这款游戏：玩家在争夺什么、设施为什么重要、位置/战损/物流/经济如何串成完整玩法 |
 
 ### 第一阶段：入门基础（Chapter 1-5）
 
@@ -141,7 +147,7 @@
 
 | 阶段 | 内容 | 建议 | 时长 |
 |------|------|------|------|
-| 入门基础 | Chapter 1-5 → Example 1, 2 | 建立概念和组件直觉，并完成最小组件闭环 | ~14h |
+| 入门基础 | Prelude → Chapter 1-5 → Example 1, 2 | 先建立玩法直觉，再进入架构、组件和最小闭环 | ~16h |
 | 工程闭环 | Chapter 31-32 → 11-12 → 35 → Example 4, 11 | 先把 Builder 的端到端链路跑通 | ~14h |
 | 合约进阶 | Chapter 6-8, 13-15 → Example 3, 6, 7, 9, 13, 14, 16, 18 | 回头补强合约设计能力 | ~28h |
 | 架构与产品 | Chapter 16, 18, 21, 17, 19, 10, 22-23 → Example 5, 12, 15, 17 | 面向长期维护、游戏接入和产品化 | ~24h |
@@ -150,14 +156,14 @@
 
 ### 推荐学习路径
 
-**快速上手 Builder（最短路径，约 24h）**：
-Chapter 1-4 → Example 1-2 → Chapter 31-32 → Chapter 11-12 → Chapter 35 → Example 4
+**快速上手 Builder（最短路径，约 26h）**：
+Prelude → Chapter 1-4 → Example 1-2 → Chapter 31-32 → Chapter 11-12 → Chapter 35 → Example 4
 
-**完整 Builder 路径（约 94h）**：
-Chapter 1-5 → Example 1-2 → Chapter 31-32 → Chapter 11-12 → Chapter 35 → Example 4, 11 → Chapter 6-8 → Chapter 13-15 → Example 3, 6, 7, 9, 13, 14 → Chapter 16 → Chapter 18 → Chapter 21 → Chapter 17, 19 → Chapter 10, 22-23 → Example 5, 12, 15, 17 → Chapter 30 → Chapter 25-29 → Chapter 24 → Example 8, 10 → Chapter 33-34 → Chapter 20
+**完整 Builder 路径（约 96h）**：
+Prelude → Chapter 1-5 → Example 1-2 → Chapter 31-32 → Chapter 11-12 → Chapter 35 → Example 4, 11 → Chapter 6-8 → Chapter 13-15 → Example 3, 6, 7, 9, 13, 14 → Chapter 16 → Chapter 18 → Chapter 21 → Chapter 17, 19 → Chapter 10, 22-23 → Example 5, 12, 15, 17 → Chapter 30 → Chapter 25-29 → Chapter 24 → Example 8, 10 → Chapter 33-34 → Chapter 20
 
-**源码研究者路径（约 30h）**：
-Chapter 3 → Chapter 6 → Chapter 13 → Chapter 30 → Chapter 25-29 → Chapter 24 → Example 8, 10 → Chapter 31-32
+**源码研究者路径（约 32h）**：
+Prelude → Chapter 3 → Chapter 6 → Chapter 13 → Chapter 30 → Chapter 25-29 → Chapter 24 → Example 8, 10 → Chapter 31-32
 
 ---
 

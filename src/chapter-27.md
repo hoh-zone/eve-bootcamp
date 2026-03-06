@@ -6,43 +6,9 @@
 
 > 状态：教学示例。正文中的能量/燃料模型用于帮助你读懂官方实现，字段和入口请以实际模块为准。
 
-## 前置依赖
-
-- 建议先读 [Chapter 4](./chapter-04.md) 和 [Chapter 17](./chapter-17.md)
-- 需要能进入 `world-contracts/contracts/world`
-- 默认你已经理解 Network Node 与 Smart Assembly 的关系
-
-## 源码位置
-
-- [energy.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/primitives/energy.move)
-- [fuel.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/primitives/fuel.move)
-
-## 关键测试文件
-
-- [energy_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/tests/primitives/energy_tests.move)
-- [fuel_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/tests/primitives/fuel_tests.move)
-
-## 推荐阅读顺序
-
-1. 先读 [energy.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/primitives/energy.move) 理解容量分配
-2. 再读 [fuel.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/primitives/fuel.move) 理解消耗与续航
-3. 最后运行相关测试并回看建筑在线/离线切换条件
-
 ## 最小调用链
 
 `Network Node 分配能量 -> 建筑检查 energy/fuel 条件 -> 业务模块消耗燃料 -> 建筑状态更新`
-
-## 验证步骤
-
-1. 进入 [world-contracts/contracts/world](https://github.com/evefrontier/world-contracts/tree/main/contracts/world)
-2. 运行 `sui move test energy` 与 `sui move test fuel`
-3. 重点确认在线、断电、燃料耗尽三类状态迁移
-
-## 常见报错
-
-- 只补 fuel、不补 energy，建筑仍然离线
-- 读取旧状态缓存，误判可用容量
-- 没把燃料消耗和业务执行顺序绑在同一事务里
 
 ## 对应代码目录
 
@@ -71,6 +37,8 @@
 - 只补 fuel 不补 energy，建筑仍然可能离线
 - 状态判断必须和资源扣减放在同一事务，否则前端很容易读到过期状态
 
+这章最重要的理解，不是记住几个字段名，而是区分**容量约束**和**消耗约束**。Energy 回答的是“这台建筑有没有资格挂在这张电网上运行”；Fuel 回答的是“它此刻还能维持多久”。前者更像并发配额，后者更像时间账本。把这两件事混成一个余额模型，Builder 在设计在线状态、预警逻辑和补给系统时很容易出错。
+
 ## 1. 为什么需要双层能源系统？
 
 EVE Frontier 的建筑（SmartAssembly）需要同时管理两种不同性质的"资源"：
@@ -82,6 +50,8 @@ EVE Frontier 的建筑（SmartAssembly）需要同时管理两种不同性质的
 
 - 建筑联网（NetworkNode）会分配一定的 **能量容量** 给各个接入的建筑
 - 建筑本身需要持续燃烧 **燃料** 来维持运行
+
+从 Builder 视角看，这意味着很多“离线”其实有两种完全不同的根因：一种是没电网容量了，另一种是没燃料了。它们在玩家体验上都表现为“建筑不能用了”，但在产品动作上不一样。容量不足常常需要做网络拓扑、建筑接入顺序或升级决策；燃料不足更像补给、收费、代运营的问题。把这两个诊断面拆开，后面的告警和收费系统才会清晰。
 
 ---
 
@@ -133,7 +103,7 @@ pub(package) fun reserve(
 ) {
     let energy_required = energy_config.assembly_energy(assembly_type_id);
     assert!(energy_source.available_energy() >= energy_required, EInsufficientAvailableEnergy);
-    
+
     energy_source.total_reserved_energy = energy_source.total_reserved_energy + energy_required;
     event::emit(EnergyReservedEvent { ... });
 }
@@ -202,7 +172,7 @@ fun calculate_units_to_consume(
     // 1. 从 FuelConfig 读取该燃料类型的效率
     let fuel_type_id = *option::borrow(&fuel.type_id);
     let fuel_efficiency = fuel_config.fuel_efficiency.borrow(fuel_type_id);
-    
+
     // 2. 实际消耗速率 = 基础速率 × 效率系数
     let actual_consumption_rate_ms =
         (fuel.burn_rate_in_ms * fuel_efficiency) / PERCENTAGE_DIVISOR;
@@ -229,6 +199,8 @@ fun calculate_units_to_consume(
 **为什么需要 `previous_cycle_elapsed_time`？**
 
 ```
+
+这段设计体现的是“链上定时计费”常见的一个难点：你没法像游戏服务器那样每秒 tick 一次，只能在离散交易里结算已经流逝的时间。所以 `previous_cycle_elapsed_time` 实际是在保存上次结算没能整除掉的那部分时间尾差。如果没有它，系统每次结算都会向下取整，长期下来会系统性少扣燃料，经济模型就会被慢慢掏空。
 时间轴示例（burn_rate = 1小时/单位）：
 │───────────────────────────────────────────────────│
 0              60min          90min         120min
@@ -311,6 +283,8 @@ pub fun is_gate_operational(gate: &Gate): bool {
 // 只有在线建筑才能处理跳跃请求
 assert!(source_gate.status.is_online(), ENotOnline);
 ```
+
+这也是一个很重要的边界：World 内核把燃料细节藏在包内，不是为了限制 Builder，而是为了避免扩展直接篡改底层计费状态。Builder 更适合围绕“是否在线”“剩余补给是否足够”“是否需要提醒/收费/捐赠”来做产品层逻辑，而不是自己发明另一套 fuel 账本。
 
 ---
 

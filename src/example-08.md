@@ -1,56 +1,19 @@
 # 实战案例 8：Builder 竞赛系统（链上排行榜 + 自动奖励）
 
-> ⏱ 预计练习时间：2 小时
->
 > **目标：** 构建一套链上竞赛框架：在固定时间窗口内，玩家通过质押积分参与竞赛，排行榜记录链上，到时间自动结算，前三名获得 NFT 奖杯和代币奖励。
 
 ---
 
 > 状态：代码骨架。仓库内已附 `Move.toml`、`weekly_race.move` 和 dApp 目录，但积分上报授权、奖励资产类型与链下结算来源仍需按你的赛事业务补齐。
 
-## 前置依赖
-
-- 建议先读 [Chapter 11](./chapter-11.md)、[Chapter 12](./chapter-12.md)
-- 需要本地 `sui` CLI 与 `pnpm`
-- 需要能区分“链上状态机”和“链下积分聚合”的边界
-
 ## 对应代码目录
 
 - [example-08](./code/example-08)
 - [example-08/dapp](./code/example-08/dapp)
 
-## 源码位置
-
-- [Move.toml](./code/example-08/Move.toml)
-- [weekly_race.move](./code/example-08/sources/weekly_race.move)
-- [dapp/readme.md](./code/example-08/dapp/readme.md)
-
-## 关键测试文件
-
-- [tests/README.md](./code/example-08/tests/README.md)
-
-## 推荐阅读顺序
-
-1. 先看 [weekly_race.move](./code/example-08/sources/weekly_race.move) 的赛事对象与结算入口
-2. 再看 [tests/README.md](./code/example-08/tests/README.md) 明确必须守住的状态流
-3. 最后打开 [dapp/readme.md](./code/example-08/dapp/readme.md) 对照前端展示和操作入口
-
 ## 最小调用链
 
 `创建赛事 -> 充值奖池 -> 链下聚合积分 -> 服务器授权上报积分 -> 到期结算 -> 分发奖池与奖杯`
-
-## 验证步骤
-
-1. 在 [example-08](./code/example-08) 运行 `sui move build`
-2. 打开 [tests/README.md](./code/example-08/tests/README.md)，确认创建赛事、积分上报、结算、失败路径四组验收项
-3. 在 [example-08/dapp](./code/example-08/dapp) 运行 `pnpm install && pnpm dev`
-4. 人工核对排行榜展示、结算按钮、奖池金额和最终前三名是否一致
-
-## 常见报错
-
-- 把链下事件统计结果直接当真，不校验 `race_id`、时间窗和上报来源
-- 奖池资产类型和排行榜奖励类型混用，导致结算无法统一
-- 只在前端排序前三名，链上却没有做最基本的积分顺序校验
 
 ## 链下职责边界
 

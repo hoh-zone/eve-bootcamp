@@ -1,55 +1,19 @@
 # 实战案例 16：NFT 合成与拆解系统
 
-> ⏱ 预计练习时间：2 小时
->
 > **目标：** 构建材料合成系统——销毁多个低级 NFT 合成一个高级 NFT（概率性），也支持高级 NFT 拆解为材料；利用链上随机数确保结果公平。
 
 ---
 
 > 状态：教学示例。正文讲解合成/拆解与随机数接入，完整目录以 `book/src/code/example-16/` 为准。
 
-## 前置依赖
-
-- 建议先读 [Chapter 14](./chapter-14.md)、[Chapter 20](./chapter-20.md)
-- 需要本地 `sui` CLI 与 `pnpm`
-- 需要理解随机数对象 `0x8`
-
 ## 对应代码目录
 
 - [example-16](./code/example-16)
 - [example-16/dapp](./code/example-16/dapp)
 
-## 源码位置
-
-- [Move.toml](./code/example-16/Move.toml)
-- [forge.move](./code/example-16/sources/forge.move)
-- [dapp/readme.md](./code/example-16/dapp/readme.md)
-
-## 关键测试文件
-
-- 当前目录未附独立 Move 测试；建议优先补成功合成、失败返还、拆解三条路径
-
-## 推荐阅读顺序
-
-1. 先看 `Move.toml`
-2. 再读 [forge.move](./code/example-16/sources/forge.move)
-3. 最后启动 dApp 看合成结果事件如何驱动 UI
-
 ## 最小调用链
 
 `用户选择材料 -> 合约读取随机数 -> 执行合成/失败返还 -> 发事件 -> 前端刷新结果`
-
-## 验证步骤
-
-1. 在 [example-16](./code/example-16) 运行 `sui move build`
-2. 在 [example-16/dapp](./code/example-16/dapp) 运行 `pnpm install && pnpm dev`
-3. 验证材料选择、合成成功、失败回退三条路径
-
-## 常见报错
-
-- 没有绑定系统随机数对象 `0x8`
-- 前端只读交易 digest，没有读事件结果
-- 材料阶级未校验一致，导致非法合成
 
 ## 需求分析
 

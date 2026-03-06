@@ -1,52 +1,18 @@
 # 实战案例 9：跨 Builder 协议聚合市场
 
-> ⏱ 预计练习时间：2 小时
->
 > **目标：** 设计一个"协议适配器"层，让用户在一个 dApp 中同时访问多个不同 Builder 发布的市场合约（尽管它们接口各异），实现类似 DEX 聚合器的体验。
 
 ---
 
 > 状态：教学示例。当前案例以聚合器架构和适配器分层为主，重点在统一接口而非单个 Move 合约。
 
-## 前置依赖
-
-- 建议先读 [Chapter 12](./chapter-12.md)、[Chapter 13](./chapter-13.md)
-- 需要本地 `pnpm` 与前端运行环境
-
 ## 对应代码目录
 
 - [example-09/dapp](./code/example-09/dapp)
 
-## 源码位置
-
-- [dapp/readme.md](./code/example-09/dapp/readme.md)
-
-## 关键测试文件
-
-- [tests/README.md](./code/example-09/tests/README.md)
-
-## 推荐阅读顺序
-
-1. 先读正文里的适配器接口设计
-2. 再打开 [dapp/readme.md](./code/example-09/dapp/readme.md)
-3. 最后按测试矩阵检查报价聚合边界
-
 ## 最小调用链
 
 `前端查询多个市场 -> 适配器归一化报价 -> 选出最优市场 -> 按对应协议提交购买`
-
-## 验证步骤
-
-1. 在 [example-09/dapp](./code/example-09/dapp) 运行 `pnpm install && pnpm dev`
-2. 按测试矩阵验证统一报价、最低价选择和失败隔离
-3. 人工确认单个市场失败不会拖垮聚合页
-
-## 常见报错
-
-- 把不同 Builder 的市场接口直接写死在页面组件里
-- 聚合展示价格和最终执行价格不是同一来源
-
----
 
 ## 需求分析
 

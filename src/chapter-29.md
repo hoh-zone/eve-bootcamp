@@ -6,41 +6,9 @@
 
 > 状态：教学示例。正文关注优先级模型和扩展切入点，具体字段仍应以官方 `turret` 模块源码为准。
 
-## 前置依赖
-
-- 建议先读 [Chapter 4](./chapter-04.md) 与 [Chapter 28](./chapter-28.md)
-- 需要理解 `InProximity`、`Aggression` 这类事件语义
-
-## 源码位置
-
-- [turret.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/assemblies/turret.move)
-- [extension_examples/sources/turret.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/extension_examples/sources/turret.move)
-
-## 关键测试文件
-
-- [turret_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/tests/assemblies/turret_tests.move)
-
-## 推荐阅读顺序
-
-1. 先看 World 侧 [turret.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/assemblies/turret.move)
-2. 再看扩展示例 [extension_examples/sources/turret.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/extension_examples/sources/turret.move)
-3. 最后用 [turret_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/tests/assemblies/turret_tests.move) 校对行为预期
-
 ## 最小调用链
 
 `飞船进入范围/触发 aggression -> turret 模块收集候选目标 -> 扩展规则排序 -> 执行攻击决策`
-
-## 验证步骤
-
-1. 进入 [world-contracts/contracts/world](https://github.com/evefrontier/world-contracts/tree/main/contracts/world)
-2. 运行 `sui move test turret`
-3. 对照候选目标、优先级、过滤条件三个阶段读源码
-
-## 常见报错
-
-- 只改了排序，没有改过滤条件，导致仍会打到不该打的目标
-- 扩展状态与炮塔共享对象状态不同步
-- 使用链下数据时没有给出有效证明
 
 ## 对应代码目录
 
@@ -69,6 +37,8 @@
 - 炮塔 AI 的扩展点通常是“排序”，不是绕过内核直接接管开火
 - 只改优先级不改过滤条件，炮塔仍可能攻击不该攻击的目标
 - 候选目标字段来自游戏事件和内核状态，不应凭前端或链下缓存臆造
+
+这一章要先分清两件事：**谁有资格成为候选目标**，以及**候选目标之间谁排第一**。前者是过滤问题，决定目标是否进入候选集；后者是排序问题，决定先打谁。大多数 Builder AI 扩展真正能安全影响的是后者，而不是完全推翻前者。这样设计的目的是把“世界规则”与“局部策略”拆开，避免一个扩展包直接把炮塔变成任何它想要的武器。
 
 ## 1. 炮塔（Turret）是什么？
 
@@ -122,6 +92,8 @@ pub enum BehaviourChangeReason has copy, drop, store {
 
 **重要设计**：每次调用，每个目标候选人只有**一个**最相关的原因（游戏引擎选最重要的那个）。
 
+这说明 `BehaviourChangeReason` 更像一次决策重算的上下文提示，而不是完整战斗历史。它告诉扩展“为什么这次要重算优先级”，却不保证把过去所有事件都带进来。因此 Builder 在写 AI 时，不要假设单次调用里能看到完整仇恨链或完整战斗日志；如果真的需要长期记忆，应该额外设计自己的配置或统计对象。
+
 ---
 
 ## 3. 返回格式：ReturnTargetPriorityList
@@ -136,6 +108,8 @@ pub struct ReturnTargetPriorityList has copy, drop, store {
 ```
 
 炮塔攻击的是列表中 `priority_weight` 最高的目标（相同权重时打第一个）。
+
+换句话说，扩展返回的是**建议顺序**，不是“立即执行某个攻击动作”的命令式接口。这个差别很关键。命令式接口意味着扩展可以越权控制底层武器行为，而优先级接口只让扩展在内核已经允许的候选集上表达偏好，整体安全边界会稳很多。
 
 ---
 
@@ -297,6 +271,8 @@ turret::authorize_extension<my_turret::ai::AiType>(
 ```
 
 之后游戏引擎就会在需要决策时调用该扩展包的 `get_target_priority_list`。
+
+生产环境里更容易出问题的地方通常不是 AI 数学公式本身，而是“扩展到底有没有真的挂上去”。也就是说，Builder 排查顺序应该先查授权是否成功、炮塔是否在线、配置对象是否可读、TypeName 是否匹配，再去查权重算法。否则很容易把一个授权链问题误判成 AI 逻辑问题。
 
 ---
 

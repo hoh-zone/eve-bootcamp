@@ -6,42 +6,9 @@
 
 > 状态：教学示例。正文中的验证流程是对官方实现的拆解版，落地时请优先对照实际源码和测试。
 
-## 前置依赖
-
-- 了解 `AdminACL`、`verify_sponsor` 与服务端签名场景
-- 建议先读 [Chapter 11](./chapter-11.md) 和 [Chapter 24](./chapter-24.md)
-- 默认你已经能在本地打开 `world-contracts` 源码
-
-## 源码位置
-
-- [sig_verify.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/crypto/sig_verify.move)
-- [access_control.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/access/access_control.move)
-
-## 关键测试文件
-
-- [sig_verify_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/tests/crypto/sig_verify_tests.move)
-
-## 推荐阅读顺序
-
-1. 先看 [sig_verify.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/crypto/sig_verify.move) 的输入结构
-2. 再看 [sig_verify_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/tests/crypto/sig_verify_tests.move) 理解合法/非法签名边界
-3. 最后回看你自己的业务消息编码方式是否与 intent 一致
-
 ## 最小调用链
 
 `游戏服务器构造消息 -> Ed25519 签名 -> 玩家提交 bytes/signature -> sig_verify 模块校验 -> 合约继续执行`
-
-## 验证步骤
-
-1. 进入 [world-contracts/contracts/world](https://github.com/evefrontier/world-contracts/tree/main/contracts/world)
-2. 运行 `sui move test sig_verify`
-3. 重点核对消息体编码、intent 前缀、签名者地址三者是否匹配
-
-## 常见报错
-
-- 消息 bytes 与链下签名前 bytes 不一致
-- 只校验签名、不校验业务字段，导致可重放
-- 忘记给消息加过期时间或 nonce
 
 ## 对应代码目录
 
@@ -68,6 +35,15 @@
 - 签名通过不等于业务通过，业务字段仍要单独校验
 - 链下签名前的 bytes 只要有一个字段编码不同，链上验证就必然失败
 - `AdminACL` 解决的是“谁可以提交/赞助”，不是“消息内容一定正确”
+
+读签名系统时，建议把验证拆成 4 层，不要混成一个“验签通过就安全”：
+
+1. 字节层：链下和链上看到的 `message_bytes` 是否完全一致。
+2. 密码学层：签名是否真由那把私钥产生。
+3. 身份层：这把私钥对应的地址是否属于被允许的服务器。
+4. 业务层：消息里的玩家、对象、deadline、nonce、数量等字段是否真的和这次调用匹配。
+
+`sig_verify` 只负责前两层和一部分第三层，真正决定业务是否安全的，往往是你在外面那层包装函数写得够不够严。
 
 ## 1. 为什么需要链下签名？
 
@@ -222,6 +198,8 @@ Move 合约
     └─ ed25519_verify(sig, pk, digest) → true/false
 ```
 
+这个端到端流程里最容易被忽略的是“**签名绑定的到底是什么**”。如果服务器签的是“玩家 A 今日可领取奖励”这种宽泛语义，而不是“玩家 A 在 deadline 前可为 item_id=123 执行 action=2 一次”，那么验签虽然正确，权限边界仍然过宽。很多重放漏洞、串用漏洞都不是出在加密算法上，而是出在消息语义过松。
+
 ---
 
 ## 5. 如何在 Builder 合约中使用？
@@ -267,6 +245,8 @@ public fun redeem_server_permit(
     // ...发放物品、积分等
 }
 ```
+
+实际写 Builder 合约时，最少要补齐 5 个绑定项：`player`、`action_type`、`target object id`、`deadline`、`nonce/request_id`。少任何一个，都可能出现“签名本身没问题，但被拿去做了原本不想允许的事”。一个简单原则是：**凡是你不希望用户替换、复用、拖延执行的字段，都应该进被签名字节**。
 
 ### 5.2 实战：Location Proof 验证（预览 Ch.26 内容）
 

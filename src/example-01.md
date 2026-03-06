@@ -1,56 +1,19 @@
 # 实战案例 1：白名单矿区守卫（智能炮塔访问控制）
 
-> ⏱ 预计练习时间：2 小时
->
 > **目标：** 编写一个智能炮塔扩展，让炮塔只放行持有"矿区通行证 NFT"的玩家；同时构建一个管理界面，让 Owner 能在线颁发通行证。
 
 ---
 
 > 状态：已映射到本地代码目录。正文覆盖通行证 NFT 与炮塔白名单逻辑，适合作为第一个完整 Builder 闭环。
 
-## 前置依赖
-
-- 建议先读 [Chapter 6](./chapter-06.md)、[Chapter 14](./chapter-14.md)
-- 需要本地 `sui` CLI 与 `pnpm`
-
 ## 对应代码目录
 
 - [example-01](./code/example-01)
 - [example-01/dapp](./code/example-01/dapp)
 
-## 源码位置
-
-- [Move.toml](./code/example-01/Move.toml)
-- [mining_pass.move](./code/example-01/sources/mining_pass.move)
-- [guard_extension.move](./code/example-01/sources/guard_extension.move)
-- [dapp/readme.md](./code/example-01/dapp/readme.md)
-
-## 关键测试文件
-
-- [tests/README.md](./code/example-01/tests/README.md)
-
-## 推荐阅读顺序
-
-1. 先看 `mining_pass.move` 理解凭证 NFT
-2. 再读 `guard_extension.move` 看炮塔校验逻辑
-3. 最后打开 dApp 对照颁证与撤销流程
-
 ## 最小调用链
 
 `Owner 颁发通行证 -> 玩家持有 MiningPass -> 炮塔扩展读取凭证 -> 放行或开火`
-
-## 验证步骤
-
-1. 在 [example-01](./code/example-01) 运行 `sui move build`
-2. 在 [example-01/dapp](./code/example-01/dapp) 运行 `pnpm install && pnpm dev`
-3. 按测试矩阵验证颁证、放行、撤销三条路径
-
-## 常见报错
-
-- 白名单逻辑只查地址，不绑定具体 `MiningPass` 对象
-- 撤销后前端缓存未刷新，导致仍显示可通行
-
----
 
 ## 需求分析
 

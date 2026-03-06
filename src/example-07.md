@@ -1,55 +1,19 @@
 # 实战案例 7：星门物流网络（多跳路由系统）
 
-> ⏱ 预计练习时间：2 小时
->
 > **目标：** 构建一个联盟拥有多个星门的物流网络，支持"A → B → C"多跳路由，链下计算最优路径，链上原子执行多次跳跃；并提供路由规划 dApp。
 
 ---
 
 > 状态：教学示例。正文聚焦多跳路由和链下规划，完整目录以 `book/src/code/example-07/` 为准。
 
-## 前置依赖
-
-- 建议先读 [Chapter 12](./chapter-12.md)、[Chapter 17](./chapter-17.md)
-- 需要本地 `sui` CLI 与 `pnpm`
-
 ## 对应代码目录
 
 - [example-07](./code/example-07)
 - [example-07/dapp](./code/example-07/dapp)
 
-## 源码位置
-
-- [Move.toml](./code/example-07/Move.toml)
-- [multi_hop.move](./code/example-07/sources/multi_hop.move)
-- [dapp/readme.md](./code/example-07/dapp/readme.md)
-
-## 关键测试文件
-
-- [tests/README.md](./code/example-07/tests/README.md)
-
-## 推荐阅读顺序
-
-1. 先看 `multi_hop.move` 的路径执行模型
-2. 再理解链下如何算最优路径
-3. 最后启动 dApp 对照多跳路线展示
-
 ## 最小调用链
 
 `链下计算最优路由 -> 构建多跳 PTB -> 链上原子执行所有跳跃 -> 全部成功或全部回滚`
-
-## 验证步骤
-
-1. 在 [example-07](./code/example-07) 运行 `sui move build`
-2. 在 [example-07/dapp](./code/example-07/dapp) 运行 `pnpm install && pnpm dev`
-3. 按测试矩阵验证原子执行和失败回滚
-
-## 常见报错
-
-- 链下算出的路径和链上执行顺序不一致
-- 多跳过程拆成多笔交易，失去原子性
-
----
 
 ## 需求分析
 

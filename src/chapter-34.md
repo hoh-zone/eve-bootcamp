@@ -6,47 +6,9 @@
 
 > 状态：源码导读。适合边读文档边打开扩展入口点与 background 代码核对消息流。
 
-## 前置依赖
-
-- 了解 Chrome MV3、content script、service worker
-- 建议先读 [Chapter 33](./chapter-33.md)
-- 需要能在本地打开 [evevault](https://github.com/evefrontier/evevault)
-
-## 源码位置
-
-- [MONOREPO_README.md](https://github.com/evefrontier/evevault/blob/main/docs/MONOREPO_README.md)
-- [background.ts](https://github.com/evefrontier/evevault/blob/main/apps/extension/entrypoints/background.ts)
-- [keeper.ts](https://github.com/evefrontier/evevault/blob/main/apps/extension/entrypoints/keeper/keeper.ts)
-- [PopupApp.tsx](https://github.com/evefrontier/evevault/blob/main/apps/extension/src/features/wallet/components/PopupApp.tsx)
-- [oauthService.ts](https://github.com/evefrontier/evevault/blob/main/apps/extension/src/lib/background/services/oauthService.ts)
-- [sponsoredTransactionHandler.ts](https://github.com/evefrontier/evevault/blob/main/apps/extension/src/lib/background/handlers/sponsoredTransactionHandler.ts)
-
-## 关键测试文件
-
-- [keeper.lock.test.ts](https://github.com/evefrontier/evevault/blob/main/apps/extension/entrypoints/keeper/__tests__/keeper.lock.test.ts)
-- [keeperService.test.ts](https://github.com/evefrontier/evevault/blob/main/packages/shared/src/services/__tests__/keeperService.test.ts)
-
-## 推荐阅读顺序
-
-1. 先读 [MONOREPO_README.md](https://github.com/evefrontier/evevault/blob/main/docs/MONOREPO_README.md)
-2. 再看 `background.ts`、`keeper.ts`
-3. 最后看 `PopupApp.tsx`、`oauthService.ts` 与赞助交易 handler
-
 ## 最小调用链
 
 `页面/内容脚本请求 -> background 分发消息 -> keeper 保护敏感状态 -> 审批页签名 -> 响应回发到调用方`
-
-## 验证步骤
-
-1. 按 README 本地构建 EVE Vault
-2. 重点调试 `background`、`keeper`、审批页三类入口
-3. 对照测试确认锁屏、keeper、赞助交易消息流没有断点
-
-## 常见报错
-
-- MV3 权限或 host 权限缺失，导致注入/消息失败
-- background 生命周期被误判，状态丢失
-- keeper 与 popup 之间的消息协议字段不一致
 
 ## 对应代码目录
 
@@ -83,9 +45,28 @@ evevault/
 
 **构建工具**：Bun（包管理）+ Turborepo（构建缓存）+ WXT（扩展框架）
 
+Monorepo 这里真正值得理解的是：
+
+> Vault 不是一个单页扩展，而是一组彼此隔离、通过消息协议协作的子系统。
+
+所以看目录时，最好不要只看“文件在哪”，而是看“哪层持有哪些权力”。
+
 ---
 
 ## 2. Chrome MV3 的 5 层脚本架构
+
+这 5 层架构真正解决的是浏览器扩展里的安全矛盾：
+
+- dApp 需要一个好接入的钱包接口
+- 但敏感状态又不能暴露给任意页面脚本
+
+所以架构被刻意拆成：
+
+- 页面层可发现
+- 中转层可通信
+- 后台层可调度
+- Keeper 层可保密
+- 审批页可让用户做最终确认
 
 Chrome MV3 扩展中各脚本的隔离边界和通信方式：
 
@@ -124,6 +105,18 @@ Chrome MV3 扩展中各脚本的隔离边界和通信方式：
 ---
 
 ## 3. 消息系统（Message Protocol）
+
+消息协议为什么是扩展系统的生命线？
+
+因为这套扩展不是靠函数直接互调，而是靠跨进程消息驱动。
+
+一旦消息类型、字段语义或响应约定变得混乱，就会出现最难排查的问题：
+
+- 页面看起来请求发出去了
+- background 也收到了
+- 但 keeper 或审批页返回的语义已经不一致
+
+所以这类系统里，消息协议本身就是“接口标准”。
 
 所有跨进程通信通过标准化的消息类型定义：
 
@@ -279,6 +272,16 @@ switch (message.type) {
 - 浏览器关闭或 Keeper 崩溃 → 私钥自动销毁
 - 重新解锁 → 重新生成新的临时密钥对
 - Background/Popup 无法直接读取私钥，只能通过 Port 消息请求签名
+
+Keeper 最重要的不是“神秘”，而是权限最小化。
+
+它把最敏感的能力压缩成很少的几件事：
+
+- 生成临时密钥
+- 用临时密钥签名
+- 清除临时密钥
+
+除此之外，别的层尽量不要碰到私钥本体。
 
 ---
 

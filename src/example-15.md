@@ -1,55 +1,19 @@
 # 实战案例 15：去中心化物品保险
 
-> ⏱ 预计练习时间：2 小时
->
 > **目标：** 构建链上物品保险协议——玩家购买 PvP 战损险，若物品在游戏中被摧毁则通过服务器证明（AdminACL）自动赔付，理赔资金来自保险池。
 
 ---
 
 > 状态：教学示例。正文强调理赔流程与资金池设计，完整目录以 `book/src/code/example-15/` 为准。
 
-## 前置依赖
-
-- 建议先读 [Chapter 11](./chapter-11.md)、[Chapter 25](./chapter-25.md)
-- 需要本地 `sui` CLI 与 `pnpm`
-- 需要理解 `AdminACL` 与链下证明流
-
 ## 对应代码目录
 
 - [example-15](./code/example-15)
 - [example-15/dapp](./code/example-15/dapp)
 
-## 源码位置
-
-- [Move.toml](./code/example-15/Move.toml)
-- [pvp_shield.move](./code/example-15/sources/pvp_shield.move)
-- [dapp/readme.md](./code/example-15/dapp/readme.md)
-
-## 关键测试文件
-
-- [tests/README.md](./code/example-15/tests/README.md)
-
-## 推荐阅读顺序
-
-1. 先看 `Move.toml`
-2. 再读 [pvp_shield.move](./code/example-15/sources/pvp_shield.move)
-3. 最后启动 dApp 验证报价和投保交互
-
 ## 最小调用链
 
 `用户购买保单 -> 服务器出具战损证明 -> 合约验证保单与签名 -> 保险池赔付`
-
-## 验证步骤
-
-1. 在 [example-15](./code/example-15) 运行 `sui move build`
-2. 在 [example-15/dapp](./code/example-15/dapp) 运行 `pnpm install && pnpm dev`
-3. 验证投保、有效期内理赔、过期理赔失败
-
-## 常见报错
-
-- 理赔证明没有绑定具体保单或物品 ID
-- 赔付比例和保费计算单位不一致
-- 前端只展示保额，没有同步显示赔付上限与保费来源
 
 ## 测试闭环
 

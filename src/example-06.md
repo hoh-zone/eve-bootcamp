@@ -1,56 +1,19 @@
 # 实战案例 6：动态 NFT 装备系统（可进化的飞船武器）
 
-> ⏱ 预计练习时间：2 小时
->
 > **目标：** 创建一套飞船武器 NFT，其属性随游戏战斗结果自动升级；利用 Sui Display 标准确保 NFT 在所有钱包和市场中实时显示最新状态。
 
 ---
 
 > 状态：教学示例。正文聚焦动态 NFT 和 Display 更新，完整目录以 `book/src/code/example-06/` 为准。
 
-## 前置依赖
-
-- 建议先读 [Chapter 14](./chapter-14.md)
-- 需要本地 `sui` CLI 与 `pnpm`
-
 ## 对应代码目录
 
 - [example-06](./code/example-06)
 - [example-06/dapp](./code/example-06/dapp)
 
-## 源码位置
-
-- [Move.toml](./code/example-06/Move.toml)
-- [plasma_rifle.move](./code/example-06/sources/plasma_rifle.move)
-- [turret_combat.move](./code/example-06/sources/turret_combat.move)
-- [dapp/readme.md](./code/example-06/dapp/readme.md)
-
-## 关键测试文件
-
-- [tests/README.md](./code/example-06/tests/README.md)
-
-## 推荐阅读顺序
-
-1. 先看 `plasma_rifle.move` 的 NFT 状态
-2. 再读战斗结果如何驱动升级
-3. 最后启动 dApp 对照 Display 展示
-
 ## 最小调用链
 
 `玩家持有武器 NFT -> 击杀事件累加 -> 达到阈值升级 -> Display 元数据更新 -> 钱包/市场显示新外观`
-
-## 验证步骤
-
-1. 在 [example-06](./code/example-06) 运行 `sui move build`
-2. 在 [example-06/dapp](./code/example-06/dapp) 运行 `pnpm install && pnpm dev`
-3. 按测试矩阵核对等级提升与 Display 刷新
-
-## 常见报错
-
-- 链上等级更新了，但 Display 元数据没有同步刷新
-- 升级阈值判断写在前端而不是链上状态机里
-
----
 
 ## 需求分析
 

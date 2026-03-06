@@ -6,43 +6,9 @@
 
 > 状态：教学示例。正文代码为便于讲解而做了精简，源码验收请以仓库内实际 `world-contracts` 文件为准。
 
-## 前置依赖
-
-- 先理解 Sui 对象模型、`Shared Object`、`derived_object`
-- 建议先读 [Chapter 6](./chapter-06.md) 与 [Chapter 25](./chapter-25.md)
-- 本章默认你已能进入 [world-contracts/contracts/world](https://github.com/evefrontier/world-contracts/tree/main/contracts/world)
-
-## 源码位置
-
-- [killmail.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/killmail/killmail.move)
-- [killmail_registry.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/registry/killmail_registry.move)
-
-## 关键测试文件
-
-- [killmail_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/tests/killmail/killmail_tests.move)
-- [killmail_registry_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/tests/registry/killmail_registry_tests.move)
-
-## 推荐阅读顺序
-
-1. 先看 [killmail_registry.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/registry/killmail_registry.move) 理解注册表职责
-2. 再看 [killmail.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/killmail/killmail.move) 读创建流程
-3. 最后跑 [killmail_tests.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/tests/killmail/killmail_tests.move) 对照断言
-
 ## 最小调用链
 
 `游戏服务器 -> AdminACL 校验 -> create_killmail -> derived_object::claim -> share_object -> emit event`
-
-## 验证步骤
-
-1. 进入 [world-contracts/contracts/world](https://github.com/evefrontier/world-contracts/tree/main/contracts/world)
-2. 运行 `sui move test killmail`
-3. 对照测试中注册表、防重放、重复 key 报错的断言回看正文
-
-## 常见报错
-
-- `EKillmailAlreadyExists`：同一个业务 key 被重复创建
-- `verify_sponsor` 失败：提交者不在 `AdminACL` 授权列表
-- `tenant/item_id` 取值不一致：链下业务 ID 与链上映射规则没有对齐
 
 ## 对应代码目录
 
@@ -70,6 +36,8 @@
 - `Killmail` 不是单纯事件日志，而是可查询、可索引的共享对象
 - `Registry` 不是为了“多存一份数据”，而是为了稳定检索和唯一性约束
 - 唯一性来自业务 key + `derived_object` 路径，不是随手生成一个新 UID 就完事
+
+读这一章时，最好同时带着两个视角：**对象视角**和**索引视角**。对象视角关心的是“链上到底落了什么状态，后续合约能不能直接读它”；索引视角关心的是“链下服务怎样稳定发现它、聚合它、按业务键定位它”。KillMail 之所以比普通事件更重，是因为 EVE 把它当成可长期复用的世界状态，而不是一次性广播消息。很多 Builder 第一次接触时会觉得“既然已经 emit 事件，为什么还要 share_object 一份对象”，根本原因就在这里：事件适合广播和统计，对象才适合后续合约组合、权限校验和确定性寻址。
 
 ## 2.1 什么是 KillMail？
 
@@ -216,6 +184,8 @@ KillMail 采用**事件索引 + 对象存储双轨制**：
 | 链上共享对象 `Killmail` | 可被合约读取，Builder 扩展可查询 |
 | `KillmailCreatedEvent` | 供索引服务实时监听，构建排行榜/统计 |
 
+这套双轨设计里，事件不是状态真相，而是**发现机制**。索引器通常先靠事件知道“有一条新 KillMail 出现了”，再根据对象 ID 或业务 key 回到链上读取对象本体。这样做的好处是，链下排行榜、成就系统、战斗报表可以高吞吐地消费事件，但真正涉及奖励发放、争议仲裁、后续扩展读写时，仍然能回到对象这一层拿到稳定状态。否则一旦只靠事件，后续 Builder 合约就没有统一的链上读取入口。
+
 ---
 
 ## 2.5 Builder 如何使用 KillMail？
@@ -306,6 +276,8 @@ pub fun object_exists(registry: &KillmailRegistry, key: TenantItemId): bool {
 ```
 
 这个注册表极其精简——它只是一个 `UID` 容器，所有的 KillMail 作为其 `derived children` 存在于 Sui 的状态树中。
+
+这里的关键设计哲学是：**Registry 不保存业务明细，只提供命名空间和唯一性锚点**。这种写法比“Registry 里再放一个 Table<key, object_id>”更轻，因为真正的唯一性已经由 `derived_object` 保证了。你可以把它理解成一个“父目录”而不是“数据库表”。一旦 Builder 读懂这个思路，后面再看角色、建筑、许可、凭证之类的确定性对象模式时会轻松很多。
 
 ---
 

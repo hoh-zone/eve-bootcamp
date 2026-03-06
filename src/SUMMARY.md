@@ -5,6 +5,11 @@
 [术语表](glossary.md)
 
 
+# 前置章节
+
+- [先读懂 EVE Frontier 这款游戏](chapter-00.md)
+
+
 # 第一阶段：入门基础（Chapter 1-5）
 
 - [Chapter 1: EVE Frontier 宏观架构](chapter-01.md)

@@ -1,56 +1,19 @@
 # 实战案例 2：太空高速收费站（智能星门收费系统）
 
-> ⏱ 预计练习时间：2 小时
->
 > **目标：** 编写一个智能星门扩展，实现按次收取 LUX 代币通行费；并建立一个面向玩家的购票 dApp 界面。
 
 ---
 
 > 状态：已映射到本地代码目录。正文覆盖收费星门、票据与金库三件套，是最典型的 Builder 商业化案例之一。
 
-## 前置依赖
-
-- 建议先读 [Chapter 8](./chapter-08.md)、[Chapter 13](./chapter-13.md)
-- 需要本地 `sui` CLI 与 `pnpm`
-
 ## 对应代码目录
 
 - [example-02](./code/example-02)
 - [example-02/dapp](./code/example-02/dapp)
 
-## 源码位置
-
-- [Move.toml](./code/example-02/Move.toml)
-- [treasury.move](./code/example-02/sources/treasury.move)
-- [toll_gate_ext.move](./code/example-02/sources/toll_gate_ext.move)
-- [dapp/readme.md](./code/example-02/dapp/readme.md)
-
-## 关键测试文件
-
-- [tests/README.md](./code/example-02/tests/README.md)
-
-## 推荐阅读顺序
-
-1. 先看 `treasury.move` 理解收费资金流
-2. 再读 `toll_gate_ext.move` 看购票与跳跃权限
-3. 最后启动 dApp 验证购票入口
-
 ## 最小调用链
 
 `玩家支付通行费 -> 金库收款 -> 铸造 JumpTicket -> 星门校验票据 -> 完成跳跃`
-
-## 验证步骤
-
-1. 在 [example-02](./code/example-02) 运行 `sui move build`
-2. 在 [example-02/dapp](./code/example-02/dapp) 运行 `pnpm install && pnpm dev`
-3. 按测试矩阵验证购票、持票跳跃、金库提取
-
-## 常见报错
-
-- 购票成功但票据未绑定具体玩家或时间窗
-- 票据校验和金库收款不在同一业务闭环里
-
----
 
 ## 需求分析
 
