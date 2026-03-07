@@ -1,38 +1,37 @@
-# 91. 极自尊不可俘虏只认主的死亡舰队私人大机甲 (Owned Object)
+# 91. 只认舰长的私有旗舰
 
 ## 💡 核心概念 (Concept)
-这极大也是极其不可夺的更是极绝对连底层只识别因为这也便由于一旦它不仅被强行缴获便只要因为这是也就是并且这就自动触发核心自毁甚至马上爆得干干净净宁可是玉碎不让这敌手去利用自己极忠战甲！
+设计一类强身份绑定的高价值旗舰系统。舰船控制权、关键模块和驾驶许可绑定到特定角色或授权名册上，敌人即便缴获船体，也无法直接以原样开走或接管核心功能。它适合做联盟旗舰、指挥舰、家族传承舰和高端赛事舰。
 
 ## 🛠️ Sui 核心特性应用 (Sui Features)
-*这里将列出该想法实际调用的 Sui 底层特性及原因。*
-- [ ] PTB (可编程交易块)
-- [ ] Dynamic Fields / Object Fields
-- [ ] zkLogin
-- [ ] sui::random
-- [ ] Sponsored Transactions
-- [ ] Sui Kiosk
-- [ ] DeepBook
-- [ ] SuiNS
-- [ ] Walrus
-- [ ] Move 核心机制 (Hot Potato, Shared, Owned, Immutable)
+- [x] Dynamic Fields / Object Fields：保存模块槽位和授权名册
+- [x] Sponsored Transactions：降低授权和维护门槛
+- [x] Move 核心机制 (Owned, Shared)：区分私有舰体和公开状态
 
 ## 📐 智能合约架构规划 (Smart Contract Architecture)
-*在这里细化 Move 模块、主要 Object、以及状态流转逻辑。*
 
 ### 核心 Object
-*...详细设计...*
+- `PrivateFlagship`：旗舰本体
+- `CaptainLicense`：舰长许可
+- `LockdownRule`：紧急锁舰规则
 
 ### 关键函数
-*...详细设计...*
+- `assign_captain`：设置舰长
+- `grant_delegate`：授予副官或舰队成员权限
+- `lockdown_ship`：异常时锁死核心功能
+- `transfer_heritage`：传承或出售旗舰
 
 ## 💻 前端与客户端交互层 (Frontend & Client)
-*前后端交互链路，以及 dApp 界面所需的关键组件规划。*
+提供旗舰面板、授权树、维护日志和继承流程页。适合配合联盟后台和舰队管理工具。
 
 ## 💰 经济与商业模型 (Economic Model)
-*说明玩家留存、消耗手段、代币或资源流转机制、抽水套利方式等。*
+- 高端舰只服务费
+- 授权变更费
+- 继承和封存费
+- 联盟级维护订阅
 
 ## 📅 开发里程碑 (Milestones)
-- [ ] MVP 原型验证
-- [ ] Move 合约部署至 Testnet
-- [ ] 客户端集成测试
-- [ ] Hackathon 终版提交
+- [ ] MVP：舰长绑定与授权
+- [ ] 紧急锁舰逻辑
+- [ ] 委托与继承流程
+- [ ] 联盟后台接入

@@ -1,38 +1,38 @@
-# 90. 全服唯一打不死极其防线绝对硬乌龟壳极硬大要塞 (Immutable Object)
+# 90. 永久战争纪念碑
 
 ## 💡 核心概念 (Concept)
-当防伪星体或者极品建筑被设为一旦设为不可修改并且其法则更是代表整个全物理系统任何哪怕终极大决战所有超级炮管绝对对由于完全无权破防而打不死即使甚至不掉极其不掉一滴血神堡！
+用 immutable object 的思路做“不可篡改纪念碑”，而不是不合理的无敌建筑。联盟在完成史诗远征、守住重要星系或经历惨烈战役后，可以把战役摘要、牺牲者名单、胜利宣言和纪念影像铸成永久纪念碑。纪念碑本体不可改写，但周边可以衍生纪念活动、军校导览、纪念 NFT 和打赏墙。
 
 ## 🛠️ Sui 核心特性应用 (Sui Features)
-*这里将列出该想法实际调用的 Sui 底层特性及原因。*
-- [ ] PTB (可编程交易块)
-- [ ] Dynamic Fields / Object Fields
-- [ ] zkLogin
-- [ ] sui::random
-- [ ] Sponsored Transactions
-- [ ] Sui Kiosk
-- [ ] DeepBook
-- [ ] SuiNS
-- [ ] Walrus
-- [ ] Move 核心机制 (Hot Potato, Shared, Owned, Immutable)
+- [x] Sponsored Transactions：方便联盟集体参与铸碑
+- [x] Sui Kiosk：售卖纪念周边或纪念票
+- [x] Walrus：保存高清纪念影像与文档
+- [x] Move 核心机制 (Immutable)：纪念碑正文不可篡改
 
 ## 📐 智能合约架构规划 (Smart Contract Architecture)
-*在这里细化 Move 模块、主要 Object、以及状态流转逻辑。*
 
 ### 核心 Object
-*...详细设计...*
+- `WarMemorial`：纪念碑本体
+- `MemorialPass`：纪念活动票或纪念 NFT
+- `TributeVault`：打赏和纪念基金
 
 ### 关键函数
-*...详细设计...*
+- `mint_memorial`：铸造纪念碑
+- `append_tribute`：追加打赏或悼词索引
+- `buy_memorial_pass`：购买纪念物
+- `fund_veterans`：从纪念基金拨款
 
 ## 💻 前端与客户端交互层 (Frontend & Client)
-*前后端交互链路，以及 dApp 界面所需的关键组件规划。*
+做成战争纪念馆页面、时间轴、地图与英雄名录。游戏内可以为纪念碑周边做导览和献花交互。
 
 ## 💰 经济与商业模型 (Economic Model)
-*说明玩家留存、消耗手段、代币或资源流转机制、抽水套利方式等。*
+- 纪念周边售卖
+- 联盟纪念基金
+- 教学战史订阅
+- 品牌合作和活动赞助
 
 ## 📅 开发里程碑 (Milestones)
-- [ ] MVP 原型验证
-- [ ] Move 合约部署至 Testnet
-- [ ] 客户端集成测试
-- [ ] Hackathon 终版提交
+- [ ] MVP：铸造纪念碑和展示页
+- [ ] 影像与名录归档
+- [ ] 纪念周边发行
+- [ ] 联盟基金和导览活动

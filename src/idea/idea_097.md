@@ -1,38 +1,37 @@
-# 97. 由于不仅这这就由于这也是由于也就是极其自动不管全即使也就是导致这也哪怕只针对红名大无区别各种极大由于这这也由于这也甚至也就是哪怕由于并且由于这也由于这也就也就是导致。导致这导致这针对这也是不管这也是由于无论哪怕由于。也就是说哪怕这也是因为由于这哪怕这也是由于这就不仅不仅这也是这也并且这这就是这因为这也也就是无论是这就哪怕这并且这也是由于这这不管这也是不仅这也是导致。不管也就是哪怕这也是也就是这也不仅这也哪怕也就是说哪怕不仅这也是这不仅不管这也是仅凭也就是说仅只也就是不论不管这也是不论无论无论。不论由于不管即使这也哪怕这也既然这也是哪怕也就是无论哪怕这这仅认红名的自动极快速跳跃瞬间截杀超神机炮大哨列阵防这防线无情网
+# 97. 红名自动截杀网
 
 ## 💡 核心概念 (Concept)
-
+围绕信誉、红名和 KillMail 数据做一张自动协防网络。联盟或赏金组织把高风险目标同步到多个 Gate 和 Turret 节点，一旦目标接近某条航线或边境区域，就触发预警、加价、拒绝通行甚至自动攻击。它把原本分散的单点防御升级成一张区域化安全网。
 
 ## 🛠️ Sui 核心特性应用 (Sui Features)
-*这里将列出该想法实际调用的 Sui 底层特性及原因。*
-- [ ] PTB (可编程交易块)
-- [ ] Dynamic Fields / Object Fields
-- [ ] zkLogin
-- [ ] sui::random
-- [ ] Sponsored Transactions
-- [ ] Sui Kiosk
-- [ ] DeepBook
-- [ ] SuiNS
-- [ ] Walrus
-- [ ] Move 核心机制 (Hot Potato, Shared, Owned, Immutable)
+- [x] Dynamic Fields / Object Fields：保存红名名单、危险级别和区域策略
+- [x] Sponsored Transactions：快速同步协防策略
+- [x] Move 核心机制 (Shared, Owned)：共享规则网络与私有控制权结合
 
 ## 📐 智能合约架构规划 (Smart Contract Architecture)
-*在这里细化 Move 模块、主要 Object、以及状态流转逻辑。*
 
 ### 核心 Object
-*...详细设计...*
+- `RedlistRegistry`：红名注册表
+- `DefenseNodeProfile`：某个 Gate 或 Turret 的协防配置
+- `BountyExecutionLog`：执行记录
 
 ### 关键函数
-*...详细设计...*
+- `mark_target`：标记高风险目标
+- `sync_profile`：同步到某个防御节点
+- `trigger_penalty`：执行拒绝、加价或攻击策略
+- `clear_target`：移除目标
 
 ## 💻 前端与客户端交互层 (Frontend & Client)
-*前后端交互链路，以及 dApp 界面所需的关键组件规划。*
+前端提供区域热图、拦截日志、红名榜和防线状态页。适合联盟安全后台和赏金追猎面板。
 
 ## 💰 经济与商业模型 (Economic Model)
-*说明玩家留存、消耗手段、代币或资源流转机制、抽水套利方式等。*
+- 安全网络订阅
+- 赏金执行分成
+- 防区托管服务
+- 区域治安评分 API
 
 ## 📅 开发里程碑 (Milestones)
-- [ ] MVP 原型验证
-- [ ] Move 合约部署至 Testnet
-- [ ] 客户端集成测试
-- [ ] Hackathon 终版提交
+- [ ] MVP：红名注册和单节点同步
+- [ ] 多节点协防
+- [ ] 赏金执行结算
+- [ ] 区域安全评分

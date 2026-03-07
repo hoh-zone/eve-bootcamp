@@ -1,38 +1,38 @@
-# 93. 绝对权限硬分割极其由于盟主不可单拿联名叫板对锁金山大锁不仅且极其不卷款跑路库
+# 93. 联盟多签金库与军费保险箱
 
 ## 💡 核心概念 (Concept)
-将极其公用也就是并且不管也就是军团金库极其也是利用权限这分割成极大必须要几大头头并且也是这就不能由于只有老大且甚至这并且老大也休想去甚至带着款全线哪怕更是这也就是并且绝不私吞之铁帐密柜！
+为联盟和大型组织设计一个真正可审计的军费系统。税收、战利品收入、补给预算和战争赔款全部进入多签金库，由不同角色分别掌握审批、付款、冻结和审计权。它解决的不是“做个钱包”，而是联盟组织最真实的治理问题：预算纪律、防卷款跑路和战时财务透明。
 
 ## 🛠️ Sui 核心特性应用 (Sui Features)
-*这里将列出该想法实际调用的 Sui 底层特性及原因。*
-- [ ] PTB (可编程交易块)
-- [ ] Dynamic Fields / Object Fields
-- [ ] zkLogin
-- [ ] sui::random
-- [ ] Sponsored Transactions
-- [ ] Sui Kiosk
-- [ ] DeepBook
-- [ ] SuiNS
-- [ ] Walrus
-- [ ] Move 核心机制 (Hot Potato, Shared, Owned, Immutable)
+- [x] PTB (可编程交易块)：一笔交易里完成审批和拨款
+- [x] Dynamic Fields / Object Fields：保存预算项、角色权限和付款记录
+- [x] Sponsored Transactions：方便普通官员提交审批动作
+- [x] Move 核心机制 (Shared, Owned)：共享金库和私有签署权结合
 
 ## 📐 智能合约架构规划 (Smart Contract Architecture)
-*在这里细化 Move 模块、主要 Object、以及状态流转逻辑。*
 
 ### 核心 Object
-*...详细设计...*
+- `AllianceTreasury`：联盟金库
+- `BudgetRequest`：预算申请单
+- `SignerRole`：角色权限配置
 
 ### 关键函数
-*...详细设计...*
+- `submit_budget`：提交军费申请
+- `approve_budget`：多签审批
+- `execute_payout`：付款执行
+- `freeze_treasury`：紧急冻结
 
 ## 💻 前端与客户端交互层 (Frontend & Client)
-*前后端交互链路，以及 dApp 界面所需的关键组件规划。*
+前端展示预算面板、签署状态、账单流水、审计报告和权限树。适合联盟管理后台和 Discord 机器人提醒。
 
 ## 💰 经济与商业模型 (Economic Model)
-*说明玩家留存、消耗手段、代币或资源流转机制、抽水套利方式等。*
+- 联盟 SaaS 服务费
+- 审计和风控增值服务
+- 战时预算模板订阅
+- 数据导出和报表服务
 
 ## 📅 开发里程碑 (Milestones)
-- [ ] MVP 原型验证
-- [ ] Move 合约部署至 Testnet
-- [ ] 客户端集成测试
-- [ ] Hackathon 终版提交
+- [ ] MVP：多签金库和付款
+- [ ] 预算流程
+- [ ] 冻结与审计
+- [ ] 联盟后台集成

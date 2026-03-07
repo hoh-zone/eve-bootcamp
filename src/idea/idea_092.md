@@ -1,38 +1,37 @@
-# 92. 超级大试用借用不动产 (Borrow) 限飞绝大安全豪车大极品车库
+# 92. 旗舰试驾与限时借舰库
 
 ## 💡 核心概念 (Concept)
-放开自己那价值极其连城之极大史诗旗舰借给哪怕这不仅穷小子去爽开不仅因为由于并且也就是哪怕系统系统不仅由于这时间一过马上底层强行将其物归这也就是立刻由于哪怕甚至不掉半点漆安全感爆棚超级大租！
+用 Borrow 模式做高价值舰船和设施的“限时借用”系统。新手可以试驾昂贵舰船，赛事组织可以发放赞助舰，富玩家可以把自己的旗舰短租给别人。系统通过押金、时限、活动范围和自动回收规则，让借用体验更安全。
 
 ## 🛠️ Sui 核心特性应用 (Sui Features)
-*这里将列出该想法实际调用的 Sui 底层特性及原因。*
-- [ ] PTB (可编程交易块)
-- [ ] Dynamic Fields / Object Fields
-- [ ] zkLogin
-- [ ] sui::random
-- [ ] Sponsored Transactions
-- [ ] Sui Kiosk
-- [ ] DeepBook
-- [ ] SuiNS
-- [ ] Walrus
-- [ ] Move 核心机制 (Hot Potato, Shared, Owned, Immutable)
+- [x] PTB (可编程交易块)：借出、押金、归还在一笔链路里结算
+- [x] Sponsored Transactions：降低试驾门槛
+- [x] Move 核心机制 (Borrow, Owned)：体现限时借用与回收
 
 ## 📐 智能合约架构规划 (Smart Contract Architecture)
-*在这里细化 Move 模块、主要 Object、以及状态流转逻辑。*
 
 ### 核心 Object
-*...详细设计...*
+- `RentalGarage`：租赁车库
+- `BorrowTicket`：借用凭证
+- `DepositVault`：押金池
 
 ### 关键函数
-*...详细设计...*
+- `list_ship`：上架可借用舰只
+- `borrow_ship`：支付押金后借出
+- `return_ship`：归还并结算
+- `slash_deposit`：逾期或违规扣押金
 
 ## 💻 前端与客户端交互层 (Frontend & Client)
-*前后端交互链路，以及 dApp 界面所需的关键组件规划。*
+前端展示舰船库、试驾套餐、剩余借用时间和押金状态。支持赛事专属邀请码和联盟内部借舰。
 
 ## 💰 经济与商业模型 (Economic Model)
-*说明玩家留存、消耗手段、代币或资源流转机制、抽水套利方式等。*
+- 租金
+- 押金利差
+- 赛事赞助舰套餐
+- 高端舰体验服务
 
 ## 📅 开发里程碑 (Milestones)
-- [ ] MVP 原型验证
-- [ ] Move 合约部署至 Testnet
-- [ ] 客户端集成测试
-- [ ] Hackathon 终版提交
+- [ ] MVP：上架与借还
+- [ ] 押金和违规结算
+- [ ] 赛事模式与联盟模式
+- [ ] 舰队体验套餐

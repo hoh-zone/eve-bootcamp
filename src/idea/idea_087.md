@@ -1,38 +1,38 @@
-# 87. 极清毫无删节全死因重现复演机匣仪大展示桌
+# 87. KillMail 取证回放台
 
 ## 💡 核心概念 (Concept)
-无论如何船毁人亡后极大且能够立刻瞬间极其超清并没减一帧的全案发重演死亡过程直接塞入 Walrus 让哪怕是悬案也铁案不翻极其真实还原追拿元凶
+围绕 KillMail 做一个战损取证和战术回放平台。链上保存击杀事实、索引、提交者和资源哈希；链下保存录像、战斗日志、语音片段和战场截图。保险方、联盟指挥、雇佣兵和媒体团队可以通过同一套回放台判断赔付真伪、复盘战术、公开战报并生成教学内容。
 
 ## 🛠️ Sui 核心特性应用 (Sui Features)
-*这里将列出该想法实际调用的 Sui 底层特性及原因。*
-- [ ] PTB (可编程交易块)
-- [ ] Dynamic Fields / Object Fields
-- [ ] zkLogin
-- [ ] sui::random
-- [ ] Sponsored Transactions
-- [ ] Sui Kiosk
-- [ ] DeepBook
-- [ ] SuiNS
-- [ ] Walrus
-- [ ] Move 核心机制 (Hot Potato, Shared, Owned, Immutable)
+- [x] Dynamic Fields / Object Fields：挂接多份取证材料和标签
+- [x] Sponsored Transactions：方便受害者和第三方快速提交材料
+- [x] Walrus：存放视频、日志和大体积回放文件
+- [x] Move 核心机制 (Shared, Immutable)：公开索引和不可篡改证据摘要
 
 ## 📐 智能合约架构规划 (Smart Contract Architecture)
-*在这里细化 Move 模块、主要 Object、以及状态流转逻辑。*
 
 ### 核心 Object
-*...详细设计...*
+- `EvidenceBoard`：某条 KillMail 的证据板
+- `ReplayTicket`：付费或授权访问凭证
+- `VerifierNote`：保险方或仲裁方批注
 
 ### 关键函数
-*...详细设计...*
+- `attach_evidence`：追加录像、日志索引
+- `verify_case`：写入审核结果
+- `buy_replay_access`：购买回放权限
+- `publish_report`：生成公开战报摘要
 
 ## 💻 前端与客户端交互层 (Frontend & Client)
-*前后端交互链路，以及 dApp 界面所需的关键组件规划。*
+做成 KillMail 详情页、时间线、地图热区和回放播放器。支持按联盟、星区、舰型和战损金额过滤。
 
 ## 💰 经济与商业模型 (Economic Model)
-*说明玩家留存、消耗手段、代币或资源流转机制、抽水套利方式等。*
+- 回放访问费
+- 保险验证服务费
+- 联盟战术课程
+- 媒体栏目赞助
 
 ## 📅 开发里程碑 (Milestones)
-- [ ] MVP 原型验证
-- [ ] Move 合约部署至 Testnet
-- [ ] 客户端集成测试
-- [ ] Hackathon 终版提交
+- [ ] MVP：KillMail 与证据链接
+- [ ] 回放查看页
+- [ ] 仲裁与赔付批注
+- [ ] 战术报告和订阅服务
