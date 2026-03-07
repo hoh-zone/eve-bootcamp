@@ -1,15 +1,17 @@
-module chapter_17::snippet_03;
+module chapter_09::snippet_03;
 
-// ❌ 浪费空间
-public struct Config has key {
-    id: UID,
-    tier: u64,     // 只存 1-5，但占 8 字节
-    status: u64,   // 只存 0-3，但占 8 字节
+// ❌ 危险：没有验证调用者
+public fun withdraw_all(treasury: &mut Treasury, ctx: &mut TxContext) {
+    let all = coin::take(&mut treasury.balance, balance::value(&treasury.balance), ctx);
+    transfer::public_transfer(all, ctx.sender()); // 任何人都能取走资金！
 }
 
-// ✅ 紧凑存储
-public struct Config has key {
-    id: UID,
-    tier: u8,      // 只占 1 字节
-    status: u8,    // 只占 1 字节
+// ✅ 安全：要求 OwnerCap
+public fun withdraw_all(
+    treasury: &mut Treasury,
+    _cap: &TreasuryOwnerCap,  // 检查调用者持有 OwnerCap
+    ctx: &mut TxContext,
+) {
+    let all = coin::take(&mut treasury.balance, balance::value(&treasury.balance), ctx);
+    transfer::public_transfer(all, ctx.sender());
 }

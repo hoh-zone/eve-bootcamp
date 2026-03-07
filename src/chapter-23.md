@@ -1,418 +1,449 @@
-# Chapter 23：从 Builder 到产品——商业化路径与生态运营
+# Chapter 23：发布、维护与社区协作
 
-> **目标：** 超越技术层面，理解如何将你的 EVE Frontier 合约和 dApp 打造成有用户、有收入、有社区的真实产品，以及如何在这个新兴生态中找到自己的定位。
-
----
-
-> 状态：产品章节。正文以商业模式、增长和运营机制为主。
-
-## 23.1 Builder 的四种商业模式
-
-在 EVE Frontier 生态中，Builder 有四种主要的价值捕获方式：
-
-```
-┌─────────────────────────────────────────────────────────┐
-│               Builder 商业模式图谱                       │
-├─────────────────┬───────────────────────────────────────┤
-│ 模式            │ 代表案例               │ 收入来源      │
-├─────────────────┼───────────────────────┼──────────────┤
-│ 基础设施        │ 星门收费、存储市场      │ 使用费（自动）│
-│ Infrastructure  │ 通用拍卖平台           │              │
-├─────────────────┼───────────────────────┼──────────────┤
-│ 代币经济        │ 联盟 Token + DAO       │ 代币升值、税  │
-│ Token Economy   │ 点数系统               │              │
-├─────────────────┼───────────────────────┼──────────────┤
-│ 平台/SaaS       │ 多租户市场框架         │ 平台抽成      │
-│ Platform        │ 竞赛系统框架           │ 月费/注册费   │
-├─────────────────┼───────────────────────┼──────────────┤
-│ 数据服务        │ 排行榜、分析面板       │ 广告/订阅     │
-│ Data & Tools    │ 价格聚合器             │ 增值服务      │
-└─────────────────┴───────────────────────┴──────────────┘
-```
-
-这张图最重要的不是帮你“选一个赛道名词”，而是看清：
-
-> 你到底是在卖资产、卖流量、卖协议能力，还是卖信息优势。
-
-很多 Builder 项目做不起来，不是技术不行，而是一开始就没想清楚自己卖的是什么。
+> **目标：** 掌握从开发到上线的完整发布流程，理解 Builder 生态的边界与定位，成为可持续活跃的 EVE Frontier 构建者。
 
 ---
 
-## 23.2 定价策略：链上自动收入
+> 状态：发布与运营章节。正文以上线流程、维护和 Builder 协作为主。
 
-最简单的 Builder 收入：**交易自动抽佣**，零运营成本。
+##  23.1 发布 checklist 全览
 
-### 双层费率结构
+从本地开发到正式上线，需要经历以下阶段：
 
-```move
-// 结算时：平台费 + Builder 费双层结构
-public fun settle_sale(
-    market: &mut Market,
-    sale_price: u64,
-    mut payment: Coin<SUI>,
-    ctx: &mut TxContext,
-): Coin<SUI> {
-    // 1. 平台协议费（EVE Frontier 官方，如果有的话）
-    let protocol_fee = sale_price * market.protocol_fee_bps / 10_000;
+```
+Phase 1 —— 本地开发（Localnet）
+  ✅ Docker 本地链运行
+  ✅ Move build 编译通过
+  ✅ 单元测试全部通过
+  ✅ 功能测试（脚本模拟完整流程）
 
-    // 2. 你的 Builder 费
-    let builder_fee = sale_price * market.builder_fee_bps / 10_000;    // 例：200 = 2%
+Phase 2 —— 测试网（Testnet）
+  ✅ sui client publish 到 testnet
+  ✅ 扩展注册到测试组件
+  ✅ dApp 部署到测试 URL
+  ✅ 邀请小范围用户测试
 
-    // 3. 剩余给卖家
-    let seller_amount = sale_price - protocol_fee - builder_fee;
-
-    // 分配
-    transfer::public_transfer(payment.split(builder_fee, ctx), market.fee_recipient);
-    // ... 协议费到官方地址，剩余给卖家
-
-    payment // 返回 seller_amount
-}
+Phase 3 —— 主网发布（Mainnet）
+  ✅ 代码审计（自审 + 社区审查）
+  ✅ 备份 UpgradeCap 到安全地址
+  ✅ sui client switch --env mainnet
+  ✅ 发布合约，记录 Package ID
+  ✅ dApp 发布到正式域名
+  ✅ 通知社区 / 更新公告
 ```
 
-### 费率范围建议
+这张 checklist 本身没有问题，但真正要建立的是一个观念：
 
-| 类型 | 建议区间 | 说明 |
-|------|---------|------|
-| 星门通行费 | 5-50 SUI/次 | 固定费，体现稀缺性 |
-| 市场佣金 | 1-3% | 对标传统市场 |
-| 拍卖平台费 | 2-5% | 提供的撮合服务 |
-| 多租户平台月费 | 10-100 SUI | 其他 Builder 使用你的框架 |
+> 发布不是“代码从本地搬到链上”，而是“把一个真实会被人使用和依赖的服务切到生产状态”。
 
-### 自动抽佣为什么看起来最美，但也最容易高估
+所以发布要同时覆盖四条线：
 
-它的优势很明显：
-
-- 收入自动化
-- 不用人工追账
-- 和实际使用量直接挂钩
-
-但它也有前提：
-
-- 用户真的愿意持续使用你的设施
-- 你的收费不会被更便宜的替代品瞬间打掉
-- 你的服务有明确差异，而不是纯同质化通道
-
-所以链上自动收入不是“写好合约就会来钱”，它只是把商业模式执行得更干净。
+- **合约线**
+  包有没有发对、权限有没有配对
+- **前端线**
+  dApp 是否连到正确网络和对象
+- **运营线**
+  用户知不知道新版本怎么用、旧入口是否失效
+- **应急线**
+  出故障时谁处理、先停哪一层
 
 ---
 
-## 23.3 用户获取：游戏内触达
+##  23.2 网络环境配置
 
-玩家发现你的 dApp 的主要路径：
+Sui 和 EVE Frontier 支持三个网络：
 
-```
-触达路径优先级：
+| 网络 | 用途 | RPC 地址 |
+|------|------|---------|
+| **localnet** | 本地开发，Docker 启动 | `http://127.0.0.1:9000` |
+| **testnet** | 公开测试，无真实价值 | `https://fullnode.testnet.sui.io:443` |
+| **mainnet** | 正式生产环境 | `https://fullnode.mainnet.sui.io:443` |
 
-1. 游戏内显示（最高转化率）
-   └── 玩家靠近你的星门/炮塔 → 游戏内浮层自动弹出 → 直接交互
+```bash
+# 切换到不同网络
+sui client switch --env testnet
+sui client switch --env mainnet
 
-2. EVE Frontier 官方 Builder 目录（预期功能）
-   └── 官方列出认证 Builder 的服务 → 玩家主动查找
+# 查看当前网络
+sui client envs
+sui client active-env
 
-3. 玩家社区（Discord / Reddit）
-   └── 口碑传播 → 联盟推荐 → 用户增长
-
-4. 联盟内部推广
-   └── 与大联盟合作 → 嵌入他们的工具链 → 批量用户
-```
-
-### 增长飞轮设计
-
-```
-玩家使用服务
-    ↓
-获得奖励（代币/NFT/特权）
-    ↓
-价值可见、可交易
-    ↓
-向其他玩家炫耀/出售
-    ↓
-更多玩家了解并加入
-    ↓
-（回到顶部）
+# 查看账户余额
+sui client balance
 ```
 
-### 用户获取里最容易被忽视的一点
-
-不是“怎么让更多人第一次点开”，而是“用户点开后为什么会留下来”。
-
-尤其在 EVE 场景里，很多功能天然带强场景性：
-
-- 当下需要就会用
-- 不需要时就会立刻离开
-
-所以真正要设计的是：
-
-- 第一次使用是否足够顺滑
-- 第二次是否还会回来
-- 是否会形成联盟级或群体级依赖
-
----
-
-## 23.4 社区建设：Builder 的护城河
-
-在 EVE Frontier，**社区是你最不可复制的资产**。技术可以被抄，但关系不能。
-
-### 建立社区的层次
-
-```
-1. Discord 服务器
-   ├── #announcements（版本更新、新功能）
-   ├── #support（用户问题解答）
-   ├── #feedback（收集意见）
-   └── #governance（重要决策投票）
-
-2. 定期沟通
-   ├── 每月 AMA（Ask Me Anything）
-   ├── 收支透明报告（展示 Treasury 余额和分红计划）
-   └── Roadmap 公开更新
-
-3. 社区激励
-   ├── 早期用户 NFT 徽章（见 Example 8）
-   ├── 反馈奖励（提 Bug 得 Token）
-   └── 推荐奖励（带新用户注册联盟）
-```
-
-社区真正的价值不在于人数，而在于关系强度和反馈质量。
-
-一个小但活跃的 Builder 社区，往往比一个大而沉默的频道更有用，因为它能提供：
-
-- 真实需求反馈
-- 问题复现样本
-- 第一批传播者
-- 早期共建者
-
----
-
-## 23.5 透明度：链上可信的运营
-
-链上数据天然透明，把它变成竞争优势：
+### dApp 中的环境切换
 
 ```typescript
-// 生成每月公开财务报告
-async function generateMonthlyReport(treasuryId: string) {
-  const treasury = await client.getObject({
-    id: treasuryId,
-    options: { showContent: true },
-  });
-  const fields = (treasury.data?.content as any)?.fields;
+// 通过环境变量控制 dApp 连接的网络
+const RPC_URL = import.meta.env.VITE_SUI_RPC_URL
+  ?? 'https://fullnode.testnet.sui.io:443'
 
-  const events = await client.queryEvents({
-    query: { MoveEventType: `${PKG}::treasury::FeeCollected` },
-    // 筛选本月时间范围...
-  });
+const WORLD_PACKAGE = import.meta.env.VITE_WORLD_PACKAGE
+  ?? '0x...' // testnet 的 package id
 
-  const totalCollected = events.data.reduce(
-    (sum, e) => sum + Number((e.parsedJson as any).amount), 0
-  );
+const client = new SuiClient({ url: RPC_URL })
+```
 
-  return {
-    date: new Date().toISOString().slice(0, 7),  // "2026-03"
-    totalRevenueSUI: totalCollected / 1e9,
-    currentBalanceSUI: Number(fields.balance) / 1e9,
-    totalUserTransactions: events.data.length,
-    topServices: calculateTopServices(events.data),
-  };
+环境切换最容易出错的地方，不是命令本身，而是“半切换”：
+
+- CLI 已切到 mainnet
+- 前端还在读 testnet
+- 钱包连的是另一套环境
+- 文档和公告写的还是旧 Package ID
+
+一旦出现这种半切换状态，表面症状通常很迷惑：
+
+- 合约看起来发成功了，但前端完全不认
+- 用户钱包能连上，但对象查不到
+- 自己本地能操作，别人环境里却不行
+
+所以真正要验证的不是“某个地方改了”，而是“所有入口都指向同一个环境”。
+
+---
+
+##  23.3 从 Testnet 到 Mainnet 的注意事项
+
+- **Package ID 会变**：Mainnet 发布后得到新的 Package ID，dApp 配置需要更新
+- **数据不通用**：Testnet 上创建的对象（角色、组件）在 Mainnet 上不存在，需要重新初始化
+- **Gas 费真实**：Mainnet 的 SUI 有真实价值，发布和操作会消耗真实 Gas
+- **不可撤销**：已共享（`share_object`）的对象无法撤回
+
+### 从测试网迁到主网，最该警惕的其实是“心理复制”
+
+很多团队会下意识以为：
+
+- 测试网上流程跑通了
+- 那主网就是“重复做一遍”
+
+实际不是。主网和测试网最大的区别，不只是资产值钱，而是：
+
+- 用户预期更高
+- 错误成本更高
+- 回滚空间更小
+- 社区信任更脆弱
+
+所以主网发布前，你应该把自己当成在上线一个产品，而不是交一次作业。
+
+---
+
+##  23.4 Package 升级的最佳实践
+
+### 安全存储 UpgradeCap
+
+`UpgradeCap` 是最敏感的权限对象，一旦丢失则无法升级合约：
+
+```bash
+# 查看你的 UpgradeCap
+sui client objects --json | grep -A5 "UpgradeCap"
+```
+
+**存储策略：**
+1. **多签地址**：将 UpgradeCap 转到 2/3 多签地址，防止单点失控
+2. **锁定时间**：可以加入时间锁机制，升级需要提前公告
+3. **烧毁**（极端情况）：如果确认合约永远不需要升级，可以烧毁 UpgradeCap，彻底保证不可变性
+
+```typescript
+// 将 UpgradeCap 转移到多签地址
+const tx = new Transaction()
+tx.transferObjects(
+  [tx.object(UPGRADE_CAP_ID)],
+  tx.pure.address(MULTISIG_ADDRESS)
+)
+```
+
+### UpgradeCap 为什么是发布后最危险的对象之一？
+
+因为它控制的不是某一次交易，而是整个协议未来的形态。
+
+如果它管理不当，会出现两种极端风险：
+
+- **被盗**
+  攻击者可以发布恶意升级
+- **丢失**
+  你永远失去升级能力
+
+这两种都不是普通业务 bug，而是协议级事故。
+
+### 版本管理
+
+建议在合约中维护版本号：
+
+```move
+const CURRENT_VERSION: u64 = 2;
+
+public struct VersionedConfig has key {
+    id: UID,
+    version: u64,
+    // ... 配置字段
+}
+
+// 升级时调用迁移函数
+public entry fun migrate_v1_to_v2(
+    config: &mut VersionedConfig,
+    _cap: &UpgradeCap,
+) {
+    assert!(config.version == 1, EMigrationNotNeeded);
+    // ... 执行数据迁移
+    config.version = 2;
 }
 ```
 
-透明度这件事，不只是“把数据公开”这么简单，而是让用户能看懂：
+### 版本号不是摆设
 
-- 钱从哪里来
-- 钱到哪里去
-- 哪些规则是固定的
-- 哪些调整是后来变的
+它真正的作用是帮你明确回答：
 
-只要这些能被用户理解，你的协议信任成本就会明显下降。
+- 这个对象现在处在哪个语义版本
+- 前端和脚本该按哪套字段解释它
+- 是否需要触发迁移逻辑
 
----
-
-## 23.6 合规与风险管理
-
-虽然 EVE Frontier 是去中心化的，Builder 仍需注意：
-
-### 技术风险
-
-| 风险 | 缓解措施 |
-|------|---------|
-| 合约漏洞导致资产损失 | 上线前审计；TimeLock 升级；设置单笔上限 |
-| Package 升级破坏用户 | 版本化 API；公告期；迁移补贴 |
-| Sui 网络故障 | 做好用户预期管理；设时效保护 |
-| 依赖的 World Contracts 升级 | 关注官方 changelog；测试网验证 |
-
-### 社区风险
-
-| 风险 | 缓解措施 |
-|------|---------|
-| 用户流失 | 持续交付价值；倾听反馈 |
-| 竞争者复制 | 加速迭代；建立用户关系护城河 |
-| 负面舆论 | 快速公开响应；透明沟通 |
-
-### 风险管理里最重要的其实是“预案”
-
-不是等出了事再想怎么说，而是提前知道：
-
-- 漏洞时先停哪一层
-- 前端要不要先隐藏某个入口
-- 是否需要暂停赞助服务
-- 哪些状态和资产要先保护
+否则一旦线上同时存在旧对象和新逻辑，你很快就会陷入“到底是数据坏了还是代码坏了”的排查地狱。
 
 ---
 
-## 23.7 长期可持续性：渐进式去中心化
+##  23.5 dApp 部署与托管
 
-最健康的 Builder 项目应走向渐进去中心化：
+### 静态部署（推荐方案）
 
-```
-阶段 1（启动期）：Builder 中心化控制
-  • 快速迭代，灵活调整
-  • 建立初始用户群和现金流
+```bash
+# 构建生产版本
+npm run build
 
-阶段 2（成长期）：引入社区治理
-  • 重要参数（费率、新功能）DAO 投票
-  • 代币持有者获得提案权
+# 部署到 Vercel（自动 CI/CD）
+vercel --prod
 
-阶段 3（成熟期）：完全社区自治
-  • 所有关键决策链上治理
-  • Builder 退为贡献者角色
-  • 协议收入完全分配给代币持有者
+# 或部署到 GitHub Pages
+gh-pages -d dist
 ```
 
-这里最需要克制的一点是：不是每个项目都必须走到“完全社区自治”。
+**推荐平台：**
+| 平台 | 特点 |
+|------|------|
+| **Vercel** | 自动 CI/CD，简单配置，免费额度充足 |
+| **Cloudflare Pages** | 全球 CDN，支持 KV 存储扩展 |
+| **IPFS/Arweave** | 真正的去中心化部署，永久存储 |
 
-更现实的问题应该是：
+### 环境变量配置
 
-- 这个项目是否真的需要治理代币
-- 社区是否已经成熟到能承担治理责任
-- 哪些权力适合下放，哪些仍应保留在执行层
+```bash
+# .env.production
+VITE_SUI_RPC_URL=https://fullnode.mainnet.sui.io:443
+VITE_WORLD_PACKAGE=0x_MAINNET_WORLD_PACKAGE_
+VITE_MY_PACKAGE=0x_MAINNET_MY_PACKAGE_
+VITE_TREASURY_ID=0x_MAINNET_TREASURY_ID_
+```
+
+### 前端部署最容易被低估的问题：缓存和旧链接
+
+链上代码发布后，前端不一定会立刻以你预期的方式切过去。你还要考虑：
+
+- CDN 缓存
+- 浏览器缓存
+- 用户收藏的旧链接
+- 第三方页面引用的旧域名或旧参数
+
+也就是说，前端发布不是“把新包传上去”就结束了，你还得确保用户真正进入的是新版本入口。
 
 ---
 
-## 23.8 EVE Frontier 生态合作机会
+##  23.6 Builder 在 EVE Frontier 的定位与约束
 
-不要单打独斗，寻找协同效应：
+理解 Builder 的边界，对于长期成功至关重要：
+
+### 你可以做的（Layer 3）
+
+- ✅ 编写自定义扩展逻辑（Witness 模式）
+- ✅ 构建新的经济机制（市场、拍卖、代币）
+- ✅ 创建前端 dApp 界面
+- ✅ 在已有设施类型上添加自定义规则
+- ✅ 与其他 Builder 的合约组合使用
+
+### 你不能改变的（Layer 1 & 2）
+
+- ❌ 修改核心游戏物理规则（位置、能量系统）
+- ❌ 创建全新类型的设施（只有 CCP 能做）
+- ❌ 访问未公开的 Admin 操作
+- ❌ 绕过 AdminACL 的服务器验证要求
+
+### 设计技巧：在约束中找空间
 
 ```
-横向合作（同类Builder）：
-  ├── 共用技术标准（接口协议）
-  ├── 联合市场推广
-  └── 互相引流（你的用户 → 我的服务）
-
-纵向合作（不同层级Builder）：
-  ├── 基础设施 Builder 提供 API
-  ├── 应用 Builder 在其上构建
-  └── 用户体验 Builder 做门户聚合
-
-与 CCP 合作：
-  ├── 申请官方 Featured Builder 认证
-  ├── 参与官方测试和反馈项目
-  └── 在官方活动中展示你的工具
+官方限制：星门只能通过 JumpPermit 控制通行
+你的扩展空间：
+  ├── 许可证有效期（时效控制）
+  ├── 许可证获取条件（付费/持有 NFT/任务完成）
+  ├── 许可证的二级市场（转卖通行证）
+  └── 许可证的批量购买折扣
 ```
 
-合作的真正价值通常有三类：
+理解约束的正确姿势不是抱怨“为什么不给我更多权限”，而是：
 
-- **分发**
-  让更多人更快知道你
-- **互补**
-  让你不必自己从零做完整栈
-- **合法性**
-  让用户更敢用你的服务
+> 在固定世界规则里，找到足够大的产品设计空间。
+
+真正成熟的 Builder，往往不是想去改世界底层，而是善于在既有接口上做出：
+
+- 更强的运营机制
+- 更清晰的权限设计
+- 更好的用户体验
+- 更高的组合价值
 
 ---
 
-## 23.9 成功 Builder 的核心特质
+##  23.7 社区协作与贡献
 
-从技术到产品，你需要的不仅仅是 Move 代码：
+### 可组合性：你的合约可以被别人使用
 
+当你发布了一个市场合约，其他 Builder 可以：
+- 将你的价格预言机集成进他们的定价系统
+- 在你的市场基础上增加推荐返佣
+- 用你的代币作为他们服务的支付手段
+
+**设计建议**：公开必要的读取接口，让你的合约对生态友好：
+
+```move
+// 公开查询接口，供其他合约调用
+public fun get_current_price(market: &Market, item_type_id: u64): u64 {
+    // 返回当前价格，其他合约可以用于定价参考
+}
+
+public fun is_item_available(market: &Market, item_type_id: u64): bool {
+    table::contains(&market.listings, item_type_id)
+}
 ```
-技术能力（你已有）                战略能力（同样重要）
-─────────────────────────         ─────────────────────────────
-✅ Move 合约开发                   ✅ 用户需求洞察
-✅ dApp 全栈开发                   ✅ 产品快速迭代
-✅ 安全与测试                      ✅ 社区建设与沟通
-✅ 性能优化                        ✅ 商业模型设计
-✅ 升级与维护                      ✅ 竞争分析与差异化
+
+### 参与官方文档贡献
+
+EVE Frontier 文档是开源的：
+
+```bash
+# 克隆文档仓库
+git clone https://github.com/evefrontier/builder-documentation.git
+
+# 创建分支，添加你的教程或修正
+git checkout -b feat/add-auction-tutorial
+
+# 提交 PR
 ```
 
-真正长期能留下来的 Builder，通常不是“最会写代码的人”，而是能把技术、产品、社区和节奏一起拿住的人。
+贡献内容包括：
+- 发现并修正文档错误
+- 补充缺失的示例代码
+- 翻译文档到其他语言
+- 分享你的最佳实践案例
+
+### 为什么社区协作不是“锦上添花”
+
+因为 Builder 生态的真正复利来自复用：
+
+- 你公开读取接口，别人能接进来
+- 别人公开最佳实践，你少踩很多坑
+- 文档一旦更准确，整个生态的开发效率都会上升
+
+对你自己也有直接回报：
+
+- 更容易被集成
+- 更容易建立信誉
+- 更容易获得早期使用者和反馈
+
+### 行为准则
+
+所有 Builder 必须遵守：
+- ❌ 禁止通过编程基础设施骚扰或恶意攻击其他玩家
+- ❌ 禁止欺骗性的经济行为（如蜜罐合约）
+- ✅ 鼓励公平竞争和透明机制
+- ✅ 鼓励集体分享知识和工具
 
 ---
 
-## 23.10 你的 Builder 旅程路线图
+##  23.8 可持续的 Builder 策略
+
+### 经济可持续性
 
 ```
-月份 0-1（学习期）：
-  ├── 完成本课程所有章节和案例
-  ├── 在 testnet 部署 Example 1-2
-  └── 加入 Builder Discord，认识社区
+收入来源设计：
+  ├── 手续费（市场交易的 1-3%）
+  ├── 订阅服务（月度 LUX 订阅）
+  ├── 高级功能（付费解锁）
+  └── 联盟服务合同（B2B）
 
-月份 1-3（实验期）：
-  ├── 发布 testnet 版本的第一个产品
-  ├── 邀请测试用户，收集反馈
-  └── 迭代 2-3 轮
-
-月份 3-6（验证期）：
-  ├── 主网发布（小规模，谨慎测试）
-  ├── 实现第一笔链上收入
-  └── 建立初始社区（Discord 100+ 成员）
-
-月份 6-12（成长期）：
-  ├── 月活用户 1000+
-  ├── 引入代币经济（如适合）
-  └── 建立第一个跨 Builder 合作
-
-年份 2+（生态期）：
-  ├── 成为生态中的"基础设施"
-  ├── 渐进社区治理
-  └── 可持续自运营
+成本控制：
+  ├── 使用读取 API（GraphQL/gRPC）替代高频链上写入
+  ├── 聚合多个操作到单笔交易
+  └── 利用赞助交易降低用户摩擦
 ```
 
-这条路线图最应该被当成“阶段判断框架”，而不是 KPI 清单。
+### 技术可持续性
 
-因为不同产品的节奏会差很多，但有一条判断始终成立：
+- **模块化设计**：将功能拆分成独立模块，方便独立升级
+- **向后兼容**：新版本优先兼容旧版本数据
+- **文档驱动**：记录你自己的合约 API，方便他人集成
+- **监控告警**：订阅关键事件，当异常发生时获得通知
 
-> 先证明有人真在用，再放大；先证明模式成立，再复杂化。
+### 技术可持续和经济可持续必须一起看
+
+很多项目死掉，不是技术做不出来，也不是没有收入，而是两边脱节：
+
+- 功能很多，但维护成本过高
+- 收入看似不错，但全靠人工运营撑着
+- 用户能进来，但没有留存理由
+
+所以一个可持续 Builder 项目，通常同时满足：
+
+- 收费模型简单可解释
+- 权限和运维不会把自己拖死
+- 新版本可以平稳演进
+- 关键问题出现时有人能快速响应
+
+### 真正该长期记录的不是“发了几个版本”
+
+而是这些运营事实：
+
+- 有多少真实用户完成了关键动作
+- 哪个环节流失最高
+- 哪类交易失败最多
+- 哪些功能几乎没人用
+
+这些数据最后会反过来决定你该继续做什么、不该继续做什么。
+
+---
+
+##  23.9 EVE Frontier 生态的未来
+
+根据官方文档，以下功能在未来可能开放给 Builder：
+- **更多组件类型**：冶炼厂、制造厂等工业设施的编程接口
+- **零知识证明**：用 ZK proof 替代服务器签名做临近验证，实现完全去中心化
+- **更丰富的经济接口**：更多官方 LUX/EVE Token 的交互接口
+
+**设计原则**：为可扩展而设计。今天的合约应该能在明天的新功能上线后，通过升级无缝接入。
+
+这里最现实的建议不是“押注所有未来方向”，而是：
+
+- 先把今天真正可落地的组件能力吃透
+- 再为未来接口变化留出演进空间
+
+也就是说，未来感不应该来自“写很多还用不上的概念接口”，而应该来自：
+
+- 对象结构别写死
+- 配置和策略留升级位
+- 前端别把链上字段解释写得过于僵硬
 
 ---
 
 ## 🔖 本章小结
 
-| 维度 | 核心要点 |
-|------|--------|
-| 商业模式 | 四类模型：基础设施/代币/平台/数据 |
-| 定价策略 | 链上自动抽佣，运营成本为零 |
-| 用户获取 | 游戏内触达优先，社区口碑次之 |
-| 社区建设 | Discord + 透明报告 + 激励机制 |
-| 风险管理 | 技术审计 + 升级时间锁 + 快速响应 |
-| 长期可持续 | 渐进去中心化，最终社区自治 |
+| 知识点 | 核心要点 |
+|--------|--------|
+| 发布流程 | localnet → testnet → mainnet 三阶段 |
+| 网络切换 | `sui client switch --env mainnet` |
+| UpgradeCap 安全 | 多签存储，考虑时间锁 |
+| dApp 部署 | Vercel/Cloudflare Pages + 环境变量 |
+| Builder 约束 | Layer 3 自由扩展，Layer 1/2 不可改变 |
+| 社区协作 | 开放 API、贡献文档、遵守行为准则 |
+| 可持续策略 | 多元收入 + 模块化 + 监控 |
 
----
+## 📚 延伸阅读
 
-## 🎓 课程完成！你现在是 EVE Frontier Builder
-
-恭喜完成这套课程的全部 **23 章 + 10 个实战案例**。
-
-你已经掌握了：
-- ✅ Move 智能合约从入门到高级
-- ✅ 四类智能组件的完整开发与部署
-- ✅ 全栈 dApp 开发与生产级架构
-- ✅ 链上经济、NFT、DAO 治理设计
-- ✅ 安全审计、性能优化、升级策略
-- ✅ 商业化路径与生态运营
-
-**在这个宇宙里，代码就是物理定律。去构建你的宇宙吧。** 🚀
-
----
-
-## 📚 书签这些资源
-
-| 资源 | 用途 |
-|------|------|
-| [EVE Frontier 官网](https://evefrontier.com) | 最新官方公告 |
-| [builder-documentation](https://github.com/evefrontier/builder-documentation) | 官方技术文档 |
-| [world-contracts](https://github.com/evefrontier/world-contracts) | World 合约源码 |
-| [builder-scaffold](https://github.com/evefrontier/builder-scaffold) | 项目脚手架 |
-| [Sui 文档](https://docs.sui.io) | Sui 区块链文档 |
-| [Move Book](https://move-book.com) | Move 语言参考 |
-| [EVE Frontier Discord](https://discord.com/invite/evefrontier) | Builder 社区 |
-| [Sui GraphQL IDE](https://graphql.testnet.sui.io) | 链上数据查询 |
+- [Builder 约束文档](https://github.com/evefrontier/builder-documentation/blob/main/welcome/contstraints.md)
+- [Contributing Guide](https://github.com/evefrontier/builder-documentation/blob/main/CONTRIBUTING.md)
+- [Sui Package 升级](https://docs.sui.io/guides/developer/packages/upgrade)
+- [EVE Frontier 开发路线图（community channels）]

@@ -310,5 +310,5 @@ export function InsuranceApp() {
 ---
 
 ## 📚 关联文档
-- [Chapter 11：赞助交易与 AdminACL 验证](./chapter-11.md)
-- [Chapter 8：经济系统与资金池](./chapter-08.md)
+- [Chapter 8：赞助交易与 AdminACL 验证](./chapter-08.md)
+- [Chapter 14：经济系统与资金池](./chapter-14.md)

@@ -1,431 +1,327 @@
-# 第31章：Builder Scaffold 完整使用指南（一）——项目结构与合约开发
+# 第31章：炮塔 AI 扩展开发
 
-> **学习目标**：掌握 `builder-scaffold` 的完整目录结构，理解 Docker 和本机两种开发流程，并能独立完成 smart_gate 合约的本地开发与发布。
+> **学习目标**：深入理解 `world::turret` 模块的目标优先级系统，掌握通过 Extension 模式自定义炮塔 AI 行为的完整实现方法。
 
 ---
 
-> 状态：已映射到本地脚手架目录。正文命令以本仓库现有 `builder-scaffold` 目录为准。
+> 状态：教学示例。正文关注优先级模型和扩展切入点，具体字段仍应以官方 `turret` 模块源码为准。
 
 ## 最小调用链
 
-`启动本地链 -> 编译 smart_gate -> 发布 -> 记录 package/object id -> 配置规则 -> 发 permit`
+`飞船进入范围/触发 aggression -> turret 模块收集候选目标 -> 扩展规则排序 -> 执行攻击决策`
 
 ## 对应代码目录
 
-- [builder-scaffold](https://github.com/evefrontier/builder-scaffold)
+- [world-contracts/contracts/world](https://github.com/evefrontier/world-contracts/tree/main/contracts/world)
+- [world-contracts/contracts/extension_examples](https://github.com/evefrontier/world-contracts/tree/main/contracts/extension_examples)
 
-## 1. 什么是 Builder Scaffold？
+## 关键 Struct
 
-`builder-scaffold` 是 EVE Frontier 官方提供的**一站式 Builder 开发脚手架**，包含：
+| 类型 | 作用 | 阅读重点 |
+|------|------|------|
+| `TargetCandidate` | 炮塔决策输入候选集 | 看哪些字段参与过滤、哪些字段参与排序 |
+| `ReturnTargetPriorityList` | 扩展返回的优先级结果 | 看扩展到底返回“排序建议”还是“直接开火命令” |
+| `BehaviourChangeReason` | 触发本次重算的原因 | 看 AI 刷新来自进入范围、攻击行为还是状态变化 |
+| `OnlineReceipt` | 炮塔在线状态相关凭证 | 看扩展逻辑是否依赖在线前置条件 |
 
-- **Move 合约模板**：两个完整的 Smart Gate Extension 示例
-- **TypeScript 交互脚本**：发布后立即可用的链上交互脚本
-- **Docker 开发环境**：零配置、开箱即用的本地链
-- **dApp 模板**：React + EVE Frontier dapp-kit 的前端起点
+## 关键入口函数
 
-```
-builder-scaffold/
-├── docker/             # Docker 开发环境（Sui CLI + Node.js 容器）
-├── move-contracts/     # Move 合约示例
-│   ├── smart_gate/     # 主要示例：Star Gate Extension
-│   ├── storage_unit/   # 存储单元 Extension 示例
-│   └── tokens/         # 代币合约示例
-├── ts-scripts/         # TypeScript 交互脚本
-│   ├── smart_gate/     # 针对 smart_gate 的 6 个操作脚本
-│   ├── utils/          # 公共工具：env配置、derive-object-id、proof
-│   └── helpers/        # 查询 OwnerCap 等辅助函数
-├── dapps/              # React dApp 模板（EVE Frontier dapp-kit）
-└── docs/               # 完整的部署流程文档
-```
+| 入口 | 作用 | 你要确认什么 |
+|------|------|------|
+| 炮塔候选集计算路径 | 收集可攻击目标 | 过滤条件是否先于排序 |
+| 扩展优先级入口 | 自定义 AI 排序规则 | 返回值是否符合 World 侧预期 |
+| 授权与上线入口 | 挂接扩展到炮塔 | 扩展是否真的被启用且状态同步 |
 
-这一章最重要的不是背目录，而是理解：
+## 最容易误读的点
 
-> `builder-scaffold` 不是一个示例仓库而已，它其实是在替你把“本地链、合约、脚本、前端”这几条线预先接好。
+- 炮塔 AI 的扩展点通常是“排序”，不是绕过内核直接接管开火
+- 只改优先级不改过滤条件，炮塔仍可能攻击不该攻击的目标
+- 候选目标字段来自游戏事件和内核状态，不应凭前端或链下缓存臆造
 
-所以真正的价值是：
+这一章要先分清两件事：**谁有资格成为候选目标**，以及**候选目标之间谁排第一**。前者是过滤问题，决定目标是否进入候选集；后者是排序问题，决定先打谁。大多数 Builder AI 扩展真正能安全影响的是后者，而不是完全推翻前者。这样设计的目的是把“世界规则”与“局部策略”拆开，避免一个扩展包直接把炮塔变成任何它想要的武器。
 
-- 降低第一次打通闭环的成本
-- 给你一个能边改边跑的标准骨架
-- 让后面的自定义开发尽量从“改模板”开始，而不是从“自己搭平台”开始
+## 1. 炮塔（Turret）是什么？
 
----
+Smart Turret 是 EVE Frontier 中一种可编程空间建筑，可以对进入其范围的飞船自动开火。
 
-## 2. 选择开发流程
+**两个关键行为触发点**：
 
-官方支持两种流程：
+| 触发器 | 说明 |
+|--------|------|
+| `InProximity` | 飞船进入炮塔范围 |
+| `Aggression` | 飞船开始/停止攻击己方建筑 |
 
-| 流程 | 适用场景 | 前置要求 |
-|------|---------|---------|
-| **Docker 流程** | 不想在本机安装 Sui/Node 的用户 | 仅 Docker |
-| **本机（Host）流程** | 已有 Sui CLI + Node.js | Sui CLI + Node.js |
+默认行为：攻击所有进入范围的飞船。
 
-### 这两种流程真正的取舍
-
-- **Docker**
-  更稳，环境差异更少，适合先跑通
-- **Host**
-  更快，更贴近日常开发，但更依赖你本机环境已经干净
-
-如果你的目标是“先理解完整闭环”，优先 Docker。  
-如果你的目标是“高频迭代自己写代码”，后面通常会逐步转向 Host。
+**Builder 扩展的能力**：自定义目标优先级排序——决定炮塔优先攻击哪些目标。
 
 ---
 
-## 3. Docker 开发环境（推荐新手）
+## 2. TargetCandidate 数据结构
 
-### 快速启动
-
-```bash
-# 克隆仓库
-git clone https://github.com/evefrontier/builder-scaffold.git
-cd builder-scaffold
-
-# 启动开发容器（首次会下载镜像约 2-3 分钟）
-cd docker
-docker compose run --rm --service-ports sui-dev
-```
-
-首次启动时，容器会自动：
-1. 创建 3 个 ed25519 密钥对（`ADMIN`、`PLAYER_A`、`PLAYER_B`）
-2. 启动本地 Sui 节点
-3. 向账户发放测试 SUI
-
-密钥持久保存在 Docker Volume，容器重启后不会丢失。
-
-### 容器内工作目录结构
-
-```
-/workspace/
-├── builder-scaffold/    # 完整仓库（与宿主机同步）
-└── world-contracts/     # 在宿主机克隆后在容器内可见
-```
-
-在宿主机编辑文件，在容器内运行命令——两者实时同步。
-
-### 为什么 build 时用 `-e testnet`?
-
-```bash
-sui move build -e testnet   # ← 这里的 testnet 是"构建环境"，不是发布目标
-```
-
-本地链的 chain ID 每次重启都变化，无法固定在 `Move.toml` 里。`-e testnet` 让依赖解析用 testnet 规则，但实际发布仍然到本地链。
-
-这里最容易误解的是把“构建环境”和“发布目标”混成一件事。
-
-这一步用 `-e testnet`，并不是说你现在真的在往 testnet 发，而是告诉构建器：
-
-- 依赖地址按哪套规则解析
-- 包构建按哪套环境约定处理
-
-如果这个概念不分开，后面你在 localnet / testnet / mainnet 切换时会非常容易判断错误。
-
-### 容器常用命令速查
-
-| 任务 | 命令 |
-|------|------|
-| 查看所有密钥 | `cat /workspace/builder-scaffold/docker/.env.sui` |
-| 切换到测试网 | `sui client switch --env testnet` |
-| 导入已有密钥 | `sui keytool import <key> ed25519` |
-| 编译合约 | `cd .../smart_gate && sui move build -e testnet` |
-| 运行 TS 脚本 | `cd /workspace/builder-scaffold && pnpm configure-rules` |
-| 启动 GraphQL | `curl http://localhost:9125/graphql` |
-| 清除重置 | `docker compose down --volumes && docker compose run --rm --service-ports sui-dev` |
-
-### PostgreSQL + GraphQL 索引器
-
-Docker 环境内置了 Sui 索引器和 GraphQL 支持：
-
-```bash
-# 查询链 ID（验证 GraphQL 是否启动）
-curl -X POST http://localhost:9125/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query": "{ chainIdentifier }"}'
-```
-
-GraphQL 端点：`http://localhost:9125/graphql`（可用 [Altair](https://altairgraphql.dev/) 调试）
-
----
-
-## 4. Smart Gate 合约的文件结构
-
-```
-move-contracts/smart_gate/
-├── Move.toml                # 包配置（依赖 world-contracts）
-├── sources/
-│   ├── config.move          # 共享配置基础：ExtensionConfig + AdminCap + XAuth
-│   ├── tribe_permit.move    # 示例1：部族身份验证通行证
-│   └── corpse_gate_bounty.move # 示例2：提交尸体物品换通行证
-└── tests/
-    └── gate_tests.move      # 测试
-```
-
-### Move.toml 分析
-
-```toml
-[package]
-name = "smart_gate"
-edition = "2024"
-
-[dependencies]
-# Git 依赖（推荐锁定稳定 tag）
-world = { git = "https://github.com/evefrontier/world-contracts.git", subdir = "contracts/world", rev = "v0.0.14" }
-
-[addresses]
-smart_gate = "0x0"   # 发布时自动替换为实际地址
-```
-
-> **重要**：建议直接使用 git 依赖并锁定 `rev`（如 `v0.0.14`），不要追踪 `main`，否则 world-contracts 主分支的 Breaking Change 会直接影响编译结果。
-
-### 为什么脚手架示例最适合拿来学“扩展模式”
-
-因为它不是抽象 demo，而是把几个最关键的 Builder 要素都放进去了：
-
-- 动态字段配置
-- AdminCap 管理
-- Typed Witness 扩展
-- Gate 组件接入
-
-换句话说，`smart_gate` 不是在教你写某一个具体业务，而是在教你 EVE Builder 最核心的扩展骨架。
-
----
-
-## 5. config.move：Extension 基础框架
+当游戏引擎需要决定炮塔该打谁时，它构造一批 `TargetCandidate` 并传入扩展函数：
 
 ```move
-module smart_gate::config;
+// world/sources/assemblies/turret.move
 
+pub struct TargetCandidate has copy, drop, store {
+    item_id: u64,           // 目标的 in-game ID（飞船/NPC）
+    type_id: u64,           // 目标类型
+    group_id: u64,          // 目标所属组（0=NPC）
+    character_id: u32,      // 飞行员的角色 ID（NPC 为 0）
+    character_tribe: u32,   // 飞行员部族（NPC 为 0）
+    hp_ratio: u64,          // 剩余生命值百分比（0-100）
+    shield_ratio: u64,      // 剩余护盾百分比（0-100）
+    armor_ratio: u64,       // 剩余装甲百分比（0-100）
+    is_aggressor: bool,     // 是否正在攻击建筑
+    priority_weight: u64,   // 优先级权重（越大越优先）
+    behaviour_change: BehaviourChangeReason,  // 触发这次更新的原因
+}
+```
+
+### 触发原因枚举
+
+```move
+pub enum BehaviourChangeReason has copy, drop, store {
+    UNSPECIFIED,
+    ENTERED,         // 飞船进入炮塔范围
+    STARTED_ATTACK,  // 飞船开始攻击
+    STOPPED_ATTACK,  // 飞船停止攻击
+}
+```
+
+**重要设计**：每次调用，每个目标候选人只有**一个**最相关的原因（游戏引擎选最重要的那个）。
+
+这说明 `BehaviourChangeReason` 更像一次决策重算的上下文提示，而不是完整战斗历史。它告诉扩展“为什么这次要重算优先级”，却不保证把过去所有事件都带进来。因此 Builder 在写 AI 时，不要假设单次调用里能看到完整仇恨链或完整战斗日志；如果真的需要长期记忆，应该额外设计自己的配置或统计对象。
+
+---
+
+## 3. 返回格式：ReturnTargetPriorityList
+
+扩展函数最终must返回一个优先级列表：
+
+```move
+pub struct ReturnTargetPriorityList has copy, drop, store {
+    target_item_id: u64,     // 目标的 in-game ID
+    priority_weight: u64,    // 自定义优先级分数（越大越优先）
+}
+```
+
+炮塔攻击的是列表中 `priority_weight` 最高的目标（相同权重时打第一个）。
+
+换句话说，扩展返回的是**建议顺序**，不是“立即执行某个攻击动作”的命令式接口。这个差别很关键。命令式接口意味着扩展可以越权控制底层武器行为，而优先级接口只让扩展在内核已经允许的候选集上表达偏好，整体安全边界会稳很多。
+
+---
+
+## 4. 默认优先级规则（内置逻辑）
+
+当 Builder 未配置扩展时，炮塔使用以下默认规则：
+
+```move
+// 默认权重增量常量
+const STARTED_ATTACK_WEIGHT_INCREMENT: u64 = 10000;  // 主动攻击者 +10000
+const ENTERED_WEIGHT_INCREMENT: u64 = 1000;           // 进入范围者 +1000
+
+// world::turret::get_target_priority_list（默认版本）
+pub fun get_target_priority_list(
+    turret: &Turret,
+    candidates: vector<TargetCandidate>,
+): vector<ReturnTargetPriorityList> {
+    effective_weight_and_excluded(candidates)
+}
+
+fun effective_weight_and_excluded(
+    candidates: vector<TargetCandidate>,
+): vector<ReturnTargetPriorityList> {
+    let mut result = vector::empty();
+    candidates.do!(|candidate| {
+        let weight = match (candidate.behaviour_change) {
+            BehaviourChangeReason::STARTED_ATTACK => {
+                candidate.priority_weight + STARTED_ATTACK_WEIGHT_INCREMENT
+            },
+            BehaviourChangeReason::ENTERED => {
+                candidate.priority_weight + ENTERED_WEIGHT_INCREMENT
+            },
+            _ => candidate.priority_weight,
+        };
+
+        // 使用 0 表示"排除该目标不攻击"，其他值表示优先级
+        if (weight > 0) {
+            result.push_back(ReturnTargetPriorityList {
+                target_item_id: candidate.item_id,
+                priority_weight: weight,
+            });
+        }
+    });
+    result
+}
+```
+
+**默认策略**：主动攻击者 > 进入范围者 > 其他。
+
+---
+
+## 5. Extension 机制：TypeName 指向扩展包
+
+```move
+pub struct Turret has key {
+    id: UID,
+    // ...
+    extension: Option<TypeName>,  // 保存了 Builder 扩展包的类型名称
+}
+```
+
+当游戏引擎需要决定目标优先级时：
+
+1. 读取 `turret.extension`
+2. 如果是 `None`：调用 `world::turret::get_target_priority_list`（默认逻辑）
+3. 如果是 `Some(TypeName)`：解析包 ID → 调用该包的 `get_target_priority_list` 函数
+
+---
+
+## 6. 开发自定义炮塔 AI
+
+### 场景：只攻击联盟成年后的玩家飞船（保护新手）
+
+```move
+module my_turret::ai;
+
+use world::turret::{Turret, TargetCandidate, ReturnTargetPriorityList};
 use sui::dynamic_field as df;
 
-/// 发布后自动创建，是所有规则的共享存储
-public struct ExtensionConfig has key {
+/// 配置：新手保护阈值（低于此 group_id 的不攻击）
+public struct AiConfig has key {
     id: UID,
+    protected_tribe_ids: vector<u32>,  // 受保护的部族（如新手部族）
+    prefer_aggressors: bool,           // 是否优先攻击主动攻击者
 }
 
-/// 管理员权限凭证（init 时转移给部署者）
-public struct AdminCap has key, store {
-    id: UID,
-}
+/// 这是游戏引擎会调用的标准入口函数名（固定签名）
+public fun get_target_priority_list(
+    turret: &Turret,
+    candidates: vector<TargetCandidate>,
+    ai_config: &AiConfig,             // Builder 的配置对象
+): vector<ReturnTargetPriorityList> {
 
-/// 授权见证类型（Typed Witness），传入 gate::issue_jump_permit<XAuth>
-public struct XAuth has drop {}
+    let mut result = vector::empty<ReturnTargetPriorityList>();
 
-fun init(ctx: &mut TxContext) {
-    // AdminCap 转移给部署者
-    transfer::transfer(AdminCap { id: object::new(ctx) }, ctx.sender());
-    // ExtensionConfig 共享化（所有人可读，只有 AdminCap 持有者可写）
-    transfer::share_object(ExtensionConfig { id: object::new(ctx) });
-}
-```
+    candidates.do!(|candidate| {
+        // 规则1：受保护部族 → 跳过（权重 0 = 排除）
+        if (vector::contains(&ai_config.protected_tribe_ids, &candidate.character_tribe)) {
+            return  // 不加入结果列表 = 不攻击
+        };
 
-### 动态字段规则系统
+        // 规则2：计算优先级权重
+        let mut weight: u64 = 1000;  // 基础权重
 
-`ExtensionConfig` 使用动态字段来存储各种规则，这样一个配置对象可以同时支持多种不同的扩展规则：
+        // 主动攻击者优先
+        if (candidate.is_aggressor && ai_config.prefer_aggressors) {
+            weight = weight + 50000;
+        };
 
-```move
-// set_rule：插入或覆盖规则（value 需要 drop ability）
-public fun set_rule<K: copy + drop + store, V: store + drop>(
-    config: &mut ExtensionConfig,
-    _: &AdminCap,      // 只有 AdminCap 才能设置
-    key: K,
-    value: V,
-) {
-    if (df::exists_(&config.id, copy key)) {
-        let _old: V = df::remove(&mut config.id, copy key);
-    };
-    df::add(&mut config.id, key, value);
-}
-```
+        // 血量越低优先级越高（补刀策略）
+        let hp_score = (100 - candidate.hp_ratio) * 100;
+        weight = weight + hp_score;
 
----
+        // 护盾破碎时附加权重
+        if (candidate.shield_ratio == 0) {
+            weight = weight + 5000;
+        };
 
-## 6. tribe_permit.move：部族通行证（精读）
-
-这是最简单的 Extension 实现，适合理解扩展模式的核心结构：
-
-```move
-module smart_gate::tribe_permit;
-
-// 规则配置（动态字段值）
-public struct TribeConfig has drop, store {
-    tribe: u32,              // 允许通过的部族 ID
-    expiry_duration_ms: u64, // 通行证有效期（毫秒）
-}
-
-// 规则标识（动态字段 Key）
-public struct TribeConfigKey has copy, drop, store {}
-```
-
-### 颁发通行证
-
-```move
-pub fun issue_jump_permit(
-    extension_config: &ExtensionConfig,
-    source_gate: &Gate,
-    destination_gate: &Gate,
-    character: &Character,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    // 1. 读取规则配置
-    let tribe_cfg = extension_config.borrow_rule<TribeConfigKey, TribeConfig>(TribeConfigKey {});
-
-    // 2. 验证角色部族
-    assert!(character.tribe() == tribe_cfg.tribe, ENotStarterTribe);
-
-    // 3. 计算过期时间（防溢出检查）
-    let ts = clock.timestamp_ms();
-    assert!(ts <= (0xFFFFFFFFFFFFFFFFu64 - tribe_cfg.expiry_duration_ms), EExpiryOverflow);
-    let expires_at = ts + tribe_cfg.expiry_duration_ms;
-
-    // 4. 调用 world 合约颁发 JumpPermit NFT
-    gate::issue_jump_permit<XAuth>(
-        source_gate, destination_gate, character,
-        config::x_auth(),  // 包内唯一的 XAuth 实例
-        expires_at, ctx,
-    );
-}
-```
-
-> **设计细节**：与 world-contracts 的原版相比，这里增加了**防溢出检查**（`EExpiryOverflow`），是更健壮的生产实现。
-
-### 管理员设置规则
-
-```move
-pub fun set_tribe_config(
-    extension_config: &mut ExtensionConfig,
-    admin_cap: &AdminCap,
-    tribe: u32,
-    expiry_duration_ms: u64,
-) {
-    extension_config.set_rule<TribeConfigKey, TribeConfig>(
-        admin_cap,
-        TribeConfigKey {},
-        TribeConfig { tribe, expiry_duration_ms },
-    );
-}
-```
-
----
-
-## 7. 编译与测试
-
-```bash
-# 进入 smart_gate 目录
-cd move-contracts/smart_gate
-
-# 编译（使用 testnet 作为构建环境）
-sui move build -e testnet
-
-# 运行测试
-sui move test -e testnet
-```
-
-### 编译失败常见问题
-
-| 错误信息 | 原因 | 解决方案 |
-|---------|------|---------|
-| `Unpublished dependencies: World` | world-contracts 未部署 | 先部署 world-contracts，或切换为 local 依赖 |
-| `Move.lock wrong env` | Move.lock 记录的环境不匹配 | `rm Move.lock && sui move build -e testnet` |
-| `edition = "legacy"` 警告 | 使用了旧版 Move | 在 `Move.toml` 中改为 `edition = "2024"` |
-
----
-
-## 8. 发布合约到本地链
-
-```bash
-# 确保 world-contracts 已部署，获得其 publication file
-sui client test-publish \
-  --build-env testnet \
-  --pubfile-path ../../deployments/Pub.localnet.toml
-
-# 发布成功后记录输出的 Package ID
-# 填入 .env 文件的 BUILDER_PACKAGE_ID
-```
-
-> **`test-publish` vs `publish`**：`test-publish` 是 Sui 的特殊发布模式，允许在本地链上发布依赖未发布的包（用于测试）。实际发布到测试网/主网时使用 `sui client publish`。
-
----
-
-## 9. 添加你自己的 Extension 规则
-
-以添加"付费通道规则"为例：
-
-### 第一步：在 `config.move` 旁创建新文件 `toll_gate.move`
-
-```move
-module smart_gate::toll_gate;
-
-use smart_gate::config::{Self, AdminCap, XAuth, ExtensionConfig};
-use sui::coin::{Self, Coin};
-use sui::sui::SUI;
-use sui::balance::{Self, Balance};
-
-// 规则数据
-public struct TollConfig has drop, store {
-    toll_amount: u64,
-    expiry_duration_ms: u64,
-}
-public struct TollConfigKey has copy, drop, store {}
-
-// 收费账本（共享对象）
-public struct TollVault has key {
-    id: UID,
-    balance: Balance<SUI>,
-}
-
-// 初始化时创建金库
-public fun create_vault(ctx: &mut TxContext) {
-    transfer::share_object(TollVault {
-        id: object::new(ctx),
-        balance: balance::zero(),
+        result.push_back(ReturnTargetPriorityList {
+            target_item_id: candidate.item_id,
+            priority_weight: weight,
+        });
     });
+
+    result
 }
 ```
 
-### 第二步：实现颁发函数
+### 策略对比：多种 AI 模式
+
+```
+默认 AI：
+  主动攻击者 (+10000) > 进入范围 (+1000)
+
+补刀 AI（血最低优先）：
+  is_aggressor bonus + (100-hp_ratio)*100 + shield_broken bonus
+
+精英护卫 AI（保护己方）：
+  同族飞船权重=0 + 敌族根据 hp_ratio 排序
+
+反 PvE AI（优先 NPC）：
+  character_id==0 (NPC) → 超高权重 + 玩家 → 低权重
+```
+
+---
+
+## 7. 授权扩展到炮塔
+
+Builder 需要先将扩展的 TypeName 注册到炮塔：
 
 ```move
-pub fun pay_and_jump(
-    extension_config: &ExtensionConfig,
-    vault: &mut TollVault,
-    source_gate: &Gate,
-    destination_gate: &Gate,
-    character: &Character,
-    mut payment: Coin<SUI>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    let toll_cfg = extension_config.borrow_rule<TollConfigKey, TollConfig>(TollConfigKey {});
-    assert!(coin::value(&payment) >= toll_cfg.toll_amount, ETollInsufficient);
-
-    let toll = coin::split(&mut payment, toll_cfg.toll_amount, ctx);
-    balance::join(&mut vault.balance, coin::into_balance(toll));
-    if (coin::value(&payment) > 0) {
-        transfer::public_transfer(payment, ctx.sender());
-    } else {
-        coin::destroy_zero(payment);
-    };
-
-    let expires = clock.timestamp_ms() + toll_cfg.expiry_duration_ms;
-    gate::issue_jump_permit<XAuth>(
-        source_gate, destination_gate, character, config::x_auth(), expires, ctx,
-    );
-}
-
-const ETollInsufficient: u64 = 0;
+// 调用 world 合约提供的函数，将自定义 AI 类型注册到炮塔
+// （需要 OwnerCap<Turret>）
+turret::authorize_extension<my_turret::ai::AiType>(
+    turret,
+    owner_cap,
+    ctx,
+);
 ```
+
+之后游戏引擎就会在需要决策时调用该扩展包的 `get_target_priority_list`。
+
+生产环境里更容易出问题的地方通常不是 AI 数学公式本身，而是“扩展到底有没有真的挂上去”。也就是说，Builder 排查顺序应该先查授权是否成功、炮塔是否在线、配置对象是否可读、TypeName 是否匹配，再去查权重算法。否则很容易把一个授权链问题误判成 AI 逻辑问题。
+
+---
+
+## 8. 高级：动态配置 AI 参数
+
+```move
+/// 让炮塔 AI 可以动态更新配置（不需要重新部署合约）
+pub fun update_protection_list(
+    ai_config: &mut AiConfig,
+    admin: address,
+    new_protected_tribes: vector<u32>,
+    ctx: &TxContext,
+) {
+    assert!(ctx.sender() == admin, 0);
+    ai_config.protected_tribe_ids = new_protected_tribes;
+}
+```
+
+---
+
+## 9. 状态处理：OnlineReceipt
+
+```move
+/// 炮塔在线的证明
+pub struct OnlineReceipt {
+    turret_id: ID,
+}
+```
+
+炮塔在执行某些操作前需要先确认炮塔在线。`OnlineReceipt` 是一次性凭证，用于在函数链中传递"已确认在线"的证明，避免重复检查。
+
+---
+
+## 10. 实战练习
+
+1. **基础 AI**：实现一个"专注新手保护"AI——对 `hp_ratio > 80` 的飞船（几乎满血，明显是老鸟）优先攻击，对 `hp_ratio < 30` 的（可能是新手）权重设为 0
+2. **联盟守护 AI**：读取一个联盟成员列表，对非成员的飞船分配高优先级，对成员飞船权重为 0
+3. **排行榜 AI**：记录被炮塔击落的各飞船类型数量，每周自动调整策略（击落越多的类型优先级越低——因为该类型玩家已经学会回避了）
 
 ---
 
 ## 本章小结
 
-| 组件 | 用途 |
+| 概念 | 要点 |
 |------|------|
-| `docker/compose.yml` | 本地 Sui 链 + GraphQL 索引器一键启动 |
-| `move-contracts/smart_gate/` | Gate Extension 主模板 |
-| `config.move` | ExtensionConfig + AdminCap + XAuth 基础框架 |
-| `tribe_permit.move` | 示例①：部族身份验证 |
-| `corpse_gate_bounty.move` | 示例②：物品消耗换通行证 |
-| `-e testnet` 构建标志 | 解决本地链 chain ID 不稳定的问题 |
+| `TargetCandidate` | 目标候选人的完整战斗信息 |
+| `BehaviourChangeReason` | ENTERED / STARTED_ATTACK / STOPPED_ATTACK |
+| `ReturnTargetPriorityList` | 返回格式：`item_id + priority_weight`（0=排除） |
+| `extension: Option<TypeName>` | 炮塔保存扩展包的类型名称，引擎动态调用 |
+| 默认权重 | STARTED_ATTACK +10000, ENTERED +1000 |
 
-> 下一章：**TypeScript 脚本与 dApp 开发** —— 合约发布后，如何用 6 个现成脚本与链上合约交互，以及如何基于 dApp 模板构建 EVE Frontier 前端。
+> 下一章：**访问控制系统完整解析** —— 深入理解 `world::access` 的 OwnerCap / GovernorCap / AdminACL / Receiving 模式，掌握 EVE Frontier 权限架构的核心设计。

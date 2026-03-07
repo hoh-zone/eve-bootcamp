@@ -1,9 +1,9 @@
 [package]
-name = "chapter_17"
+name = "chapter_09"
 edition = "2024"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
 
 [addresses]
-chapter_17 = "0x0"
+my_package = "0x0"

@@ -1,343 +1,423 @@
-# Chapter 13：跨合约组合性（Composability）
+# Chapter 13：NFT 设计与元数据管理
 
-> **目标：** 掌握如何设计对外友好的合约接口，以及如何安全地调用其他 Builder 发布的合约，构建可组合的 EVE Frontier 生态系统。
-
----
-
-> 状态：设计进阶章节。正文以跨合约接口与可组合性为主。
-
-## 13.1 可组合性的价值
-
-EVE Frontier 最激动人心的特性之一：**你的合约可以直接调用他人的合约，无需任何中间人**。
-
-```
-Builder A：发行了 ALLY Token + 价格预言机
-Builder B：调用 A 的价格预言机，以 ALLY Token 定价出售物品
-Builder C：在 B 的市场上架，同时接受 A 的 ALLY 和 SUI 支付
-```
-
-这创造了真正意义上的**开放经济协议栈**。
-
-可组合性真正厉害的地方，不是“大家都能互相调用”这句口号，而是：
-
-> 你写的协议一旦足够清晰，别人就能把它当积木，而不是把它当黑盒。
-
-这会直接改变 Builder 的思路：
-
-- 你不再只是做一个单点功能
-- 你是在决定自己要成为“终端产品”还是“底层能力”
-
-很多最有价值的协议，并不是自己包办所有事，而是把某一个能力做成别人愿意反复接入的模块。
+> **目标：** 掌握 Sui 的 NFT 标准（Display），设计可进化的动态 NFT，以及在 EVE Frontier 生态中应用 NFT 作为权限凭证、成就徽章和游戏资产。
 
 ---
 
-## 13.2 设计对外友好的 Move 接口
+> 状态：设计进阶章节。正文以 NFT 标准、动态元数据和 Collection 模式为主。
 
-好的 Move 接口设计应遵循：
+##  13.1 Sui 的 NFT 模型
+
+在 Sui 上，NFT 就是一个带有 `key` ability 的唯一对象。没有特殊的 "NFT 合约"——任何带有唯一 ObjectID 的对象都天然是 NFT：
 
 ```move
-module my_protocol::oracle;
-
-// ── 公开的视图函数（只读，免费调用）──────────────────────
-
-/// 获取 ALLY/SUI 汇率（以 MIST 计）
-public fun get_ally_price(oracle: &PriceOracle): u64 {
-    oracle.ally_per_sui
-}
-
-/// 检查价格是否在有效期内
-public fun is_price_fresh(oracle: &PriceOracle, clock: &Clock): bool {
-    clock.timestamp_ms() - oracle.last_updated_ms < PRICE_TTL_MS
-}
-
-// ── 公开的可组合函数（其他合约可调用）───────────────────
-
-/// 将 SUI 金额换算为 ALLY 数量
-public fun sui_to_ally_amount(
-    oracle: &PriceOracle,
-    sui_amount: u64,
-    clock: &Clock,
-): u64 {
-    assert!(is_price_fresh(oracle, clock), EPriceStale);
-    sui_amount * oracle.ally_per_sui / 1_000_000_000
+// 最简单的 NFT
+public struct Badge has key, store {
+    id: UID,
+    name: vector<u8>,
+    description: vector<u8>,
+    image_url: vector<u8>,
 }
 ```
 
-### 设计原则
+最重要的理解不是“NFT 能显示图片”，而是：
 
-| 原则 | 实现方式 |
-|------|--------|
-| **只读视图** | `public fun` 不含 `&mut`，零 Gas 调用 |
-| **可组合操作** | 接受 Witness 参数，允许授权调用方执行 |
-| **版本化** | 保留旧接口，新接口以新函数名/类型参数区分 |
-| **事件发射** | 关键操作发射事件，方便监听 |
-| **文档化** | 完整注释说明前置条件和返回值 |
+> NFT 在 Sui 里首先是一个对象，其次才是一个收藏品或展示品。
 
-### 好接口的标准，不只是“别人能调通”
+这意味着你可以很自然地把 NFT 用在三类不同场景：
 
-一个真正对外友好的接口，至少应该让外部集成者能快速回答这些问题：
+- **纯展示型**
+  勋章、纪念品、成就证明
+- **权限型**
+  通行证、会员卡、白名单凭证
+- **功能型**
+  可升级飞船、装备、订阅权、租赁凭证
 
-1. 这个函数会不会改状态？
-2. 调用前必须准备哪些对象和权限？
-3. 调用失败最常见的原因是什么？
-4. 返回值和事件各自代表什么？
+这三类 NFT 的设计重点完全不同。
 
-如果这些都不清楚，别人虽然“理论上能调”，但集成成本会高得离谱。
+### 设计 NFT 前先问四个问题
 
-### 接口设计里最容易犯的三个错
+1. 它主要是展示品、权限卡，还是可操作资产？
+2. 它是否允许转让？
+3. 它的元数据是否会变化？
+4. 前端和市场应不应该把它当“可交易商品”看待？
 
-#### 1. 把内部实现细节直接暴露成外部依赖
-
-一旦你的接口强依赖内部对象布局，后面每次重构都会把外部集成者一起拖下水。
-
-#### 2. 读接口和写接口混得太近
-
-只读查询最好尽量简单稳定。可写入口则应该明确标注权限和副作用。两者混在一起，集成方很容易误用。
-
-#### 3. 错误边界不清楚
-
-如果函数可能因为：
-
-- 权限不足
-- 数据过期
-- 价格无效
-- 对象状态不匹配
-
-而失败，那这些前提最好能通过文档、命名或辅助只读接口提前暴露出来。
+只要这四个问题没答清，后面的 `Display`、`Collection`、`TransferPolicy` 都很容易做偏。
 
 ---
 
-## 13.3 调用其他 Builder 的合约
+##  13.2 Sui Display 标准：让 NFT 在各处正确显示
 
-### 在 Move.toml 中添加外部依赖
-
-```toml
-[dependencies]
-# 依赖其他 Builder 已发布的包（通过 Git）
-AllyOracle = {
-  git = "https://github.com/builder-alice/ally-oracle",
-  subdir = "contracts",
-  rev = "v1.0.0"
-}
-
-# 或直接指定链上地址（对已发布的包）
-AllyOracleOnChain = { local = "../ally-oracle" }  # 本地测试用
-```
-
-### 在 Move 代码中调用
+`Display` 对象告诉钱包、市场如何显示你的 NFT：
 
 ```move
-module my_market::ally_market;
+module my_nft::space_badge;
 
-// 引入其他 Builder 的模块（需要在 Move.toml 中声明依赖）
-use ally_oracle::oracle::{Self, PriceOracle};
-use ally_dao::ally_token::ALLY_TOKEN;
+use sui::display;
+use sui::package;
+use std::string::utf8;
 
-public entry fun buy_with_ally(
-    storage_unit: &mut world::storage_unit::StorageUnit,
-    character: &Character,
-    price_oracle: &PriceOracle,     // 外部 Builder A 的价格预言机
-    ally_payment: Coin<ALLY_TOKEN>, // 外部 Builder A 的代币
-    item_type_id: u64,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): Item {
-    // 调用外部合约的视图函数
-    let price_in_sui = oracle::sui_to_ally_amount(
-        price_oracle,
-        ITEM_BASE_PRICE_SUI,
-        clock,
+// 一次性见证（创建 Publisher）
+public struct SPACE_BADGE has drop {}
+
+public struct SpaceBadge has key, store {
+    id: UID,
+    name: String,
+    tier: u8,           // 1=铜牌, 2=银牌, 3=金牌
+    earned_at_ms: u64,
+    image_url: String,
+}
+
+fun init(witness: SPACE_BADGE, ctx: &mut TxContext) {
+    // 1. 用 OTW 创建 Publisher（证明这个包的作者身份）
+    let publisher = package::claim(witness, ctx);
+
+    // 2. 创建 Display（定义如何展示 SpaceBadge）
+    let mut display = display::new_with_fields<SpaceBadge>(
+        &publisher,
+        // 字段名   // 模板值（{field_name} 会被实际字段值替换）
+        vector[
+            utf8(b"name"),
+            utf8(b"description"),
+            utf8(b"image_url"),
+            utf8(b"project_url"),
+        ],
+        vector[
+            utf8(b"{name}"),                                          // NFT 名称
+            utf8(b"EVE Frontier Builder Badge - Tier {tier}"),        // 描述
+            utf8(b"{image_url}"),                                     // 图片 URL
+            utf8(b"https://evefrontier.com"),                         // 项目链接
+        ],
+        ctx,
     );
 
-    assert!(coin::value(&ally_payment) >= price_in_sui, EInsufficientPayment);
+    // 3. 提交 Display（冻结版本，使其对外可见）
+    display::update_version(&mut display);
 
-    // 处理 ALLY Token 支付（转到联盟金库等）
-    // ...
-
-    // 从自己的 SSU 取出物品
-    storage_unit::withdraw_item(
-        storage_unit, character, MyMarketAuth {}, item_type_id, ctx,
-    )
+    // 4. 转移（Publisher 给部署者，Display 共享或冻结）
+    transfer::public_transfer(publisher, ctx.sender());
+    transfer::public_freeze_object(display);
 }
 ```
 
-### 依赖别人合约时，真正绑定的是什么？
+### `Display` 真正解决的是什么？
 
-不是“一个 Git 仓库地址”这么简单，而是同时绑定了：
+它解决的是“链上对象字段”到“钱包和市场展示内容”之间的解释层问题。
 
-- 对方的接口稳定性
-- 对方的升级策略
-- 对方的经济和治理选择
-- 你自己的故障半径
+如果没有这层：
 
-也就是说，你每引入一个外部协议，就等于把自己的一部分稳定性外包给了别人。
+- 钱包只能看到生硬字段
+- 市场很难统一显示名称、描述、图片
+- 同一类 NFT 在不同前端里会表现不一致
 
-### 所以接外部协议前先问四个问题
+所以 `Display` 不是装饰，而是 NFT 产品体验的一部分。
 
-1. 这个协议的核心接口是否稳定？
-2. 它升级时会不会破坏我当前用法？
-3. 如果它暂停或失效，我有没有降级路径？
-4. 我能不能把关键依赖收敛到只读接口，而不是深度写入耦合？
+### 设计 Display 时最容易犯的错
+
+#### 1. 把所有展示语义都塞进链上字段
+
+不是所有展示文案都要做成可变链上字段。有些稳定说明更适合放在模板里，有些动态状态才适合放字段里。
+
+#### 2. 过度依赖外部图片 URL
+
+如果图片资源路径不稳定，NFT 本体还在，但用户看到的体验会崩。
+
+#### 3. 字段命名和前端理解脱节
+
+如果链上字段叫得过于内部化，前端和钱包层就很难稳定解释。
 
 ---
 
-## 13.4 接口版本控制与协议标准
+##  13.3 动态 NFT：会进化的元数据
 
-当你的合约被广泛使用后，升级接口必须保证向后兼容：
+EVE Frontier 的游戏状态实时变化，你的 NFT 元数据也可以随之变化：
 
 ```move
-module my_protocol::market_v2;
+module my_nft::evolving_ship;
 
-// 使用类型标记版本
-public struct V1 has drop {}
-public struct V2 has drop {}
-
-// V1 接口（永远保留）
-public fun get_price_v1(market: &Market, _: V1): u64 {
-    market.price
+/// 可进化的飞船 NFT
+public struct EvolvingShip has key, store {
+    id: UID,
+    name: String,
+    hull_class: u8,        // 0=护卫舰, 1=巡洋舰, 2=战列舰
+    combat_score: u64,     // 战斗积分（随战斗增加）
+    kills: u64,            // 击杀数
+    image_url: String,     // 根据 hull_class 变化
 }
 
-// V2 接口（新增，支持动态价格）
-public fun get_price_v2(
-    market: &Market,
-    clock: &Clock,
-    _: V2,
-): u64 {
-    calculate_dynamic_price(market, clock)
+/// 记录战斗结果（由炮塔合约调用）
+public entry fun record_kill(
+    ship: &mut EvolvingShip,
+    ctx: &TxContext,
+) {
+    ship.kills = ship.kills + 1;
+    ship.combat_score = ship.combat_score + 100;
+
+    // 升级飞船等级（进化）
+    if ship.combat_score >= 10_000 && ship.hull_class < 2 {
+        ship.hull_class = ship.hull_class + 1;
+        // 更新图片 URL（指向更高级别的资产）
+        ship.image_url = get_image_url(ship.hull_class);
+    }
+}
+
+fun get_image_url(class: u8): String {
+    let base = b"https://assets.evefrontier.com/ships/";
+    let suffix = if class == 0 { b"frigate.png" }
+                 else if class == 1 { b"cruiser.png" }
+                 else { b"battleship.png" };
+    // 拼接 URL（Move 中字符串操作用 sui::string）
+    let mut url = std::string::utf8(base);
+    url.append(std::string::utf8(suffix));
+    url
 }
 ```
 
-### 定义跨合约接口标准（类似 ERC 标准）
+**Display 模板自动更新**：由于 Display 用 `{hull_class}` 和 `{image_url}` 等字段的当前值渲染，当字段变化时，NFT 在钱包中的显示也会立即更新。
 
-在 EVE Frontier 生态中，可以通过文档约定接口标准，让多个 Builder 的合约相互兼容：
+### 动态 NFT 适合什么，不适合什么？
+
+适合：
+
+- 成长型资产
+- 会被状态影响价值的物品
+- 游戏内战绩、成就、熟练度映射
+
+不一定适合：
+
+- 强调静态稀缺叙事的收藏品
+- 二级市场非常依赖固定元数据的资产
+
+因为一旦元数据可变，你就默认引入了新的产品问题：
+
+- 谁能改？
+- 改动是否可审计？
+- 玩家买入时到底买的是当前状态，还是未来可能变化的状态？
+
+### 动态元数据设计的关键边界
+
+- **状态变化是否链上可追溯**
+  最好有事件记录
+- **改动权限是否明确**
+  不是任何模块都能乱改
+- **前端是否能正确反映变化**
+  否则链上变了，用户界面还停在旧图
+
+---
+
+##  13.4 集合（Collection）模式
 
 ```move
-// ── 非官方"市场接口"标准提案 ────────────────────────────
-// 任何想接入聚合市场的 Builder 的合约应实现以下接口：
+module my_nft::badge_collection;
 
-/// 列出物品：返回当前出售的物品类型和价格
-public fun list_items(market: &T): vector<(u64, u64)>  // (type_id, price_sui)
+/// 勋章系列集合（元对象，描述这个 NFT 系列）
+public struct BadgeCollection has key {
+    id: UID,
+    name: String,
+    total_supply: u64,
+    minted_count: u64,
+    admin: address,
+}
 
-/// 查询特定物品是否可购买
-public fun is_available(market: &T, item_type_id: u64): bool
+/// 单个勋章
+public struct AllianceBadge has key, store {
+    id: UID,
+    collection_id: ID,      // 归属于哪个集合
+    serial_number: u64,     // 系列编号（第几个铸造的）
+    tier: u8,
+    attributes: vector<NFTAttribute>,
+}
 
-/// 购买（返回物品）
-public fun purchase<Auth: drop>(
-    market: &mut T,
-    buyer: &Character,
-    item_type_id: u64,
-    payment: &mut Coin<SUI>,
-    auth: Auth,
+public struct NFTAttribute has store, copy, drop {
+    trait_type: String,
+    value: String,
+}
+
+/// 铸造勋章（追踪编号和总量）
+public entry fun mint_badge(
+    collection: &mut BadgeCollection,
+    recipient: address,
+    tier: u8,
+    attributes: vector<NFTAttribute>,
     ctx: &mut TxContext,
-): Item
-```
+) {
+    assert!(ctx.sender() == collection.admin, ENotAdmin);
+    assert!(collection.minted_count < collection.total_supply, ESoldOut);
 
-### 为什么版本控制要从第一版就开始想？
+    collection.minted_count = collection.minted_count + 1;
 
-因为只要别人开始依赖你，“改接口”就不再只是你的内部事务。
+    let badge = AllianceBadge {
+        id: object::new(ctx),
+        collection_id: object::id(collection),
+        serial_number: collection.minted_count,
+        tier,
+        attributes,
+    };
 
-你要同时考虑：
-
-- 老调用方还能不能继续活
-- 新功能能不能逐步引入
-- 前端、脚本、聚合器是否要同步迁移
-
-很多协议不是死于功能不足，而是死于“第二版把第一版都打碎了”。
-
-### 标准化接口最值钱的地方
-
-不是显得专业，而是能催生二级生态：
-
-- 聚合器更容易接
-- 比价工具更容易做
-- 第三方前端更容易复用
-- 其他 Builder 更愿意基于你继续搭
-
----
-
-## 13.5 实战：聚合价格比较器
-
-```typescript
-// 在 dApp 中聚合多个 Builder 的市场价格
-async function getAggregatedPrices(
-  itemTypeId: number,
-  marketIds: string[],
-  client: SuiClient,
-): Promise<Array<{ marketId: string; price: number; builder: string }>> {
-
-  // 批量读取所有市场状态
-  const markets = await client.multiGetObjects({
-    ids: marketIds,
-    options: { showContent: true },
-  });
-
-  const prices = markets
-    .map((market, i) => {
-      const fields = (market.data?.content as any)?.fields;
-      if (!fields) return null;
-
-      // 读取 listings Table 中的价格（简化）
-      const listing = fields.listings?.fields?.contents?.find(
-        (entry: any) => Number(entry.fields?.key) === itemTypeId
-      );
-
-      if (!listing) return null;
-
-      return {
-        marketId: marketIds[i],
-        price: Number(listing.fields.value.fields.price),
-        builder: fields.owner ?? "未知",
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => a!.price - b!.price); // 按价格升序
-
-  return prices as any[];
+    transfer::public_transfer(badge, recipient);
 }
 ```
 
-这个例子很适合说明一个现实：
+Collection 的价值，不只是“把一批 NFT 归个类”，而是让系列化管理变得清晰：
 
-> 可组合性的价值，很多时候是在链下被放大的。
+- 总量控制
+- 编号追踪
+- 官方系列身份
+- 前端聚合展示
 
-也就是说，链上协议只要把接口和事件设计清楚，链下就能做出：
+### Collection 最适合解决哪些问题？
 
-- 比价器
-- 聚合器
-- 推荐路由
-- 策略编排
+- 某一系列是否已经售罄
+- 第几号资产属于哪一系列
+- 一个 badge 是否来自官方那套发行体系
 
-所以你设计合约时，不要只想着“链上另一个合约会不会调我”，也要想“链下工具会不会愿意消费我”。
+如果没有 collection 这一层，你后面做：
+
+- 系列页
+- 稀有度统计
+- 官方认证
+
+都会变得更难。
 
 ---
 
-## 13.6 组合性的风险与防御
+##  13.5 NFT 作为访问控制凭证
 
-| 风险 | 描述 | 防御 |
-|------|------|------|
-| **依赖合约升级** | 外部合约升级可能破坏你的调用 | 锁定特定版本（rev = "v1.0.0"） |
-| **外部合约暂停** | 依赖的合约被撤销或修改 | 设计降级路径（fallback 逻辑） |
-| **重入型攻击** | 外部合约回调你的合约 | Move 通过所有权系统天然防御 |
-| **价格操控** | 依赖的预言机被操控 | 使用多个预言机取中位数 |
+在 EVE Frontier 中，NFT 是最天然的权限载体：
 
-### 再补三个实际项目里很常见的风险
+```move
+// 使用 NFT 检查权限的方式
+public entry fun enter_restricted_zone(
+    gate: &Gate,
+    character: &Character,
+    badge: &AllianceBadge,   // 持有勋章才能调用
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // 验证勋章等级（需要金牌才能进入）
+    assert!(badge.tier >= 3, EInsufficientBadgeTier);
+    // 验证勋章属于正确集合（防止伪造）
+    assert!(badge.collection_id == OFFICIAL_COLLECTION_ID, EWrongCollection);
+    // ...
+}
+```
 
-| 风险 | 描述 | 防御 |
-|------|------|------|
-| **接口语义漂移** | 函数名没变，但行为口径变了 | 用版本号、文档和事件语义一起约束 |
-| **外部协议活着，但数据质量下降** | 预言机没坏，只是更新变慢或价格异常 | 增加 freshness / sanity check |
-| **降级路径缺失** | 外部依赖不可用时，自己的主流程直接瘫痪 | 预设 fallback、暂停开关、手动接管路径 |
+这是 EVE Builder 里 NFT 最实用的一类用法，因为它把“权限”做成了玩家真的能持有和理解的对象。
 
-### 组合不是越深越好
+### 为什么权限 NFT 往往比地址白名单更好？
 
-组合层次越深，你获得的能力越强，但也越难维护。
+因为它更灵活，也更产品化：
 
-一个实用原则是：
+- 可以转让
+- 可以回收
+- 可以有等级
+- 可以有到期时间
+- 前端可以直观展示
 
-- 优先依赖稳定、只读、可验证的外部能力
-- 谨慎依赖深度耦合、强状态写入的外部流程
+但也要小心一件事：
 
-因为前者坏了通常只是“数据变差”，后者坏了可能直接把你的核心业务链打断。
+> 只要它能转让，权限也会跟着流动。
+
+所以你必须先决定，这张权限 NFT 到底应该是：
+
+- 可转让的市场资产
+- 还是不可转让的身份凭证
+
+---
+
+##  13.6 NFT 转让策略
+
+Sui 支持灵活的 NFT 转让政策：
+
+```move
+// 默认：任何人都可以转让（public_transfer）
+transfer::public_transfer(badge, recipient);
+
+// 锁仓：NFT 只能由特定合约转移（通过 TransferPolicy）
+use sui::transfer_policy;
+
+// 在包初始化时建立 TransferPolicy（限制转让条件）
+fun init(witness: SPACE_BADGE, ctx: &mut TxContext) {
+    let publisher = package::claim(witness, ctx);
+    let (policy, policy_cap) = transfer_policy::new<SpaceBadge>(&publisher, ctx);
+
+    // 添加自定义规则（如需支付版税）
+    // royalty_rule::add(&mut policy, &policy_cap, 200, 0); // 2% 版税
+
+    transfer::public_share_object(policy);
+    transfer::public_transfer(policy_cap, ctx.sender());
+    transfer::public_transfer(publisher, ctx.sender());
+}
+```
+
+### 转让策略本质上是在定义“这个 NFT 的社会属性”
+
+- **自由转让**
+  更像商品
+- **受限转让**
+  更像带规则的许可
+- **不可转让**
+  更像身份或成就
+
+这不是技术细节，而是产品定位。
+
+如果你的 NFT 是：
+
+- 会员资格
+- 实名凭证
+- 联盟内部身份卡
+
+那默认自由转让往往不是好主意。
+
+---
+
+##  13.7 将 NFT 嵌入 EVE Frontier 资产（对象拥有对象）
+
+```move
+// 飞船装备 NFT（被飞船对象持有）
+public struct Equipment has key, store {
+    id: UID,
+    name: String,
+    stat_bonus: u64,
+}
+
+public struct Ship has key {
+    id: UID,
+    // Equipment 被嵌入 Ship 对象中（对象拥有对象）
+    equipped_items: vector<Equipment>,
+}
+
+// 为飞船装备物品
+public entry fun equip(
+    ship: &mut Ship,
+    equipment: Equipment,  // Equipment 从玩家钱包移入 Ship
+    ctx: &TxContext,
+) {
+    vector::push_back(&mut ship.equipped_items, equipment);
+}
+```
+
+对象拥有对象这套设计，对游戏资产尤其自然，因为它允许你表达：
+
+- 一艘船拥有多件装备
+- 一个角色拥有一套证件
+- 一个容器里放着多个特殊资产
+
+### 什么时候该把 NFT 独立存在，什么时候该嵌进去？
+
+适合独立存在：
+
+- 需要单独交易
+- 需要单独展示
+- 需要单独授权或转让
+
+适合嵌进别的对象：
+
+- 主要作为某个大对象的组成部分
+- 不需要频繁单独流转
+- 更强调组合后的整体状态
+
+这背后其实是在平衡“可流通性”和“组合表达力”。
 
 ---
 
@@ -345,13 +425,15 @@ async function getAggregatedPrices(
 
 | 知识点 | 核心要点 |
 |--------|--------|
-| 可组合性价值 | 你的合约可以被他人调用，形成协议栈 |
-| 接口设计 | 只读视图 + Witness 授权 + 文档注释 |
-| 引用外部包 | Move.toml 依赖 + `use` 语句 |
-| 版本控制 | 保留旧接口 + 类型标记版本 |
-| 聚合 dApp | 批量读取多合约数据，前端聚合展示 |
+| Sui NFT 本质 | 带 `key` 的唯一对象，ObjectID 即 NFT ID |
+| Display 标准 | `display::new_with_fields()` 定义钱包显示模板 |
+| 动态 NFT | 字段可变 + Display 模板引用字段 → 自动同步显示 |
+| Collection 模式 | MetaObject 追踪总量和编号 |
+| NFT 作为权限 | 传入 NFT 引用做权限检查，比地址白名单更灵活 |
+| TransferPolicy | 控制 NFT 二级市场转让规则（如版税） |
 
 ## 📚 延伸阅读
 
-- [EVE World Explainer](https://github.com/evefrontier/builder-documentation/blob/main/smart-contracts/eve-frontier-world-explainer.md)
-- [Move Book：包系统](https://move-book.com/programmability/packages.html)
+- [Sui Display 标准](https://docs.sui.io/standards/display)
+- [Sui NFT 指南](https://docs.sui.io/guides/developer/nft)
+- [Move Book：对象拥有对象](https://move-book.com/object/ownership.html)

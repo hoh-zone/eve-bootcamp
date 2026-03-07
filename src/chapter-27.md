@@ -1,349 +1,386 @@
-# 第27章：能量与燃料系统机制
+# 第27章：链下签名 × 链上验证
 
-> **学习目标**：深入理解 EVE Frontier 建筑运行的双层能源机制——Energy（电力容量）与 Fuel（燃料消耗），掌握 `world::energy` 和 `world::fuel` 模块的源码设计，并学会编写与这两个系统交互的 Builder 扩展。
+> **学习目标**：深入理解 `world::sig_verify` 模块的 Ed25519 签名验证机制，掌握"游戏服务器签名 → Move 合约验证"这一 EVE Frontier 的核心安全模式。
 
 ---
 
-> 状态：教学示例。正文中的能量/燃料模型用于帮助你读懂官方实现，字段和入口请以实际模块为准。
+> 状态：教学示例。正文中的验证流程是对官方实现的拆解版，落地时请优先对照实际源码和测试。
 
 ## 最小调用链
 
-`Network Node 分配能量 -> 建筑检查 energy/fuel 条件 -> 业务模块消耗燃料 -> 建筑状态更新`
+`游戏服务器构造消息 -> Ed25519 签名 -> 玩家提交 bytes/signature -> sig_verify 模块校验 -> 合约继续执行`
 
 ## 对应代码目录
 
 - [world-contracts/contracts/world](https://github.com/evefrontier/world-contracts/tree/main/contracts/world)
 
-## 关键 Struct
+## 关键 Struct / 输入
 
-| 类型 | 作用 | 阅读重点 |
+| 类型或输入 | 作用 | 阅读重点 |
 |------|------|------|
-| `EnergyConfig` | 不同装配类型的能量配置 | 看类型到能量需求的映射如何维护 |
-| `EnergySource` | 网络节点的供能状态 | 看最大产能、当前产能、已预留能量三者关系 |
-| `Fuel` 相关结构 | 建筑燃料存量与消耗状态 | 看燃料存量和时间费率如何绑定 |
-| `FuelEfficiency` | 燃料类型与效率差异 | 看不同燃料如何影响续航和成本 |
+| 消息 bytes | 链下事实的原始编码 | 看链下签名和链上验证是否使用完全相同的字节序列 |
+| 签名 blob | `flag + raw_sig + public_key` | 看长度、切片顺序和签名算法标识 |
+| `AdminACL` / 授权地址 | 业务允许的服务器身份 | 看“签名正确”和“签名者有权”是两层校验 |
 
 ## 关键入口函数
 
 | 入口 | 作用 | 你要确认什么 |
 |------|------|------|
-| `available_energy` | 计算剩余可用能量 | 当前产能和已预留量是否同步更新 |
-| 燃料消耗入口 | 业务执行时扣减 fuel | 扣 fuel 是否与业务动作绑在同一事务 |
-| 建筑上线/离线路径 | 结合 energy + fuel 判断状态 | 是否同时满足两套条件 |
+| `sig_verify` 相关校验入口 | 验证签名与消息绑定 | 是否正确加入 intent 前缀、是否严格比对 bytes |
+| 业务合约中的验证包装函数 | 把签名验证接入业务流程 | 是否同时校验 nonce、过期时间、对象绑定 |
+| sponsor / server 白名单入口 | 限制可接受的服务端身份 | 是否与签名校验分层处理 |
 
 ## 最容易误读的点
 
-- `Energy` 更像容量/配额，不是“可以慢慢花掉的钱包余额”
-- 只补 fuel 不补 energy，建筑仍然可能离线
-- 状态判断必须和资源扣减放在同一事务，否则前端很容易读到过期状态
+- 签名通过不等于业务通过，业务字段仍要单独校验
+- 链下签名前的 bytes 只要有一个字段编码不同，链上验证就必然失败
+- `AdminACL` 解决的是“谁可以提交/赞助”，不是“消息内容一定正确”
 
-这章最重要的理解，不是记住几个字段名，而是区分**容量约束**和**消耗约束**。Energy 回答的是“这台建筑有没有资格挂在这张电网上运行”；Fuel 回答的是“它此刻还能维持多久”。前者更像并发配额，后者更像时间账本。把这两件事混成一个余额模型，Builder 在设计在线状态、预警逻辑和补给系统时很容易出错。
+读签名系统时，建议把验证拆成 4 层，不要混成一个“验签通过就安全”：
 
-## 1. 为什么需要双层能源系统？
+1. 字节层：链下和链上看到的 `message_bytes` 是否完全一致。
+2. 密码学层：签名是否真由那把私钥产生。
+3. 身份层：这把私钥对应的地址是否属于被允许的服务器。
+4. 业务层：消息里的玩家、对象、deadline、nonce、数量等字段是否真的和这次调用匹配。
 
-EVE Frontier 的建筑（SmartAssembly）需要同时管理两种不同性质的"资源"：
+`sig_verify` 只负责前两层和一部分第三层，真正决定业务是否安全的，往往是你在外面那层包装函数写得够不够严。
 
-| 概念 | 对应模块 | 性质 | 类比 |
-|------|---------|------|------|
-| **Energy（能量）** | `world::energy` | 功率/容量，持续可用 | 电网容量（KW） |
-| **Fuel（燃料）** | `world::fuel` | 消耗品，有存量 | 发电机的燃油（升） |
+## 1. 为什么需要链下签名？
 
-- 建筑联网（NetworkNode）会分配一定的 **能量容量** 给各个接入的建筑
-- 建筑本身需要持续燃烧 **燃料** 来维持运行
+EVE Frontier 的一个根本性挑战：**链上合约无法访问游戏世界的实时状态**。
 
-从 Builder 视角看，这意味着很多“离线”其实有两种完全不同的根因：一种是没电网容量了，另一种是没燃料了。它们在玩家体验上都表现为“建筑不能用了”，但在产品动作上不一样。容量不足常常需要做网络拓扑、建筑接入顺序或升级决策；燃料不足更像补给、收费、代运营的问题。把这两个诊断面拆开，后面的告警和收费系统才会清晰。
+| 信息 | 来源 | 合约可直接读取？ |
+|------|------|----------|
+| 玩家的舰船位置坐标 | 游戏服务器实时计算 | ❌ |
+| 某玩家是否在某建筑附近 | 游戏物理引擎 | ❌ |
+| 今天的 PvP 击杀结果 | 游戏战斗服务器 | ❌ |
+| 链上对象的状态 | Sui 状态树 | ✅ |
+
+**解决方案**：游戏服务器在链下将这些"事实"签名成一个消息，玩家把这个签名提交给合约，合约验证签名的真实性。
 
 ---
 
-## 2. Energy 模块
+## 2. Ed25519 签名格式
 
-### 2.1 核心数据结构
+Sui 使用标准的 Ed25519 + 个人消息签名格式。
+
+### 签名的组成
+
+```
+signature (97 bytes total):
+┌─────────┬───────────────────┬──────────────────┐
+│  flag   │    raw_sig        │   public_key     │
+│ 1 byte  │    64 bytes       │   32 bytes       │
+│ (0x00)  │  (Ed25519 sig)    │  (Ed25519 PK)    │
+└─────────┴───────────────────┴──────────────────┘
+```
+
+### 常量定义（来自源码）
 
 ```move
-// world/sources/primitives/energy.move
+const ED25519_FLAG: u8 = 0x00;   // Ed25519 scheme 标识符
+const ED25519_SIG_LEN: u64 = 64; // 签名长度
+const ED25519_PK_LEN: u64 = 32;  // 公钥长度
+```
 
-pub struct EnergyConfig has key {
-    id: UID,
-    // type_id → 该装配类型所需能量数值
-    assembly_energy: Table<u64, u64>,
-}
+---
 
-pub struct EnergySource has store {
-    max_energy_production: u64,      // 最大发电量（NetworkNode 的能量上限）
-    current_energy_production: u64,  // 当前激活的发电量
-    total_reserved_energy: u64,      // 已被各建筑预留的总能量
+## 3. 源码精读：`sig_verify.move`
+
+###  3.1 从公钥派生 Sui 地址
+
+```move
+pub fun derive_address_from_public_key(public_key: vector<u8>): address {
+    assert!(public_key.length() == ED25519_PK_LEN, EInvalidPublicKeyLen);
+
+    // Sui 地址 = Blake2b256(flag_byte || public_key)
+    let mut concatenated: vector<u8> = vector::singleton(ED25519_FLAG);
+    concatenated.append(public_key);
+
+    sui::address::from_bytes(hash::blake2b256(&concatenated))
 }
 ```
 
-### 2.2 能量计算公式
+**公式**：`sui_address = Blake2b256(0x00 || ed25519_public_key)`
+
+这意味着如果你知道游戏服务器的 Ed25519 公钥，你就能预知它的 Sui 地址。
+
+###  3.2 PersonalMessage Intent 前缀
 
 ```move
-/// 可用能量 = 当前产能 - 已预留能量
-pub fun available_energy(energy_source: &EnergySource): u64 {
-    if (energy_source.current_energy_production > energy_source.total_reserved_energy) {
-        energy_source.current_energy_production - energy_source.total_reserved_energy
-    } else {
-        0  // 不能为负
+// x"030000" 是三个字节：
+// 0x03 = IntentScope::PersonalMessage
+// 0x00 = IntentVersion::V0
+// 0x00 = AppId::Sui
+let mut message_with_intent = x"030000";
+message_with_intent.append(message);
+let digest = hash::blake2b256(&message_with_intent);
+```
+
+> ⚠️ **重要细节**：消息是**直接附加**的（不经过 BCS 序列化），这与 Sui 钱包签名的默认行为不同。原因是游戏服务器的 Go/TypeScript 端使用 `SignPersonalMessage` 的方式直接操作字节。
+
+###  3.3 完整验证流程
+
+```move
+pub fun verify_signature(
+    message: vector<u8>,
+    signature: vector<u8>,
+    expected_address: address,
+): bool {
+    let len = signature.length();
+    assert!(len >= 1, EInvalidLen);
+
+    // 1. 从第一个字节提取 scheme flag
+    let flag = signature[0];
+
+    // 2. Move 2024 match 语法（类似 Rust）
+    let (sig_len, pk_len) = match (flag) {
+        ED25519_FLAG => (ED25519_SIG_LEN, ED25519_PK_LEN),
+        _ => abort EUnsupportedScheme,
+    };
+
+    assert!(len == 1 + sig_len + pk_len, EInvalidLen);
+
+    // 3. 切分签名字节
+    let raw_sig = extract_bytes(&signature, 1, 1 + sig_len);
+    let raw_public_key = extract_bytes(&signature, 1 + sig_len, len);
+
+    // 4. 构造带 intent 前缀的消息摘要
+    let mut message_with_intent = x"030000";
+    message_with_intent.append(message);
+    let digest = hash::blake2b256(&message_with_intent);
+
+    // 5. 验证公钥对应的 Sui 地址
+    let sig_address = derive_address_from_public_key(raw_public_key);
+    if (sig_address != expected_address) {
+        return false
+    };
+
+    // 6. 验证 Ed25519 签名
+    match (flag) {
+        ED25519_FLAG => {
+            ed25519::ed25519_verify(&raw_sig, &raw_public_key, &digest)
+        },
+        _ => abort EUnsupportedScheme,
     }
 }
 ```
 
-### 2.3 能量预留与释放
-
-当一个建筑（如 Gate 或 Turret）加入 NetworkNode 时：
+###  3.4 字节提取辅助函数
 
 ```move
-// 内部包函数（Builder 不直接调用）
-pub(package) fun reserve(
-    energy_source: &mut EnergySource,
-    energy_source_id: ID,
-    assembly_type_id: u64,           // 要接入的建筑类型
-    energy_config: &EnergyConfig,    // 读取该类型所需能量数
-    ctx: &TxContext,
-) {
-    let energy_required = energy_config.assembly_energy(assembly_type_id);
-    assert!(energy_source.available_energy() >= energy_required, EInsufficientAvailableEnergy);
-
-    energy_source.total_reserved_energy = energy_source.total_reserved_energy + energy_required;
-    event::emit(EnergyReservedEvent { ... });
-}
-```
-
-### 2.4 EnergyConfig 的配置（仅管理员）
-
-```move
-pub fun set_energy_config(
-    energy_config: &mut EnergyConfig,
-    admin_acl: &AdminACL,
-    assembly_type_id: u64,
-    energy_required: u64,            // 该类型建筑运行需要多少能量
-) {
-    admin_acl.verify_sponsor(ctx);
-    if (energy_config.assembly_energy.contains(assembly_type_id)) {
-        *energy_config.assembly_energy.borrow_mut(assembly_type_id) = energy_required;
-    } else {
-        energy_config.assembly_energy.add(assembly_type_id, energy_required);
-    };
+// Move 2024 的 vector::tabulate! 宏：简洁地创建切片
+fun extract_bytes(source: &vector<u8>, start: u64, end: u64): vector<u8> {
+    vector::tabulate!(end - start, |i| source[start + i])
 }
 ```
 
 ---
 
-## 3. Fuel 模块（重点：时间费率计算）
+## 4. 端到端流程
 
-### 3.1 核心数据结构
+```
+游戏服务器（Go/Node.js）
+    │
+    ├─ 构造消息：message = bcs_encode(LocationProofMessage)
+    ├─ 添加 intent 前缀：msg_with_intent = 0x030000 + message
+    ├─ 计算摘要：digest = blake2b256(msg_with_intent)
+    └─ 签名：signature = ed25519_sign(server_private_key, digest)
+                          ↓
+玩家调用合约（Sui PTB）
+    │
+    └─ verify_signature(message, flag+sig+pk, server_address)
+                          ↓
+Move 合约
+    ├─ 重建摘要（相同算法）
+    ├─ 从 signature 中提取 public_key
+    ├─ 验证 address(public_key) == server_address（防伪造）
+    └─ ed25519_verify(sig, pk, digest) → true/false
+```
+
+这个端到端流程里最容易被忽略的是“**签名绑定的到底是什么**”。如果服务器签的是“玩家 A 今日可领取奖励”这种宽泛语义，而不是“玩家 A 在 deadline 前可为 item_id=123 执行 action=2 一次”，那么验签虽然正确，权限边界仍然过宽。很多重放漏洞、串用漏洞都不是出在加密算法上，而是出在消息语义过松。
+
+---
+
+## 5. 如何在 Builder 合约中使用？
+
+###  5.1 基础用法：验证服务器颁发的许可
 
 ```move
-// world/sources/primitives/fuel.move
+module my_extension::server_permit;
 
-pub struct FuelConfig has key {
-    id: UID,
-    // fuel_type_id → 效率倍数（BPS，10000 = 100%）
-    fuel_efficiency: Table<u64, u64>,
+use world::sig_verify;
+use world::access::ServerAddressRegistry;
+use std::bcs;
+
+public struct PermitMessage has copy, drop {
+    player: address,
+    action_type: u8,     // 1=通行证, 2=物品奖励
+    item_id: u64,
+    deadline_ms: u64,
 }
 
-public struct Fuel has store {
-    type_id: Option<u64>,           // 当前填充的燃料类型
-    quantity: u64,                  // 剩余燃料数量
-    max_capacity: u64,              // 燃料槽最大容量
-    burn_rate_in_ms: u64,           // 基础燃烧速率（ms/单位）
-    is_burning: bool,               // 是否正在燃烧
-    burn_start_time: u64,           // 最近一次开始燃烧的时间戳
-    previous_cycle_elapsed_time: u64, // 上一次周期的剩余时间（防止精度丢失）
-    last_updated: u64,              // 最后更新时间
+public fun redeem_server_permit(
+    server_registry: &ServerAddressRegistry,
+    message_bytes: vector<u8>,
+    signature: vector<u8>,
+    ctx: &mut TxContext,
+) {
+    // 1. 反序列化消息（假设服务器用 BCS 序列化）
+    let msg = bcs::from_bytes<PermitMessage>(message_bytes);
+
+    // 2. 验证 deadline
+    // （实际需传入 Clock，此处简化）
+
+    // 3. 验证签名来自授权服务器
+    // 从 registry 中取出服务器地址
+    let server_addr = get_server_address(server_registry);
+    assert!(
+        sig_verify::verify_signature(message_bytes, signature, server_addr),
+        EInvalidSignature,
+    );
+
+    // 4. 执行业务逻辑
+    assert!(msg.player == ctx.sender(), EPlayerMismatch);
+    // ...发放物品、积分等
 }
 ```
 
-### 3.2 燃烧周期计算（精读）
+实际写 Builder 合约时，最少要补齐 5 个绑定项：`player`、`action_type`、`target object id`、`deadline`、`nonce/request_id`。少任何一个，都可能出现“签名本身没问题，但被拿去做了原本不想允许的事”。一个简单原则是：**凡是你不希望用户替换、复用、拖延执行的字段，都应该进被签名字节**。
 
-这是 Fuel 模块最复杂的部分：
+###  5.2 实战：Location Proof 验证（预览 Ch.26 内容）
+
+`location.move` 中的 `verify_proximity` 就是 `sig_verify` 的典型应用：
 
 ```move
-fun calculate_units_to_consume(
-    fuel: &Fuel,
-    fuel_config: &FuelConfig,
-    current_time_ms: u64,
-): (u64, u64) {           // 返回：(消耗单位数, 剩余毫秒数)
-
-    if (!fuel.is_burning || fuel.burn_start_time == 0) {
-        return (0, 0)
-    };
-
-    // 1. 从 FuelConfig 读取该燃料类型的效率
-    let fuel_type_id = *option::borrow(&fuel.type_id);
-    let fuel_efficiency = fuel_config.fuel_efficiency.borrow(fuel_type_id);
-
-    // 2. 实际消耗速率 = 基础速率 × 效率系数
-    let actual_consumption_rate_ms =
-        (fuel.burn_rate_in_ms * fuel_efficiency) / PERCENTAGE_DIVISOR;
-    //  例如：burn_rate=3600000ms(1hr/单位), efficiency=5000(50%)
-    //  实际每单位 = 3600000 * 5000 / 10000 = 1800000ms（30分钟）
-
-    // 3. 计算经过的总时间（含上一周期剩余时间）
-    let elapsed_ms = if (current_time_ms > fuel.burn_start_time) {
-        current_time_ms - fuel.burn_start_time
-    } else { 0 };
-
-    // 保留上一周期的"零头"时间，避免精度丢失
-    let total_elapsed_ms = elapsed_ms + fuel.previous_cycle_elapsed_time;
-
-    // 4. 整除得到消耗单位数
-    let units_to_consume = total_elapsed_ms / actual_consumption_rate_ms;
-    // 5. 取余得到下一周期的起始时间
-    let remaining_elapsed_ms = total_elapsed_ms % actual_consumption_rate_ms;
-
-    (units_to_consume, remaining_elapsed_ms)
-}
-```
-
-**为什么需要 `previous_cycle_elapsed_time`？**
-
-```
-
-这段设计体现的是“链上定时计费”常见的一个难点：你没法像游戏服务器那样每秒 tick 一次，只能在离散交易里结算已经流逝的时间。所以 `previous_cycle_elapsed_time` 实际是在保存上次结算没能整除掉的那部分时间尾差。如果没有它，系统每次结算都会向下取整，长期下来会系统性少扣燃料，经济模型就会被慢慢掏空。
-时间轴示例（burn_rate = 1小时/单位）：
-│───────────────────────────────────────────────────│
-0              60min          90min         120min
-
-第一次 update(90min时)：
-  elapsed = 90min
-  units = 90min / 60min = 1 单位消耗
-  remaining = 90min % 60min = 30min  ← 保存到 previous_cycle_elapsed_time
-
-第二次 update(120min时)：
-  elapsed = 30min（从上次 burn_start_time 算）
-  total = 30min + 30min(previous) = 60min
-  units = 60min / 60min = 1 单位消耗
-  remaining = 0
-```
-
-### 3.3 update 函数：批量结算
-
-```move
-/// 游戏服务器定期调用此函数，结算燃料消耗
-pub(package) fun update(
-    fuel: &mut Fuel,
-    assembly_id: ID,
-    assembly_key: TenantItemId,
-    fuel_config: &FuelConfig,
+// world/sources/primitives/location.move
+pub fun verify_proximity(
+    location: &Location,
+    proof: LocationProof,
+    server_registry: &ServerAddressRegistry,
     clock: &Clock,
+    ctx: &mut TxContext,
 ) {
-    // 未燃烧 → 直接返回
-    if (!fuel.is_burning || fuel.burn_start_time == 0) { return };
+    let LocationProof { message, signature } = proof;
 
-    let current_time_ms = clock.timestamp_ms();
-    if (fuel.last_updated == current_time_ms) { return }; // 同一区块内幂等
+    // Step 1: 验证消息字段（位置哈希、发送者地址等）
+    validate_proof_message(&message, location, server_registry, ctx.sender());
 
-    let (units_to_consume, remaining_elapsed_ms) =
-        calculate_units_to_consume(fuel, fuel_config, current_time_ms);
+    // Step 2: 对消息做 BCS 编码
+    let message_bytes = bcs::to_bytes(&message);
 
-    if (fuel.quantity >= units_to_consume) {
-        // 有足够燃料：正常消耗
-        consume_fuel_units(fuel, ..., units_to_consume, remaining_elapsed_ms, current_time_ms);
-        fuel.last_updated = current_time_ms;
-    } else {
-        // 燃料耗尽：自动停止燃烧
-        stop_burning(fuel, assembly_id, assembly_key, fuel_config, clock);
-    }
+    // Step 3: 验证 deadline 未过期
+    assert!(is_deadline_valid(message.deadline_ms, clock), EDeadlineExpired);
+
+    // Step 4: 调用 sig_verify 验证签名！
+    assert!(
+        sig_verify::verify_signature(
+            message_bytes,
+            signature,
+            message.server_address,
+        ),
+        ESignatureVerificationFailed,
+    )
 }
 ```
 
-### 3.4 一个已知 Bug（源码注释）
-
-```move
-pub(package) fun start_burning(fuel: &mut Fuel, ...) {
-    // ...
-    if (fuel.quantity != 0) {
-        // todo : fix bug: consider previous cycle elapsed time
-        fuel.quantity = fuel.quantity - 1; // Consume 1 unit to start the clock
-    };
-```
-
-启动燃烧时直接扣 1 单位，但没有考虑 `previous_cycle_elapsed_time` 可能导致这个单位被重复计算。这是源码中明确注释的已知 Bug。学习要点：即使是生产合约也会有 Bug，读源码时要批判性思考。
-
 ---
 
-## 4. Builder 如何感知燃料状态？
+## 6. 从 TypeScript 到链上：完整示例
 
-Builder 扩展通常**不直接操作** Fuel 对象（它是 `pub(package)` 内部字段），但可以通过建筑的状态间接判断：
+### 服务器端签名（TypeScript/Node.js）
 
-```move
-use world::assemblies::gate::{Self, Gate};
-use world::status;
+```typescript
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { blake2b } from '@noble/hashes/blake2b';
 
-/// 检查 Gate 是否在线（间接反映燃料状态）
-pub fun is_gate_operational(gate: &Gate): bool {
-    gate.status().is_online()
-}
+const serverKeypair = Ed25519Keypair.fromSecretKey(SERVER_PRIVATE_KEY);
+
+// 构造消息（与 Move 中 BCS 格式一致）
+const message = {
+    server_address: serverKeypair.getPublicKey().toSuiAddress(),
+    player_address: playerAddress,
+    // ...其他字段
+};
+
+// 序列化（BCS）
+const messageBytes = bcs.serialize(PermitMessage, message);
+
+// 添加 PersonalMessage intent 前缀
+const intentPrefix = new Uint8Array([0x03, 0x00, 0x00]);
+const msgWithIntent = new Uint8Array([...intentPrefix, ...messageBytes]);
+
+// 计算 Blake2b-256 摘要
+const digest = blake2b(msgWithIntent, { dkLen: 32 });
+
+// 用服务器私钥签名
+const rawSig = serverKeypair.signData(digest); // 64 bytes
+
+// 构建完整签名：flag (1) + sig (64) + pubkey (32) = 97 bytes
+const pubKey = serverKeypair.getPublicKey().toRawBytes(); // 32 bytes
+const fullSignature = new Uint8Array([0x00, ...rawSig, ...pubKey]);
 ```
 
-当燃料耗尽时，游戏服务器会调用 `stop_burning`，然后建筑的 `Status` 会变为 `Offline`，Builder 合约通过 `Status` 感知：
+### 玩家提交到链上（TypeScript/PTB）
 
-```move
-// 只有在线建筑才能处理跳跃请求
-assert!(source_gate.status.is_online(), ENotOnline);
-```
-
-这也是一个很重要的边界：World 内核把燃料细节藏在包内，不是为了限制 Builder，而是为了避免扩展直接篡改底层计费状态。Builder 更适合围绕“是否在线”“剩余补给是否足够”“是否需要提醒/收费/捐赠”来做产品层逻辑，而不是自己发明另一套 fuel 账本。
-
----
-
-## 5. Energy vs Fuel 的状态流转
-
-```
-Fuel 状态机：
-   EMPTY
-     │ deposit_fuel()
-     ▼
-   LOADED
-     │ start_burning()
-     ▼
-   BURNING ──── update() ────► 燃料充足继续 BURNING
-     │                          │
-     │                          ▼ 燃料耗尽
-     │                        OFFLINE（建筑下线）
-     │ stop_burning()
-     ▼
-   STOPPED（保留 previous_cycle_elapsed_time）
-
-Energy 状态机（更简单）：
-   OFF
-     │ start_energy_production()
-     ▼
-   ON（持续提供 max_energy_production 的容量）
-     │ stop_energy_production()
-     ▼
-   OFF
+```typescript
+const tx = new Transaction();
+tx.moveCall({
+    target: `${PACKAGE_ID}::my_extension::redeem_server_permit`,
+    arguments: [
+        tx.object(SERVER_REGISTRY_ID),
+        tx.pure(bcs.vector(bcs.u8()).serialize(Array.from(messageBytes))),
+        tx.pure(bcs.vector(bcs.u8()).serialize(Array.from(fullSignature))),
+    ],
+});
+await client.signAndExecuteTransaction({ signer: playerKeypair, transaction: tx });
 ```
 
 ---
 
-## 6. FuelEfficiency 设计：支持多种燃料类型
+## 7. Match 语法：Move 2024 的新特性
+
+`sig_verify.move` 大量使用了 Move 2024 的 `match` 表达式：
 
 ```move
-pub struct FuelConfig has key {
-    id: UID,
-    fuel_efficiency: Table<u64, u64>,  // fuel_type_id → efficiency_bps
-}
+// Move 2024 match（类似 Rust）
+let (sig_len, pk_len) = match (flag) {
+    ED25519_FLAG => (ED25519_SIG_LEN, ED25519_PK_LEN),
+    _ => abort EUnsupportedScheme,
+};
 ```
 
-不同类型的燃料（不同 `type_id`）有不同的效率：
-
-| fuel_type_id | 燃料名称 | efficiency_bps | 说明 |
-|---|---|---|---|
-| 1001 | 标准燃料 | 10000 (100%) | 基准效率 |
-| 1002 | 高效燃料 | 15000 (150%) | 燃烧更久 |
-| 1003 | 普通燃料棒 | 8000 (80%) | 便宜但低效 |
-
-效率越高，同等燃料量能维持建筑运行越长时间。Builder 可以在扩展中要求玩家使用特定类型燃料。
+对比旧写法：
+```move
+// Move 旧写法
+let sig_len: u64;
+let pk_len: u64;
+if (flag == ED25519_FLAG) {
+    sig_len = ED25519_SIG_LEN;
+    pk_len = ED25519_PK_LEN;
+} else {
+    abort EUnsupportedScheme
+};
+```
 
 ---
 
-## 7. 实战练习
+## 8. 安全性注意事项
 
-1. **燃料计算器**：给定 `burn_rate_in_ms = 3600000`，`fuel_efficiency = 7500`，剩余 `quantity = 10`，计算还能运行多少小时
-2. **燃料预警合约**：写一个 Builder 扩展，当 Gate 的燃料剩余量不足 5 单位时，自动向物主发送一个链上事件提醒
-3. **燃料捐献系统**：设计一个共享 `FuelDonationPool`，允许任意玩家向建筑捐赠燃料
+| 风险 | 防护机制 |
+|------|---------|
+| 伪造签名 | Ed25519 密码学保障 |
+| 重放攻击（同一个证明被反复提交） | `deadline_ms` 过期时间 + 一次性验证标记 |
+| 错误服务器签名 | `derive_address_from_public_key` 验证地址匹配 |
+| 未注册服务器 | `ServerAddressRegistry` 白名单过滤 |
+
+---
+
+## 9. 实战练习
+
+1. **签名验证工具**：用 TypeScript 实现一个"签名生成器"，用测试密钥为玩家生成通行许可证签名
+2. **单次使用凭证**：设计一个合约，接收服务器签发的"单次使用 item"，验证后在链上标记为"已使用"防止重放
+3. **多服务器支持**：阅读 `ServerAddressRegistry` 的设计，思考如何支持多个游戏服务器节点签名同一个凭证
 
 ---
 
@@ -351,10 +388,10 @@ pub struct FuelConfig has key {
 
 | 概念 | 要点 |
 |------|------|
-| `EnergySource` | 功率容量系统，预留/释放模式 |
-| `Fuel` | 消耗品系统，基于时间的燃烧周期 |
-| `previous_cycle_elapsed_time` | 防止时间取整导致的精度损失 |
-| `fuel_efficiency` | 不同燃料类型的效率倍数（BPS） |
-| 已知 Bug | `start_burning` 的 1 单位扣除未考虑前序剩余时间 |
+| Ed25519 签名格式 | `flag(1) + sig(64) + pubkey(32)` = 97 字节 |
+| PersonalMessage intent | `0x030000` 前缀 + 消息，Blake2b256 摘要 |
+| 地址验证 | `Blake2b256(0x00 || pubkey)` = Sui 地址 |
+| Match 语法 | Move 2024 新特性，替代 if/else 分支 |
+| `tabulate!` 宏 | 简洁的字节切片操作 |
 
-> 下一章：**Extension 模式实战** —— 用官方 `extension_examples` 的两个真实示例，掌握 Builder 扩展的标准开发流程。
+> 下一章：**位置证明协议** —— LocationProof 的 BCS 序列化、临近性验证，以及如何在建筑合约中要求玩家"必须在场"。

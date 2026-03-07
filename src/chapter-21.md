@@ -1,426 +1,349 @@
-# Chapter 21：游戏内 dApp 集成（浮层 UI 与事件通信）
+# Chapter 21：性能优化与 Gas 最小化
 
-> **目标：** 掌握如何将你的 dApp 嵌入 EVE Frontier 游戏客户端作为悬浮面板，实现游戏内与链上数据的无缝交互，以及如何从游戏内发起签名请求而无需切换到外部浏览器。
-
----
-
-> 状态：集成章节。正文以游戏内 WebView、浮层 UI 和事件通信为主。
-
-## 21.1 两种 dApp 访问模式
-
-EVE Frontier 支持两种访问你的 dApp 的方式：
-
-| 模式 | 入口 | 适合场景 |
-|------|------|--------|
-| **外部浏览器** | 玩家手动打开网页 | 管理面板、数据分析、设置页 |
-| **游戏内浮层** | 游戏客户端内嵌 WebView | 交易弹窗、实时状态、战斗辅助 |
-
-游戏内集成提供更流畅的用户体验：玩家无需切出游戏就能完成购买、查看库存、签署交易。
-
-这章最重要的不是“WebView 里也能打开网页”，而是：
-
-> 同一套 dApp，在游戏内和外部浏览器里扮演的角色其实不一样。
-
-外部浏览器更像完整后台：
-
-- 信息量大
-- 操作链更长
-- 适合管理、分析、配置
-
-游戏内浮层更像即时工具：
-
-- 必须快
-- 必须短
-- 必须对当前场景强相关
-
-如果你把两种入口做成完全一样，通常两边体验都会打折。
+> **目标：** 掌握链上操作的性能优化技巧，最大化利用链下计算，通过批处理、对象设计优化和 Gas 预算控制，构建高效低成本的 EVE Frontier 应用。
 
 ---
 
-## 21.2 游戏内 WebView 的工作原理
+> 状态：工程章节。正文以 Gas、批处理和对象设计优化为主。
 
-EVE Frontier 客户端内置一个 Chromium WebView，可以加载外部 URL：
+##  21.1 Gas 成本模型
 
+Sui 的 Gas 由两部分组成：
 ```
-游戏客户端 (Unity/Electron)
-    └── WebView 组件
-          └── 加载你的 dApp URL（https://your-dapp.com）
-                └── 与 EVE Vault（已注入游戏内）通信
+Gas 费 = (计算单元 + 存储差额) × Gas 价格
 ```
 
-**关键点**：EVE Vault 被注入到游戏内 WebView 的 `window` 对象中，与外部浏览器扩展共享相同的 Wallet Standard API，因此同一套 `@mysten/dapp-kit` 代码**无需修改**即可在两种模式下运行。
+- **计算单元**：Move 代码执行消耗
+- **存储差额**：链上存储的净增量（新增字节收费，删除字节退款）
 
-### 但“API 兼容”不等于“体验等价”
+**关键洞察**：
+- 读取数据是**免费的**（GraphQL/RPC 读取不上链）
+- 动态字段的增删有显著 Gas 成本
+- 发射事件几乎免费（不占用链上存储）
 
-技术上可以复用同一套钱包接入代码，不代表你可以无脑照搬整个产品流。
+Gas 优化最容易走偏的一点是：很多人一上来就盯着“怎么省几个单位”，却没先看清：
 
-游戏内环境通常会额外受到这些约束：
+> 真正昂贵的，往往不是某一行代码，而是你整个状态模型迫使系统反复做的那些事。
 
-- 页面空间更小
-- 玩家注意力更短
-- 操作时可能仍在战斗或移动
-- 宿主环境会决定打开/关闭时机
+所以性能优化最好分三层看：
 
-所以真正该复用的是底层能力，而不是整套交互节奏。
+- **交易层**
+  这笔交易是否能合并、是否重复做了很多小动作
+- **对象层**
+  你的对象是否过大、过热、过于集中
+- **架构层**
+  哪些计算和聚合其实根本不该上链
+
+###  21.1.1 一组可以复用的 Gas 对比记录模板
+
+这一章最容易流于口号。建议至少拿一组固定操作记录“优化前/后”数据：
+
+| 操作 | 低效写法 | 优化写法 | 你要记录的字段 |
+|------|------|------|------|
+| 两个星门上线 + 链接 | 3 笔独立交易 | 1 笔 PTB 批处理 | `gasUsed`、对象写入数、总耗时 |
+| 市场创建挂单 | 大对象追加 `vector` | 独立对象或动态字段 | 对象大小、写入次数、存储退款 |
+| 历史记录 | 持久化到共享对象 | 改发事件 + 链下索引 | 事件数、对象增长字节 |
+
+> 这些数字不需要追求“绝对标准值”，但必须留下同环境下的对比记录，否则优化结论没有说服力。
 
 ---
 
-## 21.3 检测当前运行环境
+##  21.2 批处理：一笔交易做多件事
 
-你的 dApp 需要知道自己是运行在游戏内还是外部浏览器，以便做出相应的 UI 调整：
+Sui 的可编程交易块（PTB）允许在**一笔交易**中执行多个 Move 调用：
 
 ```typescript
-// lib/environment.ts
+// ❌ 低效：3 笔单独交易
+await client.signAndExecuteTransaction({ transaction: tx_online }); // 上线星门1
+await client.signAndExecuteTransaction({ transaction: tx_online }); // 上线星门2  
+await client.signAndExecuteTransaction({ transaction: tx_link });   // 链接星门
 
-export type RunEnvironment = "in-game" | "external-browser" | "unknown";
+// ✅ 高效：1 笔交易完成所有操作
+const tx = new Transaction();
 
-export function detectEnvironment(): RunEnvironment {
-  // EVE Frontier 客户端会在 WebView 的 navigator.userAgent 中注入标识
-  const ua = navigator.userAgent;
+// 借用 OwnerCap（一次）
+const [ownerCap1, receipt1] = tx.moveCall({ target: `${PKG}::character::borrow_owner_cap`, ... });
+const [ownerCap2, receipt2] = tx.moveCall({ target: `${PKG}::character::borrow_owner_cap`, ... });
 
-  if (ua.includes("EVEFrontier/GameClient")) {
-    return "in-game";
-  }
+// 执行所有操作
+tx.moveCall({ target: `${PKG}::gate::online`, arguments: [gate1, ownerCap1, ...] });
+tx.moveCall({ target: `${PKG}::gate::online`, arguments: [gate2, ownerCap2, ...] });
+tx.moveCall({ target: `${PKG}::gate::link`,   arguments: [gate1, gate2, ...] });
 
-  // 也可以通过自定义查询参数传入
-  const params = new URLSearchParams(window.location.search);
-  if (params.get("env") === "ingame") {
-    return "in-game";
-  }
+// 归还 OwnerCap
+tx.moveCall({ target: `${PKG}::character::return_owner_cap`, arguments: [..., receipt1] });
+tx.moveCall({ target: `${PKG}::character::return_owner_cap`, arguments: [..., receipt2] });
 
-  return "external-browser";
-}
-
-export const isInGame = detectEnvironment() === "in-game";
+await client.signAndExecuteTransaction({ transaction: tx });
+// 节省 2/3 的 Gas 基础费！
 ```
 
-```tsx
-// App.tsx
-import { isInGame } from "./lib/environment";
+###  21.2.1 如何记录一次真实 Gas 对比
 
-export function App() {
-  return (
-    <div className={`app ${isInGame ? "app--ingame" : "app--external"}`}>
-      {isInGame ? <InGameOverlay /> : <FullDashboard />}
-    </div>
-  );
-}
+1. 先固定输入：同一网络、同一对象数量、同一批操作
+2. 记录低效版本的执行结果：`digest`、`gasUsed`、`effects` 中的写对象数
+3. 再执行 PTB 版本，记录同样字段
+4. 把结果整理成一张对比表，写进你的发布或优化笔记
+
+推荐至少记录这些字段：
+
+```text
+- digest
+- computationCost
+- storageCost
+- storageRebate
+- nonRefundableStorageFee
+- changedObjects count
 ```
 
-### 环境检测真正要服务什么？
+### PTB 不是“能合就全合”
 
-不是为了打一个 `isInGame` 标记，而是为了让页面决定：
+批处理很强，但也不是无脑把所有动作塞进一笔就最好。
 
-- 当前该渲染哪套布局
-- 某些按钮是否应该隐藏
-- 是否要监听游戏事件桥
-- 某些复杂操作是否该引导到外部浏览器完成
+适合合并的情况：
 
-也就是说，环境检测不是展示层小技巧，而是交互路由的一部分。
+- 原本就强关联的步骤
+- 必须原子成功或一起失败的流程
+- 多次借用同类权限对象的操作
+
+不一定适合过度合并的情况：
+
+- 一笔交易里塞太多无关逻辑
+- 一旦失败就很难定位问题
+- Gas 预算和计算量开始变得不可预测
+
+所以 PTB 的目标不是“最大化长度”，而是“收敛一条真正应该原子化的流程”。
 
 ---
 
-## 21.4 游戏内浮层 UI 设计原则
+##  21.3 对象设计优化
 
-游戏内 UI 与外部 Web 页面的设计要求不同：
+### 原则一：避免大对象
 
-| 外部浏览器 | 游戏内浮层 |
-|----------|---------|
-| 全屏布局 | **小窗口**（通常 400×600px） |
-| 标准字体大小 | 更大字体，高对比度 |
-| 悬停 tooltip | 避免悬停（不确定焦点在游戏还是 UI） |
-| 多步骤表单 | 单步操作为主，减少输入 |
-| 非流式动效 | 轻量动效（防止遮挡游戏画面） |
-
-```css
-/* ingame.css - 游戏内浮层专用样式 */
-:root {
-  --ingame-bg: rgba(10, 15, 25, 0.92);
-  --ingame-border: rgba(80, 160, 255, 0.4);
-  --ingame-text: #e0e8ff;
-  --ingame-accent: #4fa3ff;
+```move
+// ❌ 把所有数据放在一个对象（最大 250KB）
+public struct BadMarket has key {
+    id: UID,
+    listings: vector<Listing>,     // 随商品增多，对象越来越大
+    bid_history: vector<BidRecord>, // 历史数据无限增长
 }
 
-.app--ingame {
-  width: 420px;
-  min-height: 100vh;
-  background: var(--ingame-bg);
-  color: var(--ingame-text);
-  border: 1px solid var(--ingame-border);
-  backdrop-filter: blur(8px);
-  font-size: 15px;      /* 比标准稍大 */
-  font-family: 'Share Tech Mono', monospace;  /* EVE 风格字体 */
+// ✅ 用动态字段或独立对象分散存储
+public struct GoodMarket has key {
+    id: UID,
+    listing_count: u64,  // 只存计数器
+    // 具体 Listing 用动态字段存储：df::add(id, item_id, listing)
 }
-
-/* 确认按钮足够大，适合鼠标点击（游戏内操作精度要求） */
-.ingame-btn {
-  min-height: 44px;
-  min-width: 140px;
-  font-size: 14px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-/* 隐藏非必要的横向导航 */
-.app--ingame .sidebar-nav { display: none; }
-.app--ingame .header-nav  { display: none; }
 ```
 
-### 游戏内浮层最容易犯的错
+### 原则二：删除不再需要的对象（获取存储退款）
 
-#### 1. 把后台页面硬塞进浮层
+```move
+// 拍卖结束后，删除 Listing 获得 Gas 退款
+public entry fun end_auction(auction: DutchAuction) {
+    let DutchAuction { id, .. } = auction;
+    id.delete(); // 删除对象 → 存储退款
+}
 
-结果就是：
+// 领取完毕后，删除 DividendClaim 对象
+public entry fun close_claim_record(record: DividendClaim) {
+    let DividendClaim { id, .. } = record;
+    id.delete();
+}
+```
 
-- 信息密度过高
-- 按钮太小
-- 用户根本不知道当前最重要的动作是什么
+### 原则三：用 u8/u16 代替 u64 存储小整数
 
-#### 2. 把确认流程做得过长
+```move
+// ❌ 浪费空间
+public struct Config has key {
+    id: UID,
+    tier: u64,     // 只存 1-5，但占 8 字节
+    status: u64,   // 只存 0-3，但占 8 字节
+}
 
-游戏内适合：
+// ✅ 紧凑存储
+public struct Config has key {
+    id: UID,
+    tier: u8,      // 只占 1 字节
+    status: u8,    // 只占 1 字节
+}
+```
 
-- 单步确认
-- 当前对象的即时操作
-- 强场景相关动作
+### 对象设计为什么几乎总是性能问题的根源？
 
-不太适合：
+因为在 Sui 上，性能和对象模型是绑在一起的：
 
-- 长表单
-- 多页设置向导
-- 复杂筛选后台
+- 对象越大，读写越重
+- 共享对象越热，争用越高
+- 状态越集中，扩展越难
 
-#### 3. 视觉上太“网页”，不够“嵌入式工具”
+所以很多性能优化，最后都不是在“重写算法”，而是在“重构对象边界”。
 
-浮层更应该像一个面向当前设施的控制面板，而不是独立网站首页。
+### 一个很实用的判断标准
+
+只要一个对象同时具备下面两个特征，就要开始警惕：
+
+- 经常被写
+- 还在不断长大
+
+这类对象几乎一定会成为性能热点。
 
 ---
 
-## 21.5 游戏事件监听（postMessage 桥接）
+##  21.4 链下计算，链上验证
 
-游戏客户端通过 `window.postMessage` 向 WebView 发送游戏内事件：
+**黄金法则**：所有不需要强制执行的计算，都放到链下做。
+
+```move
+// ❌ 在链上排序（极度消耗 Gas）
+public fun get_top_bidders(auction: &Auction, n: u64): vector<address> {
+    let mut sorted = vector::empty<BidRecord>();
+    // ... O(n²) 排序，每次都在链上执行
+}
+
+// ✅ 链上只存原始数据，链下排序
+public fun get_bid_at(auction: &Auction, index: u64): BidRecord {
+    *df::borrow<u64, BidRecord>(&auction.id, index)
+}
+// dApp 或后端读取所有竞价，在内存中排序，展示排行榜
+```
+
+### 复杂路由计算在链下完成
 
 ```typescript
-// lib/gameEvents.ts
-
-export type GameEvent =
-  | { type: "PLAYER_ENTERED_RANGE"; assemblyId: string; distance: number }
-  | { type: "PLAYER_LEFT_RANGE"; assemblyId: string }
-  | { type: "INVENTORY_CHANGED"; characterId: string }
-  | { type: "SYSTEM_CHANGED"; fromSystem: string; toSystem: string };
-
-type GameEventHandler = (event: GameEvent) => void;
-
-const handlers = new Set<GameEventHandler>();
-
-// 启动监听（在应用启动时调用一次）
-export function startGameEventListener() {
-  window.addEventListener("message", (e) => {
-    // 仅处理来自游戏客户端的消息（通过 origin 或约定的 source 字段验证）
-    if (e.data?.source !== "EVEFrontierClient") return;
-
-    const event = e.data as { source: string } & GameEvent;
-    if (!event.type) return;
-
-    for (const handler of handlers) {
-      handler(event);
-    }
-  });
-}
-
-export function onGameEvent(handler: GameEventHandler) {
-  handlers.add(handler);
-  return () => handlers.delete(handler); // 返回取消订阅函数
+// Example: 星门物流路由（链下计算最优路径）
+function findOptimalRoute(
+  start: string,
+  end: string,
+  gateGraph: Map<string, string[]>, // gate_id → [connected_gate_ids]
+): string[] {
+  // Dijkstra 等路径算法，在 dApp/后端执行
+  // 计算出最优路径后，只把最终跳跃操作提交上链
+  return dijkstra(gateGraph, start, end);
 }
 ```
 
-### 事件桥最重要的不是“能收到消息”，而是消息语义稳定
+### 链下计算不是偷懒，而是正确分工
 
-一个成熟的消息桥接协议，至少应该保证：
+很多适合链下做的事，本质上不是“不重要”，而是：
 
-- 事件类型稳定
-- 字段名和字段含义稳定
-- 缺失字段时前端能安全降级
-- 前后端都知道哪些事件是一次性触发、哪些是状态同步
+- 结果需要展示，但不需要链上强制执行
+- 算法复杂，但最终只需提交一个结论
+- 可重算、可缓存、可替换
 
-否则游戏客户端一改字段，前端会在最难排查的环境里静默出错。
+这类工作如果硬放链上，只会把成本和失败面一起拉高。
 
-### 在 React 中使用游戏事件
+### 什么时候必须链上验证？
 
-```tsx
-// hooks/useGameEvents.ts
-import { useEffect } from "react";
-import { onGameEvent, GameEvent } from "../lib/gameEvents";
+当结果会影响：
 
-export function useGameEvent<T extends GameEvent["type"]>(
-  type: T,
-  handler: (event: Extract<GameEvent, { type: T }>) => void,
+- 资产归属
+- 权限放行
+- 金额结算
+- 稀缺资源分配
+
+就必须把关键结论放回链上验证，而不是只信链下算出来就算数。
+
+---
+
+##  21.5 Gas 预算设置
+
+```typescript
+const tx = new Transaction();
+
+// 设置 Gas 预算上限（防止意外超额消耗）
+tx.setGasBudget(10_000_000); // 10 SUI上限
+
+// 或使用 dryRun 预估 Gas
+const estimate = await client.dryRunTransactionBlock({
+  transactionBlock: await tx.build({ client }),
+});
+console.log("预估 Gas:", estimate.effects.gasUsed);
+```
+
+### `dryRun` 最值钱的地方，不是“估个数”，而是提前发现模型问题
+
+如果一笔交易的 dry run 结果已经显示：
+
+- 写对象很多
+- 存储成本异常高
+- 返还很少
+
+那通常说明问题不在预算，而在结构本身。
+
+---
+
+##  21.6 并行执行：无争用的共享对象设计
+
+Sui 可以并行执行操作不同对象的交易。争用同一共享对象会导致顺序执行：
+
+```
+// ❌ 所有用户都争用同一个 Market 对象
+Market (shared) ← 所有购买交易都需要写锁 → 顺序执行
+（高流量时，队列堆积，延迟上升）
+
+// ✅ 分片设计（多个 SubMarket）
+Market_Shard_0 (shared) ← 物品 type_id % 4 == 0 的交易
+Market_Shard_1 (shared) ← 物品 type_id % 4 == 1 的交易
+Market_Shard_2 (shared) ← 物品 type_id % 4 == 2 的交易
+Market_Shard_3 (shared) ← 物品 type_id % 4 == 3 的交易
+（4 个分片并行执行，吞吐量 ×4）
+```
+
+```move
+// 分片路由
+public entry fun buy_item_sharded(
+    shards: &mut vector<MarketShard>,
+    item_type_id: u64,
+    payment: Coin<SUI>,
+    ctx: &mut TxContext,
 ) {
-  useEffect(() => {
-    return onGameEvent((event) => {
-      if (event.type === type) {
-        handler(event as Extract<GameEvent, { type: T }>);
-      }
-    });
-  }, [type, handler]);
-}
-
-// 使用场景：玩家进入星门范围时，自动弹出购票面板
-function GatePanel() {
-  const [nearGate, setNearGate] = useState<string | null>(null);
-
-  useGameEvent("PLAYER_ENTERED_RANGE", (event) => {
-    setNearGate(event.assemblyId);
-  });
-
-  useGameEvent("PLAYER_LEFT_RANGE", () => {
-    setNearGate(null);
-  });
-
-  if (!nearGate) return null;
-
-  return <JumpTicketPanel gateId={nearGate} />;
+    let shard_index = item_type_id % vector::length(shards);
+    let shard = vector::borrow_mut(shards, shard_index);
+    buy_from_shard(shard, item_type_id, payment, ctx);
 }
 ```
 
-### 游戏事件不要直接当作链上真相
+### 并发设计里最该问的问题
 
-事件桥最适合做：
+不是“能不能并行”，而是：
 
-- 当前场景提示
-- UI 弹出/关闭
-- 当前对象上下文切换
+> 我的业务流里，到底哪些状态必须争用同一个共享对象，哪些其实可以天然拆开？
 
-但真正涉及资产和权限的动作，仍然应该回到链上对象和正式验证流程上来。
+比如市场系统里，常见可以拆开的维度包括：
 
-换句话说：
+- 物品类型
+- 区域
+- 租户
+- 时间桶
 
-- 游戏事件告诉你“玩家现在可能想操作谁”
-- 链上数据告诉你“这个对象现在到底处于什么状态”
+只要拆分维度选对，吞吐量通常会明显提升。
 
----
+### 分片也有代价
 
-## 21.6 从游戏内发起签名请求
+别把分片当成免费午餐。它会带来：
 
-由于 EVE Vault 在游戏内已注入，签名请求直接弹出游戏内的 Vault UI：
+- 查询聚合更复杂
+- 路由逻辑更复杂
+- 前端和索引层要额外知道分片规则
 
-```tsx
-// components/InGameMarket.tsx
-import { useDAppKit } from "@mysten/dapp-kit-react";
-import { Transaction } from "@mysten/sui/transactions";
-
-export function InGameMarket({ gateId }: { gateId: string }) {
-  const dAppKit = useDAppKit();
-  const [status, setStatus] = useState("");
-
-  const handleBuy = async () => {
-    setStatus("请在右上角钱包确认交易...");
-
-    const tx = new Transaction();
-    tx.moveCall({
-      target: `${TOLL_PKG}::toll_gate_ext::pay_toll_and_get_permit`,
-      arguments: [/* ... */],
-    });
-
-    try {
-      // 签名请求会触发游戏内置的 EVE Vault 弹窗
-      const result = await dAppKit.signAndExecuteTransaction({
-        transaction: tx,
-      });
-      setStatus("✅ 通行证已发放！");
-    } catch (e: any) {
-      if (e.message?.includes("User rejected")) {
-        setStatus("❌ 已取消");
-      } else {
-        setStatus(`❌ ${e.message}`);
-      }
-    }
-  };
-
-  return (
-    <div className="ingame-market">
-      <div className="gate-info">
-        <span>⛽ 通行费：10 SUI</span>
-        <span>⏱ 有效期：30 分钟</span>
-      </div>
-      <button className="ingame-btn" onClick={handleBuy}>
-        🚀 购买通行证
-      </button>
-      {status && <p className="status">{status}</p>}
-    </div>
-  );
-}
-```
-
-### 游戏内签名体验的关键不是“能签”，而是“别打断用户节奏”
-
-最好的游戏内签名流程通常具备这些特征：
-
-- 签名前就把关键成本讲清楚
-- 失败后能快速回到原场景
-- 成功后立刻给出当前对象状态变化
-
-如果用户每次签名都像突然切出去做一件外部钱包任务，那游戏内集成价值会大幅下降。
-
----
-
-## 21.7 响应式切换：同一套代码适配两种场景
-
-```tsx
-// App.tsx 完整示例
-import { isInGame } from "./lib/environment";
-import { startGameEventListener } from "./lib/gameEvents";
-import { useEffect } from "react";
-
-export function App() {
-  useEffect(() => {
-    if (isInGame) startGameEventListener();
-  }, []);
-
-  return (
-    <EveFrontierProvider>
-      {isInGame ? (
-        // 游戏内：精简的单功能浮层
-        <InGameOverlay />
-      ) : (
-        // 外部浏览器：完整功能仪表盘
-        <FullDashboard />
-      )}
-    </EveFrontierProvider>
-  );
-}
-```
-
----
-
-## 21.8 游戏内 dApp 的 URL 配置
-
-向玩家提供正确的 URL，他们可以在游戏设置中添加自定义 dApp：
-
-```
-你的 dApp 地址（在游戏内 WebView 打开）：
-https://your-dapp.com?env=ingame
-
-# 或通过游戏客户端的"自定义面板"功能添加
-# 游戏会在 User-Agent 中自动附加 EVEFrontier/GameClient 标识
-```
+所以分片是“为了吞吐而增加系统复杂度”的明确交换，不是默认选项。
 
 ---
 
 ## 🔖 本章小结
 
-| 知识点 | 核心要点 |
+| 优化技巧 | 节省比例 |
 |--------|--------|
-| 两种访问模式 | 外部浏览器（完整）vs 游戏内 WebView（精简） |
-| 环境检测 | `navigator.userAgent` 或查询参数判断 |
-| UI 适配 | 小窗口、大字体、单步操作、高对比度 |
-| 游戏事件监听 | `window.postMessage` + 事件分发器 |
-| 签名无缝集成 | EVE Vault 已注入游戏内，API 完全相同 |
-| 响应式切换 | 同一套代码，`isInGame` 条件渲染 |
+| PTB 批处理（合并多笔交易） | 30-70% 基础费 |
+| 链下计算，链上验证 | 消除复杂计算 Gas |
+| 删除废弃对象 | 获得存储退款 |
+| 紧凑数据类型（u8 vs u64） | 减小对象尺寸 |
+| 分片共享对象 | 提升并发吞吐量 |
 
 ## 📚 延伸阅读
 
-- [dapp-kit 文档](https://github.com/evefrontier/builder-documentation/blob/main/dapp-kit/dapp-kit.md)
-- [EVE Vault 介绍](https://github.com/evefrontier/builder-documentation/blob/main/eve-vault/introduction-to-eve-vault.md)
-- [Chapter 5：dApp 前端开发](./chapter-05.md)
-- [Chapter 18：全栈 dApp 架构](./chapter-18.md)
+- [Sui Gas 文档](https://docs.sui.io/concepts/tokenomics/gas-in-sui)
+- [PTB 编程指南](https://docs.sui.io/concepts/transactions/prog-txn-blocks)
+- [Sui 对象限制](https://github.com/evefrontier/builder-documentation/blob/main/welcome/contstraints.md)

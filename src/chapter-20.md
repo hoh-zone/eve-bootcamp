@@ -1,315 +1,426 @@
-# Chapter 20：未来展望 — ZK 证明、完全去中心化与 EVM 互操作
+# Chapter 20：游戏内 dApp 集成（浮层 UI 与事件通信）
 
-> **目标：** 了解 EVE Frontier 和 Sui 生态的前沿技术方向，思考如何为未来的关键升级提前做好架构准备，成为站在技术前沿的构建者。
-
----
-
-> 状态：展望章节。正文以未来技术方向和架构预留为主。
-
-## 20.1 当前的信任假设与局限
-
-回顾我们整个课程中的架构，有几个核心的"信任假设"：
-
-| 环节 | 当前依赖 | 局限性 |
-|------|---------|-------|
-| 临近性验证 | 游戏服务器签名 | 服务器可撒谎或宕机 |
-| 位置隐私 | 服务器不泄露哈希映射 | 服务器知道所有位置 |
-| 组件状态更新 | 游戏服务器提交 | 中心化瓶颈 |
-| 游戏规则修改 | CCP 控制的合约升级 | 玩家无直接治理权 |
-
-这些局限不是设计失误，而是现阶段技术和工程的取舍。EVE Frontier 官方路线图承诺逐步消除这些中心化依赖。
-
-这一章最容易写成“技术愿景列表”，但真正有价值的视角是：
-
-> 哪些未来方向值得今天就为它留接口，哪些则只需要知道，不必过早下注。
-
-因为对 Builder 来说，未来感如果处理不好，就会变成两种常见问题：
-
-- 过度预留，系统今天反而很臃肿
-- 完全不预留，未来一变化就要重构
+> **目标：** 掌握如何将你的 dApp 嵌入 EVE Frontier 游戏客户端作为悬浮面板，实现游戏内与链上数据的无缝交互，以及如何从游戏内发起签名请求而无需切换到外部浏览器。
 
 ---
 
-## 20.2 零知识证明（ZK Proofs）的应用前景
+> 状态：集成章节。正文以游戏内 WebView、浮层 UI 和事件通信为主。
 
-### 什么是 ZK 证明？
+##  20.1 两种 dApp 访问模式
 
-零知识证明允许一方（Prover）向另一方（Verifier）证明某件事是真的，**而不泄露任何具体信息**：
+EVE Frontier 支持两种访问你的 dApp 的方式：
 
-```
-当前（服务器签名）：
-  玩家 → "我在星门附近" → 服务器查询坐标 → 签名证明 → 链上验证签名
+| 模式 | 入口 | 适合场景 |
+|------|------|--------|
+| **外部浏览器** | 玩家手动打开网页 | 管理面板、数据分析、设置页 |
+| **游戏内浮层** | 游戏客户端内嵌 WebView | 交易弹窗、实时状态、战斗辅助 |
 
-未来（ZK 证明）：
-  玩家本地计算："生成一个 ZK 证明，证明我知道一个坐标 (x,y)，
-                 使得 hash(x,y,salt) = 链上存储的哈希，
-                 且 distance(x,y, 星门) < 20km"
-  → 将 ZK 证明提交上链
-  → Sui Verifier 智能合约验证证明（无需服务器）
-```
+游戏内集成提供更流畅的用户体验：玩家无需切出游戏就能完成购买、查看库存、签署交易。
 
-### ZK 对 EVE Frontier 的意义
+这章最重要的不是“WebView 里也能打开网页”，而是：
 
-```
-现在                          未来（ZK）
-────────────────────────────────────────────────
-临近性 → 服务器签名           临近性 → 玩家自证 ZK
-位置隐私 → 信任服务器         位置隐私 → 数学保证
-跳跃验证 → 需要服务器在线     跳跃验证 → 完全链上
-链下仲裁 → CCP 决策           链下仲裁 → 社区 DAO
-```
+> 同一套 dApp，在游戏内和外部浏览器里扮演的角色其实不一样。
 
-### 为 ZK 做好准备的合约设计
+外部浏览器更像完整后台：
 
-```move
-// 现在：用 AdminACL 验证服务器签名
-public fun jump(
-    gate: &Gate,
-    admin_acl: &AdminACL,   // 现在：验证服务器赞助
-    ctx: &TxContext,
-) {
-    verify_sponsor(admin_acl, ctx);  // 检查服务器在授权列表
-}
+- 信息量大
+- 操作链更长
+- 适合管理、分析、配置
 
-// 未来（ZK 时代）：替换验证逻辑，业务代码不变
-public fun jump(
-    gate: &Gate,
-    proximity_proof: vector<u8>,    // 换成 ZK 证明
-    proof_inputs: vector<u8>,       // 公开输入（位置哈希、距离阈值）
-    verifier: &ZkVerifier,          // Sui 的 ZK 验证合约
-    ctx: &TxContext,
-) {
-    // 同一链上验证 ZK 证明
-    zk_verifier::verify_proof(verifier, proximity_proof, proof_inputs);
-}
-```
+游戏内浮层更像即时工具：
 
-**关键架构建议**：**现在就把位置验证封装成独立函数**，未来只需替换验证逻辑，无需重写业务代码。
+- 必须快
+- 必须短
+- 必须对当前场景强相关
 
-### 对今天的 Builder 来说，ZK 最现实的价值是什么？
-
-不是马上自己写证明系统，而是先学会把“证明机制”和“业务状态机”拆开。
-
-这样未来如果：
-
-- 服务器签名换成 ZK
-- 某些验证步骤变成本地生成证明
-- 不同组件使用不同证明后端
-
-你替换的是验证层，而不是整套产品逻辑。
+如果你把两种入口做成完全一样，通常两边体验都会打折。
 
 ---
 
-## 20.3 完全去中心化游戏（Fully On-Chain Game）
+##  20.2 游戏内 WebView 的工作原理
 
-区块链游戏的终极形态：**游戏逻辑完全在链上，无任何中心化服务器**。
-
-```
-理想的完全链上游戏：
-  所有游戏状态 → 链上对象
-  所有规则执行 → Move 合约
-  所有随机数   → 链上随机数（Sui Drand）
-  所有验证     → ZK 证明
-  所有治理     → DAO 投票
-```
-
-### Sui Drand：链上可验证随机数
-
-```move
-use sui::random::{Self, Random};
-
-public entry fun open_loot_box(
-    loot_box: &mut LootBox,
-    random: &Random,   // Sui 系统提供的随机数对象
-    ctx: &mut TxContext,
-): Item {
-    let mut rng = random::new_generator(random, ctx);
-    let roll = rng.generate_u64() % 100;  // 0-99 均匀分布
-
-    let item_tier = if roll < 60 { 1 }   // 60% 普通
-                    else if roll < 90 { 2 } // 30% 稀有
-                    else { 3 };             // 10% 史诗
-
-    mint_item(item_tier, ctx)
-}
-```
-
-### 链上 AI NPC（实验性）
-
-结合 ZK 机器学习（ZKML），理论上可以把 NPC 的决策逻辑也放上链：
+EVE Frontier 客户端内置一个 Chromium WebView，可以加载外部 URL：
 
 ```
-链上 NPC 合约 → 接收游戏状态输入
-             → 在链上通过 ZKML 验证"AI 决策的正确性"
-             → 输出行动结果
+游戏客户端 (Unity/Electron)
+    └── WebView 组件
+          └── 加载你的 dApp URL（https://your-dapp.com）
+                └── 与 EVE Vault（已注入游戏内）通信
 ```
 
-### 这里最需要现实一点的判断
+**关键点**：EVE Vault 被注入到游戏内 WebView 的 `window` 对象中，与外部浏览器扩展共享相同的 Wallet Standard API，因此同一套 `@mysten/dapp-kit` 代码**无需修改**即可在两种模式下运行。
 
-“完全链上”并不自动等于“更适合现在的 EVE Builder 任务”。
+### 但“API 兼容”不等于“体验等价”
 
-很多今天真正有价值的产品，仍然是混合架构：
+技术上可以复用同一套钱包接入代码，不代表你可以无脑照搬整个产品流。
 
-- 关键资产和规则上链
-- 高速世界模拟留在链下
-- 验证边界逐步前移
+游戏内环境通常会额外受到这些约束：
 
-所以更实际的目标通常不是一步到位全链上，而是持续缩小“必须依赖中心化信任”的那部分面积。
+- 页面空间更小
+- 玩家注意力更短
+- 操作时可能仍在战斗或移动
+- 宿主环境会决定打开/关闭时机
+
+所以真正该复用的是底层能力，而不是整套交互节奏。
 
 ---
 
-## 20.4 Sui 与其他生态的互操作
+##  20.3 检测当前运行环境
 
-### Sui Bridge：跨链资产
+你的 dApp 需要知道自己是运行在游戏内还是外部浏览器，以便做出相应的 UI 调整：
 
 ```typescript
-// 未来：通过 Sui Bridge 从以太坊转入 EVE 游戏物品
-const suiBridge = new SuiBridge({ network: "testnet" });
+// lib/environment.ts
 
-// 将以太坊上的某个 NFT 桥接到 Sui
-await suiBridge.deposit({
-  sender: ethAddress,
-  recipient: suiAddress,
-  token: ethNftContractAddress,
-  tokenId: "12345",
-});
+export type RunEnvironment = "in-game" | "external-browser" | "unknown";
+
+export function detectEnvironment(): RunEnvironment {
+  // EVE Frontier 客户端会在 WebView 的 navigator.userAgent 中注入标识
+  const ua = navigator.userAgent;
+
+  if (ua.includes("EVEFrontier/GameClient")) {
+    return "in-game";
+  }
+
+  // 也可以通过自定义查询参数传入
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("env") === "ingame") {
+    return "in-game";
+  }
+
+  return "external-browser";
+}
+
+export const isInGame = detectEnvironment() === "in-game";
 ```
 
-### 状态证明（State Proof）
+```tsx
+// App.tsx
+import { isInGame } from "./lib/environment";
 
-Sui 支持向其他链证明自身的链上状态，这使得跨链的资产证明成为可能：
-
-```
-EVE Frontier 玩家拥有稀有矿石 (Sui)
-    → 生成 Sui State Proof
-    → 在以太坊上的 DEX 中用 Sui 资产作为抵押品
-```
-
-### 互操作最值得关注的，不是“能不能桥”，而是“桥过去以后语义还对不对”
-
-例如：
-
-- 一件 EVE 资产到了别的链，还是不是原来那种权限或物品？
-- 另一条链上的金融场景，是否理解它的真实风险？
-- 桥接后失败、冻结、回滚时，用户怎么理解资产状态？
-
-这意味着跨链不是纯技术扩展，也是一层产品语义迁移。
-
----
-
-## 20.5 DAO 治理：Builder 参与游戏规则制定
-
-随着游戏成熟，更多游戏参数可能开放 DAO 投票：
-
-```move
-// 未来：费率参数由 DAO 投票决定
-public entry fun update_energy_cost_via_dao(
-    new_cost: u64,
-    dao_proposal: &ExecutedProposal,  // 已通过的 DAO 提案凭证
-    energy_config: &mut EnergyConfig,
-) {
-    // 验证提案已通过且未过期
-    dao::verify_executed_proposal(dao_proposal);
-    energy_config.update_cost(new_cost);
+export function App() {
+  return (
+    <div className={`app ${isInGame ? "app--ingame" : "app--external"}`}>
+      {isInGame ? <InGameOverlay /> : <FullDashboard />}
+    </div>
+  );
 }
 ```
 
-### 不是所有参数都值得 DAO 化
+### 环境检测真正要服务什么？
 
-更适合 DAO 的通常是：
+不是为了打一个 `isInGame` 标记，而是为了让页面决定：
 
-- 中长期规则参数
-- 高价值公共资源配置
-- 影响多方利益的分润与治理项
+- 当前该渲染哪套布局
+- 某些按钮是否应该隐藏
+- 是否要监听游戏事件桥
+- 某些复杂操作是否该引导到外部浏览器完成
 
-不太适合完全 DAO 化的通常是：
-
-- 高频运营参数
-- 需要秒级响应的安全开关
-- 明显属于执行层职责的日常动作
-
-否则治理会从“集体决策”变成“系统阻塞”。
+也就是说，环境检测不是展示层小技巧，而是交互路由的一部分。
 
 ---
 
-## 20.6 给构建者的长远建议
+##  20.4 游戏内浮层 UI 设计原则
 
-### 技术选择
+游戏内 UI 与外部 Web 页面的设计要求不同：
 
+| 外部浏览器 | 游戏内浮层 |
+|----------|---------|
+| 全屏布局 | **小窗口**（通常 400×600px） |
+| 标准字体大小 | 更大字体，高对比度 |
+| 悬停 tooltip | 避免悬停（不确定焦点在游戏还是 UI） |
+| 多步骤表单 | 单步操作为主，减少输入 |
+| 非流式动效 | 轻量动效（防止遮挡游戏画面） |
+
+```css
+/* ingame.css - 游戏内浮层专用样式 */
+:root {
+  --ingame-bg: rgba(10, 15, 25, 0.92);
+  --ingame-border: rgba(80, 160, 255, 0.4);
+  --ingame-text: #e0e8ff;
+  --ingame-accent: #4fa3ff;
+}
+
+.app--ingame {
+  width: 420px;
+  min-height: 100vh;
+  background: var(--ingame-bg);
+  color: var(--ingame-text);
+  border: 1px solid var(--ingame-border);
+  backdrop-filter: blur(8px);
+  font-size: 15px;      /* 比标准稍大 */
+  font-family: 'Share Tech Mono', monospace;  /* EVE 风格字体 */
+}
+
+/* 确认按钮足够大，适合鼠标点击（游戏内操作精度要求） */
+.ingame-btn {
+  min-height: 44px;
+  min-width: 140px;
+  font-size: 14px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* 隐藏非必要的横向导航 */
+.app--ingame .sidebar-nav { display: none; }
+.app--ingame .header-nav  { display: none; }
 ```
-✅ 现在就做：
-  - 将验证逻辑封装为可替换的模块
-  - 使用动态字段预留扩展空间
-  - 为 DAO 治理留好参数接口
-  - 保持合约模块化，方便升级
 
-🔮 关注的技术方向：
-  - Sui ZK Proof 原生支持
-  - Sui Move 的类型系统扩展
-  - 跨链桥的安全性成熟
-  - ZKML 在游戏中的实际应用
-```
+### 游戏内浮层最容易犯的错
 
-### 商业定位
+#### 1. 把后台页面硬塞进浮层
 
-```
-短期（现在可做）：
-  - 星门收费、市场、拍卖等经济系统
-  - 联盟协作工具（分红、治理）
-  - 游戏数据统计面板和分析服务
+结果就是：
 
-中期（1-2年）：
-  - 多租户 SaaS 平台（通用市场、任务框架）
-  - 跨联盟协议和标准
-  - 数据分析和商业智能
+- 信息密度过高
+- 按钮太小
+- 用户根本不知道当前最重要的动作是什么
 
-长期（ZK 成熟后）：
-  - 完全去中心化的游戏副本（小游戏内游戏）
-  - ZK 驱动的隐私交易
-  - 跨链的 EVE 资产金融化
-```
+#### 2. 把确认流程做得过长
 
-### 真正的长远建议可以压缩成一句话
+游戏内适合：
 
-先把今天真实能落地的系统做成模块化、可升级、边界清晰的产品，再去迎接未来能力。
+- 单步确认
+- 当前对象的即时操作
+- 强场景相关动作
 
-因为未来真正会奖励的，不是“谁最早喊口号”，而是“谁今天的系统最容易演进到明天”。
+不太适合：
+
+- 长表单
+- 多页设置向导
+- 复杂筛选后台
+
+#### 3. 视觉上太“网页”，不够“嵌入式工具”
+
+浮层更应该像一个面向当前设施的控制面板，而不是独立网站首页。
 
 ---
 
-## 20.7 本课程的终点是下一个起点
+##  20.5 游戏事件监听（postMessage 桥接）
 
-恭喜你完成了 EVE Frontier 构建者完整课程！你现在具备：
+游戏客户端通过 `window.postMessage` 向 WebView 发送游戏内事件：
 
-- ✅ **Move 合约开发**：从基础到高级模式
-- ✅ **智能设施改造**：炮塔、星门、存储箱的完整 API
-- ✅ **经济系统设计**：代币、市场、DAO 治理
-- ✅ **全栈 dApp 开发**：React + Sui SDK + 实时数据
-- ✅ **生产级工程**：测试、安全、升级、性能优化
+```typescript
+// lib/gameEvents.ts
 
-**接下来的行动**：
+export type GameEvent =
+  | { type: "PLAYER_ENTERED_RANGE"; assemblyId: string; distance: number }
+  | { type: "PLAYER_LEFT_RANGE"; assemblyId: string }
+  | { type: "INVENTORY_CHANGED"; characterId: string }
+  | { type: "SYSTEM_CHANGED"; fromSystem: string; toSystem: string };
 
-1. **完成 10 个实战案例**，将知识转化为可部署的产品
-2. **加入 Builder 社区**，分享你的合约，参与生态建设
-3. **关注官方更新**，Sui 和 EVE Frontier 持续进化
-4. **构建你自己的宇宙**，在这里，代码就是物理定律
+type GameEventHandler = (event: GameEvent) => void;
+
+const handlers = new Set<GameEventHandler>();
+
+// 启动监听（在应用启动时调用一次）
+export function startGameEventListener() {
+  window.addEventListener("message", (e) => {
+    // 仅处理来自游戏客户端的消息（通过 origin 或约定的 source 字段验证）
+    if (e.data?.source !== "EVEFrontierClient") return;
+
+    const event = e.data as { source: string } & GameEvent;
+    if (!event.type) return;
+
+    for (const handler of handlers) {
+      handler(event);
+    }
+  });
+}
+
+export function onGameEvent(handler: GameEventHandler) {
+  handlers.add(handler);
+  return () => handlers.delete(handler); // 返回取消订阅函数
+}
+```
+
+### 事件桥最重要的不是“能收到消息”，而是消息语义稳定
+
+一个成熟的消息桥接协议，至少应该保证：
+
+- 事件类型稳定
+- 字段名和字段含义稳定
+- 缺失字段时前端能安全降级
+- 前后端都知道哪些事件是一次性触发、哪些是状态同步
+
+否则游戏客户端一改字段，前端会在最难排查的环境里静默出错。
+
+### 在 React 中使用游戏事件
+
+```tsx
+// hooks/useGameEvents.ts
+import { useEffect } from "react";
+import { onGameEvent, GameEvent } from "../lib/gameEvents";
+
+export function useGameEvent<T extends GameEvent["type"]>(
+  type: T,
+  handler: (event: Extract<GameEvent, { type: T }>) => void,
+) {
+  useEffect(() => {
+    return onGameEvent((event) => {
+      if (event.type === type) {
+        handler(event as Extract<GameEvent, { type: T }>);
+      }
+    });
+  }, [type, handler]);
+}
+
+// 使用场景：玩家进入星门范围时，自动弹出购票面板
+function GatePanel() {
+  const [nearGate, setNearGate] = useState<string | null>(null);
+
+  useGameEvent("PLAYER_ENTERED_RANGE", (event) => {
+    setNearGate(event.assemblyId);
+  });
+
+  useGameEvent("PLAYER_LEFT_RANGE", () => {
+    setNearGate(null);
+  });
+
+  if (!nearGate) return null;
+
+  return <JumpTicketPanel gateId={nearGate} />;
+}
+```
+
+### 游戏事件不要直接当作链上真相
+
+事件桥最适合做：
+
+- 当前场景提示
+- UI 弹出/关闭
+- 当前对象上下文切换
+
+但真正涉及资产和权限的动作，仍然应该回到链上对象和正式验证流程上来。
+
+换句话说：
+
+- 游戏事件告诉你“玩家现在可能想操作谁”
+- 链上数据告诉你“这个对象现在到底处于什么状态”
 
 ---
 
-> *"我们不只是在写代码。  
-> 我们在为一个宇宙制定物理法则。"*
->
-> — EVE Frontier Builder 精神
+##  20.6 从游戏内发起签名请求
+
+由于 EVE Vault 在游戏内已注入，签名请求直接弹出游戏内的 Vault UI：
+
+```tsx
+// components/InGameMarket.tsx
+import { useDAppKit } from "@mysten/dapp-kit-react";
+import { Transaction } from "@mysten/sui/transactions";
+
+export function InGameMarket({ gateId }: { gateId: string }) {
+  const dAppKit = useDAppKit();
+  const [status, setStatus] = useState("");
+
+  const handleBuy = async () => {
+    setStatus("请在右上角钱包确认交易...");
+
+    const tx = new Transaction();
+    tx.moveCall({
+      target: `${TOLL_PKG}::toll_gate_ext::pay_toll_and_get_permit`,
+      arguments: [/* ... */],
+    });
+
+    try {
+      // 签名请求会触发游戏内置的 EVE Vault 弹窗
+      const result = await dAppKit.signAndExecuteTransaction({
+        transaction: tx,
+      });
+      setStatus("✅ 通行证已发放！");
+    } catch (e: any) {
+      if (e.message?.includes("User rejected")) {
+        setStatus("❌ 已取消");
+      } else {
+        setStatus(`❌ ${e.message}`);
+      }
+    }
+  };
+
+  return (
+    <div className="ingame-market">
+      <div className="gate-info">
+        <span>⛽ 通行费：10 SUI</span>
+        <span>⏱ 有效期：30 分钟</span>
+      </div>
+      <button className="ingame-btn" onClick={handleBuy}>
+        🚀 购买通行证
+      </button>
+      {status && <p className="status">{status}</p>}
+    </div>
+  );
+}
+```
+
+### 游戏内签名体验的关键不是“能签”，而是“别打断用户节奏”
+
+最好的游戏内签名流程通常具备这些特征：
+
+- 签名前就把关键成本讲清楚
+- 失败后能快速回到原场景
+- 成功后立刻给出当前对象状态变化
+
+如果用户每次签名都像突然切出去做一件外部钱包任务，那游戏内集成价值会大幅下降。
 
 ---
 
-## 📚 最终参考资源
+##  20.7 响应式切换：同一套代码适配两种场景
 
-- [EVE Frontier 官网](https://evefrontier.com)
-- [官方文档](https://github.com/evefrontier/builder-documentation)
-- [World Contracts 源码](https://github.com/evefrontier/world-contracts)
-- [Sui 技术文档](https://docs.sui.io)
-- [Move Book](https://move-book.com)
-- [Sui ZK 相关](https://docs.sui.io/concepts/cryptography/zklogin)
-- [Sui On-chain Randomness](https://docs.sui.io/guides/developer/advanced/randomness-onchain)
-- [EVE Frontier Discord](https://discord.com/invite/evefrontier)
+```tsx
+// App.tsx 完整示例
+import { isInGame } from "./lib/environment";
+import { startGameEventListener } from "./lib/gameEvents";
+import { useEffect } from "react";
+
+export function App() {
+  useEffect(() => {
+    if (isInGame) startGameEventListener();
+  }, []);
+
+  return (
+    <EveFrontierProvider>
+      {isInGame ? (
+        // 游戏内：精简的单功能浮层
+        <InGameOverlay />
+      ) : (
+        // 外部浏览器：完整功能仪表盘
+        <FullDashboard />
+      )}
+    </EveFrontierProvider>
+  );
+}
+```
+
+---
+
+##  20.8 游戏内 dApp 的 URL 配置
+
+向玩家提供正确的 URL，他们可以在游戏设置中添加自定义 dApp：
+
+```
+你的 dApp 地址（在游戏内 WebView 打开）：
+https://your-dapp.com?env=ingame
+
+# 或通过游戏客户端的"自定义面板"功能添加
+# 游戏会在 User-Agent 中自动附加 EVEFrontier/GameClient 标识
+```
+
+---
+
+## 🔖 本章小结
+
+| 知识点 | 核心要点 |
+|--------|--------|
+| 两种访问模式 | 外部浏览器（完整）vs 游戏内 WebView（精简） |
+| 环境检测 | `navigator.userAgent` 或查询参数判断 |
+| UI 适配 | 小窗口、大字体、单步操作、高对比度 |
+| 游戏事件监听 | `window.postMessage` + 事件分发器 |
+| 签名无缝集成 | EVE Vault 已注入游戏内，API 完全相同 |
+| 响应式切换 | 同一套代码，`isInGame` 条件渲染 |
+
+## 📚 延伸阅读
+
+- [dapp-kit 文档](https://github.com/evefrontier/builder-documentation/blob/main/dapp-kit/dapp-kit.md)
+- [EVE Vault 介绍](https://github.com/evefrontier/builder-documentation/blob/main/eve-vault/introduction-to-eve-vault.md)
+- [Chapter 5：dApp 前端开发](./chapter-05.md)
+- [Chapter 19：全栈 dApp 架构](./chapter-19.md)

@@ -1,20 +1,20 @@
-module chapter_15::snippet_04;
+module chapter_13::snippet_04;
 
-public struct BaseZone has key {
-    id: UID,
-    center_hash: vector<u8>,   // 基地中心位置哈希
-    owner: address,
-    zone_nft_ids: vector<ID>,  // 在这个区域内的友方 NFT 列表
-}
+// ── 非官方"市场接口"标准提案 ────────────────────────────
+// 任何想接入聚合市场的 Builder 的合约应实现以下接口：
 
-// 授权组件只对在基地范围内的玩家开放
-public entry fun base_service(
-    zone: &BaseZone,
-    service: &mut StorageUnit,
-    player_in_zone_proof: vector<u8>,  // 服务器证明"玩家在基地范围内"
-    admin_acl: &AdminACL,
+/// 列出物品：返回当前出售的物品类型和价格
+public fun list_items(market: &T): vector<(u64, u64)>  // (type_id, price_sui)
+
+/// 查询特定物品是否可购买
+public fun is_available(market: &T, item_type_id: u64): bool
+
+/// 购买（返回物品）
+public fun purchase<Auth: drop>(
+    market: &mut T,
+    buyer: &Character,
+    item_type_id: u64,
+    payment: &mut Coin<SUI>,
+    auth: Auth,
     ctx: &mut TxContext,
-) {
-    verify_sponsor(admin_acl, ctx);
-    // ...提供服务
-}
+): Item

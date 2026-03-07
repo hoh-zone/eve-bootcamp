@@ -408,5 +408,5 @@ export function RentalMarket() {
 | 防双租 | `is_available` 标志保证同时只有一个租用者 |
 
 ## 📚 关联文档
-- [Chapter 7：动态字段与余额管理](./chapter-07.md)
-- [Chapter 8：经济系统设计](./chapter-08.md)
+- [Chapter 12：动态字段与余额管理](./chapter-12.md)
+- [Chapter 14：经济系统设计](./chapter-14.md)

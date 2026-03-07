@@ -1,13 +1,12 @@
-module chapter_17::snippet_04;
+module chapter_09::snippet_04;
 
-// ❌ 在链上排序（极度消耗 Gas）
-public fun get_top_bidders(auction: &Auction, n: u64): vector<address> {
-    let mut sorted = vector::empty<BidRecord>();
-    // ... O(n²) 排序，每次都在链上执行
+// ❌ 危险：OwnerCap 没有验证对应的对象 ID
+public fun admin_action(vault: &mut Vault, _cap: &OwnerCap) {
+    // 任何 OwnerCap 都能控制任何 Vault！
 }
 
-// ✅ 链上只存原始数据，链下排序
-public fun get_bid_at(auction: &Auction, index: u64): BidRecord {
-    *df::borrow<u64, BidRecord>(&auction.id, index)
+// ✅ 安全：验证 OwnerCap 和对象的绑定关系
+public fun admin_action(vault: &mut Vault, cap: &OwnerCap) {
+    assert!(cap.authorized_object_id == object::id(vault), ECapMismatch);
+    // ...
 }
-// dApp 或后端读取所有竞价，在内存中排序，展示排行榜

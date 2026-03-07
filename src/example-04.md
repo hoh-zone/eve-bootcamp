@@ -427,6 +427,6 @@ dApp 层
 
 ## 📚 关联文档
 
-- [Chapter 6：OwnerCap 与 Keychain](./chapter-06.md)
-- [Chapter 7：位标志与 Table](./chapter-07.md)
+- [Chapter 11：OwnerCap 与 Keychain](./chapter-11.md)
+- [Chapter 12：位标志与 Table](./chapter-12.md)
 - [Smart Gate 文档](https://github.com/evefrontier/builder-documentation/blob/main/smart-assemblies/gate/README.md)

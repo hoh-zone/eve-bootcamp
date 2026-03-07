@@ -6,7 +6,7 @@
 
 > 状态：基础章节。正文以钱包接入、前端状态读取和交易发起为主。
 
-## 5.1 dApp 在 EVE Frontier 中的角色
+##  5.1 dApp 在 EVE Frontier 中的角色
 
 当你完成了 Move 合约开发后，玩家需要一个界面来与你的设施交互。dApp（去中心化应用）就是这个界面，它可以：
 
@@ -60,7 +60,7 @@
 
 ---
 
-## 5.2 安装 dapp-kit
+##  5.2 安装 dapp-kit
 
 ```bash
 # 创建 React 项目（以 Vite 为例）
@@ -83,7 +83,7 @@ npm install @evefrontier/dapp-kit @tanstack/react-query react
 
 ---
 
-## 5.3 项目基础配置
+##  5.3 项目基础配置
 
 ### 配置 Provider
 
@@ -156,7 +156,7 @@ SDK 会自动从 URL 读取这些参数，你无需手动处理。
 
 ---
 
-## 5.4 核心 Hooks 详解
+##  5.4 核心 Hooks 详解
 
 ### Hook 1：useConnection（钱包连接状态）
 
@@ -269,7 +269,7 @@ function ActionButton() {
 
 ---
 
-## 5.5 执行链上交易
+##  5.5 执行链上交易
 
 ### 标准交易（用户付 Gas）
 
@@ -365,7 +365,7 @@ const result = await signAndExecuteSponsoredTransaction({
 
 ---
 
-## 5.6 读取链上数据（GraphQL）
+##  5.6 读取链上数据（GraphQL）
 
 ```typescript
 import {
@@ -426,7 +426,7 @@ async function queryGates() {
 
 ---
 
-## 5.7 实用工具函数
+##  5.7 实用工具函数
 
 ```typescript
 import {
@@ -470,7 +470,7 @@ console.log(info.name, info.iconUrl)
 
 ---
 
-## 5.8 完整的 dApp 示例
+##  5.8 完整的 dApp 示例
 
 ```tsx
 // src/App.tsx
@@ -563,7 +563,7 @@ export default function App() {
 
 ---
 
-## 5.9 将 dApp 嵌入游戏
+##  5.9 将 dApp 嵌入游戏
 
 在游戏中靠近你的组件时，客户端会在浮窗中加载你注册的 dApp URL。配置方法：
 

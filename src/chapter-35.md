@@ -1,509 +1,315 @@
-# 第35章：EVE Vault 与 dApp 集成实战
+# Chapter 35：未来展望 — ZK 证明、完全去中心化与 EVM 互操作
 
-> **学习目标**：掌握在 Builder dApp 中接入 EVE Vault 的完整流程——账户发现、连接、签名交易、赞助交易，以及处理 zkLogin 特有的 Epoch 刷新和断连情况。
-
----
-
-> 状态：教学示例。正文 API 说明以当前依赖版本与本仓库示例 dApp 为准，实际接入时需以本地包版本核对。
-
-## 最小调用链
-
-`dApp Provider 初始化 -> useConnection 发现钱包 -> 构建 PTB -> EVE Vault 审批/签名 -> 链上执行 -> dApp 刷新对象状态`
-
-## 钱包能力矩阵
-
-| 能力 | 普通 Wallet Standard 钱包 | EVE Vault |
-|------|------|------|
-| 发现与连接 | 支持 | 支持 |
-| 普通交易签名 | 支持 | 支持 |
-| Sponsored Tx | 通常不支持 | 支持 |
-| zkLogin / Epoch 处理 | 依赖钱包实现 | 内建处理 |
-| 游戏内浮层联动 | 通常没有 | 可与 EVE Frontier 场景配合 |
-
-这张表的作用不是做宣传，而是提醒你：接入层必须先探测钱包能力，再决定是否展示赞助交易入口。
-
-这章真正该建立的意识是：
-
-> 钱包接入不是“连上就行”，而是要按钱包能力差异设计完整交互降级路径。
-
-也就是说，你的 dApp 不能假设所有钱包都等价。
-
-## 异常处理顺序
-
-当用户反馈“钱包能连上，但交易发不出去”时，建议按这个顺序排查：
-
-1. 先确认当前钱包是否支持 Sponsored Tx
-2. 再确认网络、package id、对象 ID 是否一致
-3. 然后确认 zkLogin 证明是否过期、`maxEpoch` 是否需要刷新
-4. 最后再看前端是否正确处理了断连和重连后的状态恢复
-
-## 对应代码目录
-
-- [builder-scaffold/dapps](https://github.com/evefrontier/builder-scaffold/tree/main/dapps)
-- [book/src/code/example-17/dapp](./code/example-17/dapp)
-- [evevault](https://github.com/evefrontier/evevault)
-
-## 1. dApp 集成概述
-
-因为 EVE Vault 实现了完整的 **Sui Wallet Standard**，任何使用 `@mysten/dapp-kit` 或 `@evefrontier/dapp-kit` 的 dApp 可以零配置地发现并连接 EVE Vault。
-
-同时，EVE Vault 还实现了 EVE Frontier 专有的 **赞助交易扩展**，让 Builder 可以替玩家支付 Gas。
-
-所以接入层通常至少要回答三件事：
-
-- 当前有没有钱包
-- 当前是不是 EVE Vault
-- 当前操作需不需要 Sponsored Tx 能力
+> **目标：** 了解 EVE Frontier 和 Sui 生态的前沿技术方向，思考如何为未来的关键升级提前做好架构准备，成为站在技术前沿的构建者。
 
 ---
 
-## 2. 安装依赖
+> 状态：展望章节。正文以未来技术方向和架构预留为主。
 
-```bash
-# EVE Frontier 专用 SDK（推荐，包含 EVE Vault 赞助交易支持）
-npm install @evefrontier/dapp-kit
+##  35.1 当前的信任假设与局限
 
-# 或 Mysten 官方 SDK（基础 Wallet Standard，不含赞助交易）
-npm install @mysten/dapp-kit
+回顾我们整个课程中的架构，有几个核心的"信任假设"：
+
+| 环节 | 当前依赖 | 局限性 |
+|------|---------|-------|
+| 临近性验证 | 游戏服务器签名 | 服务器可撒谎或宕机 |
+| 位置隐私 | 服务器不泄露哈希映射 | 服务器知道所有位置 |
+| 组件状态更新 | 游戏服务器提交 | 中心化瓶颈 |
+| 游戏规则修改 | CCP 控制的合约升级 | 玩家无直接治理权 |
+
+这些局限不是设计失误，而是现阶段技术和工程的取舍。EVE Frontier 官方路线图承诺逐步消除这些中心化依赖。
+
+这一章最容易写成“技术愿景列表”，但真正有价值的视角是：
+
+> 哪些未来方向值得今天就为它留接口，哪些则只需要知道，不必过早下注。
+
+因为对 Builder 来说，未来感如果处理不好，就会变成两种常见问题：
+
+- 过度预留，系统今天反而很臃肿
+- 完全不预留，未来一变化就要重构
+
+---
+
+##  35.2 零知识证明（ZK Proofs）的应用前景
+
+### 什么是 ZK 证明？
+
+零知识证明允许一方（Prover）向另一方（Verifier）证明某件事是真的，**而不泄露任何具体信息**：
+
+```
+当前（服务器签名）：
+  玩家 → "我在星门附近" → 服务器查询坐标 → 签名证明 → 链上验证签名
+
+未来（ZK 证明）：
+  玩家本地计算："生成一个 ZK 证明，证明我知道一个坐标 (x,y)，
+                 使得 hash(x,y,salt) = 链上存储的哈希，
+                 且 distance(x,y, 星门) < 20km"
+  → 将 ZK 证明提交上链
+  → Sui Verifier 智能合约验证证明（无需服务器）
 ```
 
----
+### ZK 对 EVE Frontier 的意义
 
-## 3. Provider 配置
-
-```tsx
-// src/main.tsx
-import { EveFrontierProvider } from "@evefrontier/dapp-kit";
-import { QueryClient } from "@tanstack/react-query";
-import ReactDOM from "react-dom/client";
-
-const queryClient = new QueryClient();
-
-ReactDOM.createRoot(document.getElementById("root")!).render(
-    <EveFrontierProvider queryClient={queryClient}>
-        <App />
-    </EveFrontierProvider>,
-);
+```
+现在                          未来（ZK）
+────────────────────────────────────────────────
+临近性 → 服务器签名           临近性 → 玩家自证 ZK
+位置隐私 → 信任服务器         位置隐私 → 数学保证
+跳跃验证 → 需要服务器在线     跳跃验证 → 完全链上
+链下仲裁 → CCP 决策           链下仲裁 → 社区 DAO
 ```
 
-`EveFrontierProvider` 自动初始化：
-- **QueryClientProvider**（React Query）
-- **DAppKitProvider**（Sui 客户端 + Wallet）
-- **VaultProvider**（EVE Vault 连接状态）
-- **SmartObjectProvider**（游戏对象 GraphQL 查询）
-- **NotificationProvider**（链上操作通知）
+### 为 ZK 做好准备的合约设计
 
-Provider 这里最关键的不是“包了多少层”，而是能力顺序。
+```move
+// 现在：用 AdminACL 验证服务器签名
+public fun jump(
+    gate: &Gate,
+    admin_acl: &AdminACL,   // 现在：验证服务器赞助
+    ctx: &TxContext,
+) {
+    verify_sponsor(admin_acl, ctx);  // 检查服务器在授权列表
+}
 
-你后面的连接、签名、对象查询和通知体验，都依赖这层初始化顺序正确。
-
----
-
-## 4. 连接钱包
-
-```tsx
-import { useConnection, abbreviateAddress } from "@evefrontier/dapp-kit";
-import { useCurrentAccount } from "@mysten/dapp-kit-react";
-
-function ConnectButton() {
-    const { handleConnect, handleDisconnect, isConnected, walletAddress, hasEveVault } = useConnection();
-    const account = useCurrentAccount();
-
-    if (!isConnected) {
-        return (
-            <div>
-                <button onClick={handleConnect}>连接 EVE Vault</button>
-                {!hasEveVault && (
-                    <p style={{ color: "orange" }}>
-                        请先安装 <a href="https://github.com/evefrontier/evevault/releases/latest/download/eve-vault-chrome.zip">EVE Vault 扩展</a>
-                    </p>
-                )}
-            </div>
-        );
-    }
-
-    return (
-        <div>
-            <span>已连接：{abbreviateAddress(account?.address ?? "")}</span>
-            <button onClick={handleDisconnect}>断开</button>
-        </div>
-    );
+// 未来（ZK 时代）：替换验证逻辑，业务代码不变
+public fun jump(
+    gate: &Gate,
+    proximity_proof: vector<u8>,    // 换成 ZK 证明
+    proof_inputs: vector<u8>,       // 公开输入（位置哈希、距离阈值）
+    verifier: &ZkVerifier,          // Sui 的 ZK 验证合约
+    ctx: &TxContext,
+) {
+    // 同一链上验证 ZK 证明
+    zk_verifier::verify_proof(verifier, proximity_proof, proof_inputs);
 }
 ```
 
-### hasEveVault 的意义
+**关键架构建议**：**现在就把位置验证封装成独立函数**，未来只需替换验证逻辑，无需重写业务代码。
 
-`hasEveVault` 为 `true` 时表示 EVE Vault 扩展已安装且在钱包列表中被发现。这让你可以给未安装的用户提供下载链接引导。
+### 对今天的 Builder 来说，ZK 最现实的价值是什么？
 
-连接流程里最容易忽视的问题，不是“按钮能不能点亮”，而是连上之后页面有没有立刻切到正确状态：
+不是马上自己写证明系统，而是先学会把“证明机制”和“业务状态机”拆开。
 
-- 当前地址是否刷新
-- 需要的对象查询是否重新拉取
-- 依赖钱包能力的按钮是否切换显示
+这样未来如果：
 
----
+- 服务器签名换成 ZK
+- 某些验证步骤变成本地生成证明
+- 不同组件使用不同证明后端
 
-## 5. 发送交易（普通签名）
-
-```tsx
-import { useDAppKit } from "@mysten/dapp-kit-react";
-import { Transaction } from "@mysten/sui/transactions";
-import { useConnection } from "@evefrontier/dapp-kit";
-
-function SendTxButton() {
-    const { signAndExecuteTransaction } = useDAppKit();
-    const { isConnected } = useConnection();
-
-    const handleSend = async () => {
-        const tx = new Transaction();
-
-        // 调用 Builder 合约
-        tx.moveCall({
-            target: `${PACKAGE_ID}::tribe_permit::issue_jump_permit`,
-            arguments: [
-                tx.object(EXTENSION_CONFIG_ID),
-                tx.object(SOURCE_GATE_ID),
-                tx.object(DEST_GATE_ID),
-                tx.object(CHARACTER_ID),
-                tx.object("0x6"),  // Sui Clock（固定对象 ID）
-            ],
-        });
-
-        try {
-            const result = await signAndExecuteTransaction({ transaction: tx });
-            console.log("交易成功，Digest:", result.digest);
-        } catch (err) {
-            // EVE Vault 审批弹窗被用户关闭
-            if (err.message?.includes("User rejected")) {
-                alert("交易被用户取消");
-            }
-        }
-    };
-
-    return <button onClick={handleSend} disabled={!isConnected}>颁发通行证</button>;
-}
-```
-
-普通签名流程的关键不是代码能调用，而是用户能理解自己正在签什么。
-
-所以交易按钮前最好就把：
-
-- 目标对象
-- 关键成本
-- 预期结果
-
-尽量讲清楚，而不是把一切都留给钱包审批页。
+你替换的是验证层，而不是整套产品逻辑。
 
 ---
 
-## 6. 赞助交易（Sponsored TX）——最重要的特性
+##  35.3 完全去中心化游戏（Fully On-Chain Game）
 
-EVE Vault 是唯一实现了 `sign_sponsored_transaction` 的 Sui 钱包。这意味着 Builder 的服务器可以替玩家支付 Gas，玩家不需要持有 SUI 才能使用 dApp。
+区块链游戏的终极形态：**游戏逻辑完全在链上，无任何中心化服务器**。
 
-```tsx
-import { useSponsoredTransaction, WalletSponsoredTransactionNotSupportedError } from "@evefrontier/dapp-kit";
-import { Transaction } from "@mysten/sui/transactions";
+```
+理想的完全链上游戏：
+  所有游戏状态 → 链上对象
+  所有规则执行 → Move 合约
+  所有随机数   → 链上随机数（Sui Drand）
+  所有验证     → ZK 证明
+  所有治理     → DAO 投票
+```
 
-function SponsoredTxButton() {
-    const { sponsoredSignAndExecute } = useSponsoredTransaction();
+### Sui Drand：链上可验证随机数
 
-    const handleSponsoredTx = async () => {
-        const tx = new Transaction();
-        tx.moveCall({
-            target: `${PACKAGE_ID}::my_extension::some_action`,
-            arguments: [/* ... */],
-        });
+```move
+use sui::random::{Self, Random};
 
-        try {
-            // 玩家签名，Gas 由 Builder 服务器赞助
-            const result = await sponsoredSignAndExecute({ transaction: tx });
-            console.log("赞助交易成功！", result.digest);
-        } catch (err) {
-            if (err instanceof WalletSponsoredTransactionNotSupportedError) {
-                // 用户使用的不是 EVE Vault，降级到普通交易
-                console.warn("当前钱包不支持赞助交易，请使用 EVE Vault");
-                // 可以 fallback 到 signAndExecuteTransaction
-            }
-        }
-    };
+public entry fun open_loot_box(
+    loot_box: &mut LootBox,
+    random: &Random,   // Sui 系统提供的随机数对象
+    ctx: &mut TxContext,
+): Item {
+    let mut rng = random::new_generator(random, ctx);
+    let roll = rng.generate_u64() % 100;  // 0-99 均匀分布
 
-    return <button onClick={handleSponsoredTx}>免 Gas 操作（EVE Vault 赞助）</button>;
+    let item_tier = if roll < 60 { 1 }   // 60% 普通
+                    else if roll < 90 { 2 } // 30% 稀有
+                    else { 3 };             // 10% 史诗
+
+    mint_item(item_tier, ctx)
 }
 ```
 
-### Builder 服务器端的赞助配置
+### 链上 AI NPC（实验性）
 
-赞助交易需要 Builder 在服务器端配置一个 Gas 赞助者账户：
+结合 ZK 机器学习（ZKML），理论上可以把 NPC 的决策逻辑也放上链：
+
+```
+链上 NPC 合约 → 接收游戏状态输入
+             → 在链上通过 ZKML 验证"AI 决策的正确性"
+             → 输出行动结果
+```
+
+### 这里最需要现实一点的判断
+
+“完全链上”并不自动等于“更适合现在的 EVE Builder 任务”。
+
+很多今天真正有价值的产品，仍然是混合架构：
+
+- 关键资产和规则上链
+- 高速世界模拟留在链下
+- 验证边界逐步前移
+
+所以更实际的目标通常不是一步到位全链上，而是持续缩小“必须依赖中心化信任”的那部分面积。
+
+---
+
+##  35.4 Sui 与其他生态的互操作
+
+### Sui Bridge：跨链资产
 
 ```typescript
-// Builder 后端（Node.js）
-import { SuiClient } from "@mysten/sui/client";
-import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
-import { Transaction } from "@mysten/sui/transactions";
+// 未来：通过 Sui Bridge 从以太坊转入 EVE 游戏物品
+const suiBridge = new SuiBridge({ network: "testnet" });
 
-const sponsorKeypair = Ed25519Keypair.fromSecretKey(SPONSOR_PRIVATE_KEY);
-
-// 接收玩家的 PTB，添加 Gas 并签名返回
-app.post("/sponsor-tx", async (req, res) => {
-    const { serializedTx } = req.body;
-
-    const tx = Transaction.from(serializedTx);
-
-    // 设置 Gas 赞助者
-    tx.setSender(playerAddress);
-    tx.setGasOwner(sponsorKeypair.getPublicKey().toSuiAddress());
-
-    const sponsorSignature = await tx.sign({ signer: sponsorKeypair, client });
-
-    res.json({ sponsorSignature, serializedTx: tx.serialize() });
+// 将以太坊上的某个 NFT 桥接到 Sui
+await suiBridge.deposit({
+  sender: ethAddress,
+  recipient: suiAddress,
+  token: ethNftContractAddress,
+  tokenId: "12345",
 });
 ```
 
-Sponsored Tx 的接入重点不是“省 Gas”，而是“前后端协同”。
+### 状态证明（State Proof）
 
-它要求至少三层都配合正确：
+Sui 支持向其他链证明自身的链上状态，这使得跨链的资产证明成为可能：
 
-- 前端能识别钱包能力
-- 后端能正确补 Gas 和签名
-- 钱包能完成对应审批流程
+```
+EVE Frontier 玩家拥有稀有矿石 (Sui)
+    → 生成 Sui State Proof
+    → 在以太坊上的 DEX 中用 Sui 资产作为抵押品
+```
 
-只要其中一层口径不一致，用户看到的就会是“能连上，但怎么都发不出去”。
+### 互操作最值得关注的，不是“能不能桥”，而是“桥过去以后语义还对不对”
+
+例如：
+
+- 一件 EVE 资产到了别的链，还是不是原来那种权限或物品？
+- 另一条链上的金融场景，是否理解它的真实风险？
+- 桥接后失败、冻结、回滚时，用户怎么理解资产状态？
+
+这意味着跨链不是纯技术扩展，也是一层产品语义迁移。
 
 ---
 
-## 7. 读取游戏对象（Smart Object）
+##  35.5 DAO 治理：Builder 参与游戏规则制定
 
-```tsx
-import { useSmartObject } from "@evefrontier/dapp-kit";
+随着游戏成熟，更多游戏参数可能开放 DAO 投票：
 
-function GateStatus({ gateItemId }: { gateItemId: string }) {
-    const { assembly, character, loading, error, refetch } = useSmartObject({
-        itemId: gateItemId,
-    });
-
-    if (loading) return <div>加载中...</div>;
-    if (error) return <div>错误: {error.message}</div>;
-    if (!assembly) return <div>未找到 Gate</div>;
-
-    return (
-        <div>
-            <h2>{assembly.name}</h2>
-            <p>类型 ID: {assembly.typeId}</p>
-            <p>状态: {assembly.state}</p>
-            <p>所有者: {character?.name ?? "未知"}</p>
-            <button onClick={refetch}>刷新</button>
-        </div>
-    );
+```move
+// 未来：费率参数由 DAO 投票决定
+public entry fun update_energy_cost_via_dao(
+    new_cost: u64,
+    dao_proposal: &ExecutedProposal,  // 已通过的 DAO 提案凭证
+    energy_config: &mut EnergyConfig,
+) {
+    // 验证提案已通过且未过期
+    dao::verify_executed_proposal(dao_proposal);
+    energy_config.update_cost(new_cost);
 }
 ```
 
+### 不是所有参数都值得 DAO 化
+
+更适合 DAO 的通常是：
+
+- 中长期规则参数
+- 高价值公共资源配置
+- 影响多方利益的分润与治理项
+
+不太适合完全 DAO 化的通常是：
+
+- 高频运营参数
+- 需要秒级响应的安全开关
+- 明显属于执行层职责的日常动作
+
+否则治理会从“集体决策”变成“系统阻塞”。
+
 ---
 
-## 8. zkLogin Epoch 刷新处理
+##  35.6 给构建者的长远建议
 
-zkLogin 的临时密钥对绑定到 Sui Epoch（约 24 小时）。当 Epoch 过期时，需要重新生成密钥和 ZK Proof：
+### 技术选择
 
-```tsx
-import { useConnection } from "@evefrontier/dapp-kit";
-import { useDAppKit } from "@mysten/dapp-kit-react";
+```
+✅ 现在就做：
+  - 将验证逻辑封装为可替换的模块
+  - 使用动态字段预留扩展空间
+  - 为 DAO 治理留好参数接口
+  - 保持合约模块化，方便升级
 
-function TransactionButton() {
-    const { isConnected, walletAddress } = useConnection();
-    const { signAndExecuteTransaction } = useDAppKit();
-
-    const handleTransaction = async () => {
-        const tx = new Transaction();
-        // ...构建交易...
-
-        try {
-            await signAndExecuteTransaction({ transaction: tx });
-        } catch (err) {
-            const errMsg = err?.message ?? "";
-
-            if (errMsg.includes("ZK proof") || errMsg.includes("maxEpoch")) {
-                // Epoch 已过期，ZK Proof 无效
-                // EVE Vault 会自动弹出重新验证的引导
-                alert("您的登录已过期，请在 EVE Vault 中刷新登录状态");
-            } else if (errMsg.includes("User rejected")) {
-                // 用户在审批页面取消了交易
-                console.log("用户取消了操作");
-            } else {
-                console.error("交易失败:", errMsg);
-            }
-        }
-    };
-
-    return <button onClick={handleTransaction} disabled={!isConnected}>执行操作</button>;
-}
+🔮 关注的技术方向：
+  - Sui ZK Proof 原生支持
+  - Sui Move 的类型系统扩展
+  - 跨链桥的安全性成熟
+  - ZKML 在游戏中的实际应用
 ```
 
----
+### 商业定位
 
-## 9. 监听网络切换
+```
+短期（现在可做）：
+  - 星门收费、市场、拍卖等经济系统
+  - 联盟协作工具（分红、治理）
+  - 游戏数据统计面板和分析服务
 
-EVE Vault 支持用户在 Devnet/Testnet 之间切换。dApp 需要响应这个变化：
+中期（1-2年）：
+  - 多租户 SaaS 平台（通用市场、任务框架）
+  - 跨联盟协议和标准
+  - 数据分析和商业智能
 
-```tsx
-import { useCurrentAccount } from "@mysten/dapp-kit-react";
-import { useEffect } from "react";
-
-function NetworkAwareComponent() {
-    const account = useCurrentAccount();
-
-    useEffect(() => {
-        if (!account) return;
-
-        // account.chains 包含当前钱包支持的链
-        const currentChain = account.chains[0]; // "sui:testnet" 或 "sui:devnet"
-        console.log("当前网络:", currentChain);
-
-        // 根据网络切换 API 端点或合约地址
-    }, [account]);
-
-    // ...
-}
+长期（ZK 成熟后）：
+  - 完全去中心化的游戏副本（小游戏内游戏）
+  - ZK 驱动的隐私交易
+  - 跨链的 EVE 资产金融化
 ```
 
----
+### 真正的长远建议可以压缩成一句话
 
-## 10. 消息签名（Personal Message）
+先把今天真实能落地的系统做成模块化、可升级、边界清晰的产品，再去迎接未来能力。
 
-```tsx
-import { useDAppKit } from "@mysten/dapp-kit-react";
-import { toBase64 } from "@mysten/sui/utils";
-
-function SignMessageButton() {
-    const { signPersonalMessage } = useDAppKit();
-
-    const handleSign = async () => {
-        const message = new TextEncoder().encode("EVE Frontier Builder Auth: " + Date.now());
-
-        const { bytes, signature } = await signPersonalMessage({
-            message,
-        });
-
-        console.log("消息签名:", signature);
-        // 可将 signature 发给服务器验证用户身份（link game account to builder system）
-    };
-
-    return <button onClick={handleSign}>用 EVE Vault 签名验证身份</button>;
-}
-```
+因为未来真正会奖励的，不是“谁最早喊口号”，而是“谁今天的系统最容易演进到明天”。
 
 ---
 
-## 11. 完整示例：Gate Extension dApp
+##  35.7 本课程的终点是下一个起点
 
-以下是一个将所有功能整合的最小完整示例：
+恭喜你完成了 EVE Frontier 构建者完整课程！你现在具备：
 
-```tsx
-// src/App.tsx
-import { useConnection, useSmartObject, abbreviateAddress } from "@evefrontier/dapp-kit";
-import { useDAppKit } from "@mysten/dapp-kit-react";
-import { useSponsoredTransaction } from "@evefrontier/dapp-kit";
-import { Transaction } from "@mysten/sui/transactions";
+- ✅ **Move 合约开发**：从基础到高级模式
+- ✅ **智能设施改造**：炮塔、星门、存储箱的完整 API
+- ✅ **经济系统设计**：代币、市场、DAO 治理
+- ✅ **全栈 dApp 开发**：React + Sui SDK + 实时数据
+- ✅ **生产级工程**：测试、安全、升级、性能优化
 
-const GATE_ITEM_ID = import.meta.env.VITE_GATE_ITEM_ID;
-const PACKAGE_ID = import.meta.env.VITE_BUILDER_PACKAGE_ID;
-const EXTENSION_CONFIG_ID = import.meta.env.VITE_EXTENSION_CONFIG_ID;
+**接下来的行动**：
 
-export function App() {
-    const { handleConnect, handleDisconnect, isConnected, hasEveVault } = useConnection();
-    const { assembly, loading } = useSmartObject({ itemId: GATE_ITEM_ID });
-    const { signAndExecuteTransaction } = useDAppKit();
-    const { sponsoredSignAndExecute } = useSponsoredTransaction();
-
-    const requestJumpPermit = async () => {
-        const tx = new Transaction();
-        tx.moveCall({
-            target: `${PACKAGE_ID}::tribe_permit::issue_jump_permit`,
-            arguments: [tx.object(EXTENSION_CONFIG_ID), /* ... */],
-        });
-        await signAndExecuteTransaction({ transaction: tx });
-    };
-
-    const requestFreeJump = async () => {
-        // 赞助交易版本（Builder 付 Gas）
-        const tx = new Transaction();
-        tx.moveCall({ /* 同上 */ });
-        await sponsoredSignAndExecute({ transaction: tx });
-    };
-
-    return (
-        <div>
-            {/* 顶栏 */}
-            <header>
-                <h1>Star Gate Manager</h1>
-                <button onClick={isConnected ? handleDisconnect : handleConnect}>
-                    {isConnected ? "断开钱包" : "连接 EVE Vault"}
-                </button>
-            </header>
-
-            {/* Gate 状态卡片 */}
-            {!loading && assembly && (
-                <div>
-                    <h2>{assembly.name}</h2>
-                    <p>当前状态: {assembly.state}</p>
-                </div>
-            )}
-
-            {/* 操作按钮 */}
-            {isConnected && (
-                <div>
-                    <button onClick={requestJumpPermit}>申请通行证（自付 Gas）</button>
-                    <button onClick={requestFreeJump}>免费申请（赞助交易）</button>
-                </div>
-            )}
-
-            {/* EVE Vault 未安装提示 */}
-            {!hasEveVault && (
-                <div style={{ background: "#fff3cd", padding: 12, borderRadius: 8 }}>
-                    ⚠️ 请安装{" "}
-                    <a href="https://github.com/evefrontier/evevault/releases/latest/download/eve-vault-chrome.zip">
-                        EVE Vault 扩展
-                    </a>{" "}
-                    以连接您的 EVE Frontier 账户
-                </div>
-            )}
-        </div>
-    );
-}
-```
+1. **完成 10 个实战案例**，将知识转化为可部署的产品
+2. **加入 Builder 社区**，分享你的合约，参与生态建设
+3. **关注官方更新**，Sui 和 EVE Frontier 持续进化
+4. **构建你自己的宇宙**，在这里，代码就是物理定律
 
 ---
 
-## 12. 常见集成问题
-
-| 问题 | 原因 | 解决方案 |
-|------|------|---------|
-| `WalletSponsoredTransactionNotSupportedError` | 用户使用非 EVE Vault 钱包 | Catch 错误，降级为普通交易 |
-| 审批弹窗不出现 | Chrome 拦截了弹窗 | 告知用户检查右上角的拦截提示 |
-| `maxEpoch exceeded` | ZK Proof 过期 | 提示用户在 EVE Vault 弹窗中刷新 |
-| `hasEveVault = false` | 扩展未安装或未激活 | 展示下载链接和安装指引 |
-| 网络不匹配 | dApp 期望 testnet，钱包连 devnet | 监听 account.chains，提示用户切换网络 |
+> *"我们不只是在写代码。  
+> 我们在为一个宇宙制定物理法则。"*
+>
+> — EVE Frontier Builder 精神
 
 ---
 
-## 本章小结
+## 📚 最终参考资源
 
-| 功能 | API |
-|------|-----|
-| 检测钱包安装 | `useConnection().hasEveVault` |
-| 连接/断开 | `handleConnect / handleDisconnect` |
-| 普通交易 | `useDAppKit().signAndExecuteTransaction` |
-| 赞助交易 | `useSponsoredTransaction().sponsoredSignAndExecute` |
-| 消息签名 | `useDAppKit().signPersonalMessage` |
-| 读取游戏对象 | `useSmartObject({ itemId })` |
-| 监听网络切换 | `useCurrentAccount().chains` |
-
----
-
-## 延伸阅读
-
-- [EVE Vault GitHub](https://github.com/evefrontier/evevault)
-- [Sui zkLogin 官方文档](https://docs.sui.io/concepts/cryptography/zklogin)
-- [Enoki 文档](https://docs.enoki.mystenlabs.com/)
-- [Sui Wallet Standard](https://docs.sui.io/standards/wallet-standard)
-- [@evefrontier/dapp-kit SDK 文档](https://sui-docs.evefrontier.com/)
-
-> 你现在掌握了 EVE Frontier Builder 课程的完整知识体系：从 Move 2024 基础到 World 合约深度解析，从 Builder Scaffold 工程实践到 EVE Vault 钱包集成。是时候在星际中留下你的印记了。
+- [EVE Frontier 官网](https://evefrontier.com)
+- [官方文档](https://github.com/evefrontier/builder-documentation)
+- [World Contracts 源码](https://github.com/evefrontier/world-contracts)
+- [Sui 技术文档](https://docs.sui.io)
+- [Move Book](https://move-book.com)
+- [Sui ZK 相关](https://docs.sui.io/concepts/cryptography/zklogin)
+- [Sui On-chain Randomness](https://docs.sui.io/guides/developer/advanced/randomness-onchain)
+- [EVE Frontier Discord](https://discord.com/invite/evefrontier)

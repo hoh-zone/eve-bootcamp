@@ -6,7 +6,7 @@
 
 > 状态：基础章节。正文以部署工作流和链上组件操作为主。
 
-## 4.1 完整的部署工作流
+##  4.1 完整的部署工作流
 
 在你的代码能在真实游戏中生效之前，需要完成以下完整链路：
 
@@ -58,7 +58,7 @@
 
 ---
 
-## 4.2 Smart Character（智能角色）
+##  4.2 Smart Character（智能角色）
 
 Smart Character 是你在链上的 **主体身份**，所有组件都归属于你的角色。
 
@@ -124,7 +124,7 @@ tx.moveCall({
 
 ---
 
-## 4.3 Network Node（网络节点）
+##  4.3 Network Node（网络节点）
 
 ### 什么是网络节点？
 
@@ -176,7 +176,7 @@ pnpm setup:assembly       # 创建并连接智能组件
 
 ---
 
-## 4.4 Smart Storage Unit（智能存储单元）深度解析
+##  4.4 Smart Storage Unit（智能存储单元）深度解析
 
 ### 两种仓库
 
@@ -255,7 +255,7 @@ public fun withdraw_item<Auth: drop>(
 
 ---
 
-## 4.5 Smart Gate（智能星门）深度解析
+##  4.5 Smart Gate（智能星门）深度解析
 
 ### 默认 vs 自定义行为
 
@@ -351,7 +351,7 @@ public fun jump_with_permit(
 
 ---
 
-## 4.6 Smart Turret（智能炮塔）深度解析
+##  4.6 Smart Turret（智能炮塔）深度解析
 
 炮塔的扩展模式与星门类似，通过 Typed Witness 授权。
 
@@ -366,7 +366,7 @@ Builder 可以注册扩展，改变炮塔的**目标判断**逻辑。例如：
 
 ---
 
-## 4.7 将扩展发布并注册到组件
+##  4.7 将扩展发布并注册到组件
 
 ### 第一步：发布你的扩展包
 
@@ -445,7 +445,7 @@ sui client object <GATE_ID>
 
 ---
 
-## 4.8 使用 TypeScript 读取链上状态
+##  4.8 使用 TypeScript 读取链上状态
 
 ```typescript
 import { SuiClient } from "@mysten/sui/client";

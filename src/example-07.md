@@ -442,5 +442,5 @@ dApp 层
 ## 📚 关联文档
 
 - [Smart Gate API](https://github.com/evefrontier/builder-documentation/blob/main/smart-assemblies/gate/README.md)
-- [Chapter 17：批处理事务](./chapter-17.md)
-- [Chapter 12：链下索引](./chapter-12.md)
+- [Chapter 21：批处理事务](./chapter-21.md)
+- [Chapter 9：链下索引](./chapter-09.md)

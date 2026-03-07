@@ -71,7 +71,7 @@ EVE Vault 的方案：
 
 ## 3. zkLogin 原理精讲
 
-### 3.1 核心概念
+###  3.1 核心概念
 
 zkLogin 是 Sui 原生支持的一种签名方案，它将 OAuth 身份与区块链地址绑定：
 
@@ -86,7 +86,7 @@ JWT (OAuth token) + Ephemeral Key → ZK Proof → 签名
                   这个证明证明了"我持有有效的 JWT 且 JWT 对应地址 A"
 ```
 
-### 3.2 zkLogin 地址公式
+###  3.2 zkLogin 地址公式
 
 ```
 zkLogin_address = hash(
@@ -114,7 +114,7 @@ zkLogin_address = hash(
 
 它们分别在证明不同的事。
 
-### 3.3 临时密钥对（Ephemeral Key Pair）
+###  3.3 临时密钥对（Ephemeral Key Pair）
 
 zkLogin 使用一个临时密钥对来执行实际签名：
 
@@ -133,7 +133,7 @@ zkLogin 使用一个临时密钥对来执行实际签名：
 
 因为 zkLogin 并不是让 OAuth token 直接变成签名器。临时密钥的作用是把“登录态”和“具体签名动作”连接起来，同时把风险窗口限制在一个较短周期内。
 
-### 3.4 ZK Proof 生成
+###  3.4 ZK Proof 生成
 
 ```typescript
 // packages/shared/src/wallet/zkProof.ts
@@ -152,7 +152,7 @@ ZK Proof 的生成步骤：
 2. 调用 Sui ZK Prover 端点（Enoki 托管）
 3. 返回包含 `proofPoints`、`issBase64Details`、`headerBase64` 的 ZK 证明
 
-### 3.5 JWT Nonce 的构造
+###  3.5 JWT Nonce 的构造
 
 zkLogin 最关键的设计是把临时公钥"嵌入" JWT 中，这通过 `nonce` 字段实现：
 
@@ -182,7 +182,7 @@ FusionAuth 在返回的 JWT（`id_token`）中包含：
 
 Sui 的 ZK 验证器通过检查 `nonce` 中嵌入的临时公钥，确认签名确实来自该临时密钥对。
 
-### 3.6 zkLogin 地址的 TypeScript 计算
+###  3.6 zkLogin 地址的 TypeScript 计算
 
 ```typescript
 import { computeZkLoginAddress } from "@mysten/sui/zklogin";

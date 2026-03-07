@@ -365,6 +365,6 @@ dApp 层
 
 ## 📚 关联文档
 
-- [Chapter 14：NFT 设计与 Display 标准](./chapter-14.md)
-- [Chapter 7：事件系统](./chapter-07.md)
+- [Chapter 13：NFT 设计与 Display 标准](./chapter-13.md)
+- [Chapter 12：事件系统](./chapter-12.md)
 - [Sui Display 文档](https://docs.sui.io/standards/display)

@@ -24,7 +24,7 @@
 4. 玩家一键点击，EVE Vault 弹出签名确认
 5. 签名完成后，显示成功动画并自动关闭
 
-这个案例聚焦于 **Chapter 21 的工程实践**，代码细节更完整。
+这个案例聚焦于 **Chapter 20 的工程实践**，代码细节更完整。
 
 ---
 
@@ -391,6 +391,6 @@ export function SuccessAnimation() {
 ---
 
 ## 📚 关联文档
-- [Chapter 21：游戏内 dApp 集成](./chapter-21.md)
-- [Chapter 11：赞助交易](./chapter-11.md)
+- [Chapter 20：游戏内 dApp 集成](./chapter-20.md)
+- [Chapter 8：赞助交易](./chapter-08.md)
 - [Example 2：星门收费站（合约层）](./example-02.md)

@@ -1,438 +1,425 @@
-# Chapter 11：赞助交易与服务端集成
+# Chapter 11：所有权模型深度解析
 
-> **目标：** 深入理解 EVE Frontier 的赞助交易机制，掌握如何构建后端服务来验证业务逻辑并代玩家支付 Gas，实现无摩擦的游戏体验。
-
----
-
-> 状态：工程章节。正文以赞助交易、服务端校验和链上链下协同为主。
-
-## 11.1 什么是赞助交易？
-
-在普通的 Sui 交易中，**发起者**（Sender）和 **Gas 付款人**（Gas Owner）是同一个人。赞助交易允许这两个角色分离：
-
-```
-普通交易：  玩家签名 + 玩家付 Gas
-赞助交易：  玩家签名意图 + 服务器验证 + 服务器付 Gas
-```
-
-**对 EVE Frontier 至关重要**，因为：
-- 某些操作需要**游戏服务器验证**（如临近性证明、距离检查）
-- 降低玩家的**入门门槛**（不需要提前充值 SUI 做 Gas）
-- 实现**业务级别的风控**：服务器可以拒绝非法请求
-
-这里真正的关键不是“谁替谁付 Gas”这么简单，而是：
-
-> 赞助交易把一次玩家操作拆成了“用户意图 + 服务端审核 + 链上执行”三段。
-
-这让很多原本很难做的产品体验成为可能：
-
-- 玩家不需要先准备 SUI
-- 服务端可以在上链前做业务判断
-- 风险控制可以发生在签名前，而不是等资产出事后再补救
-
-但代价也很明确：你的系统不再只是前端 + 合约，而是正式进入“链上链下协同系统”。
+> **目标：** 深入理解 EVE Frontier 的能力对象体系，掌握 OwnerCap 的完整生命周期，学会设计安全的委托授权和所有权转移方案。
 
 ---
 
-## 11.2 AdminACL：游戏服务器的权限对象
+> 状态：设计进阶章节。正文以 OwnerCap、委托与所有权生命周期为主。
 
-EVE Frontier 通过 `AdminACL` 共享对象来管理哪些服务器地址被授权作为赞助者：
+##  11.1 为什么要有专门的所有权模型？
+
+很多新手在第一次设计权限系统时，直觉都是：
+
+- 记录一个 owner 地址
+- 每次操作时检查调用者是不是这个地址
+
+这种方式短期很省事，但一旦进入 EVE Frontier 这类“设施可经营、可转移、可委托、可组合”的世界，很快就会暴露问题：
+
+- **不可委托**
+  你很难安全地把部分权力临时交给别人
+- **不可组合**
+  权限规则散在各个函数里，系统越做越乱
+- **不可细粒度表达**
+  很难表达“可以操作这个炮塔，但不能操作那个星门”
+- **不可自然转移**
+  一旦设施、角色、经营权发生迁移，地址硬编码会变得很脆
+
+EVE Frontier 使用的是 Sui 原生的 **Capability 对象体系**。它的核心思想不是“看你是谁”，而是：
+
+> 看你手里拿着哪一个权限对象。
+
+这会让所有权从“账户属性”变成“可组合、可转移、可验证的链上实体”。
+
+---
+
+##  11.2 权限层级结构
 
 ```
-GovernorCap
-    └──（管理）AdminACL（共享对象）
-                └── sponsors: vector<address>
-                    ├── 游戏服务器1地址
-                    ├── 游戏服务器2地址
-                    └── ...
+GovernorCap（部署者持有 — 最高权限）
+    │
+    └── AdminACL（共享对象 — 授权的服务器地址列表）
+            │
+            └── OwnerCap<T>（玩家持有 — 对特定对象的操作权）
 ```
 
-需要服务器参与的操作（如跳跃）在合约中有类似这样的检查：
+### GovernorCap：游戏运营层
+
+`GovernorCap` 在合约部署时创建，由 CCP Games（游戏运营方）持有。它可以：
+- 向 `AdminACL` 添加/删除服务器授权地址
+- 执行全局配置更改
+
+作为 Builder，你无需关心 `GovernorCap`。
+
+### AdminACL：服务器授权层
+
+`AdminACL` 是一个**共享对象**，包含被授权的游戏服务器地址列表。
+
+某些操作（如临近证明、跃迁验证）需要游戏服务器作为**赞助者（Sponsor）**签署交易：
 
 ```move
+// 验证调用者是否为授权赞助者
 public fun verify_sponsor(admin_acl: &AdminACL, ctx: &TxContext) {
-    // tx_context::sponsor() 返回 Gas 付款人的地址
-    let sponsor = ctx.sponsor().unwrap(); // 如果没有 sponsor 则 abort
     assert!(
-        vector::contains(&admin_acl.sponsors, &sponsor),
-        EUnauthorizedSponsor,
+        admin_acl.sponsors.contains(ctx.sponsor().unwrap()),
+        EUnauthorizedSponsor
     );
 }
 ```
 
-这意味着：即使玩家自己构造了一个合法的交易，如果没有授权服务器签名，调用 `jump_with_permit` 等函数也会 abort。
+这意味着：某些敏感操作玩家不能单独完成，必须经过游戏服务器验证。
 
-### `AdminACL` 真正表达的是什么？
+### OwnerCap：玩家操作层
 
-它表达的不是“这个服务器技术上能签名”，而是：
+```move
+public struct OwnerCap<phantom T> has key {
+    id: UID,
+    authorized_object_id: ID,  // 只对这一个具体对象有效
+}
+```
 
-> 这个服务器被世界规则正式信任，可以为某类敏感动作背书。
+`phantom T` 使得 `OwnerCap<Gate>` 和 `OwnerCap<StorageUnit>` 是完全不同的类型，无法混用——这是类型系统级别的安全保证。
 
-这和普通后端服务有本质区别。很多 Web 应用里，后端只是帮你做业务判断；在这里，后端本身还是链上权限模型的一部分。
+### 这三层权限为什么要分开？
 
-所以一旦 `AdminACL` 管理混乱，影响的不是单个接口，而是整条可信链：
+你可以把它理解成三种完全不同的职责：
 
-- 谁能代付
-- 谁能为临近性证明背书
-- 谁能发起某些受限动作
+- **GovernorCap**
+  解决“世界级规则和全局治理”
+- **AdminACL**
+  解决“哪些服务器或后端流程被信任”
+- **OwnerCap**
+  解决“具体哪个经营主体可以操作哪个设施”
+
+把它们拆开最大的好处是：系统不会把“全局治理权”和“单设施操作权”混成一锅。
+
+否则你很容易出现这种糟糕结构：
+
+- 一个地址既是服务器授权者
+- 又是所有设施管理员
+- 又是某些临时业务的执行者
+
+一旦这个地址出问题，整个系统的权限边界都会塌掉。
 
 ---
 
-## 11.3 赞助交易的完整流程
+##  11.3 Character 作为钥匙串（Keychain）
+
+玩家的所有 `OwnerCap` 都存储在 **Character 对象**中，而不是直接发给钱包地址。
 
 ```
-   玩家                    你的后端服务                   Sui 网络
-    │                          │                            │
-    │── 1. 构建 Transaction ──►│                            │
-    │   (setSender = 玩家地址)  │                            │
-    │                          │                            │
-    │◄── 2. 后端验证业务逻辑 ───│                            │
-    │   (检查临近性、余额等)    │                            │
-    │                          │                            │
-    │── 3. 玩家签名 (Sender) ──►│                            │
-    │                          │                            │
-    │                          │── 4. 服务器签名 (Gas) ─────►│
-    │                          │   (setGasOwner = 服务器)   │
-    │                          │                            │
-    │◄─────────────────────────┼── 5. 交易执行结果 ─────────│
+玩家钱包地址
+    └── Character（共享对象，映射到钱包地址）
+            ├── OwnerCap<NetworkNode>  → 网络节点 0x...a1
+            ├── OwnerCap<Gate>         → 星门 0x...b2
+            ├── OwnerCap<StorageUnit>  → 存储箱 0x...c3
+            └── OwnerCap<Gate>         → 星门 0x...d4（第二个星门）
 ```
 
-### 这条链路里每一段分别在防什么？
+**为什么这样设计？**
+- 所有资产的所有权集中于 Character，转让 Character 等于转让所有资产
+- 即使玩家更换钱包地址，Character 还在，资产不丢失
+- 与联盟机制配合，可以实现集体所有权管理
 
-- **玩家构建交易**
-  防止服务端替用户随意捏造意图
-- **后端验证业务逻辑**
-  防止不满足条件的请求直接上链
-- **玩家签名**
-  证明这确实是用户授权的动作
-- **服务器签名**
-  证明平台愿意为这笔动作代付并背书
+这里要特别注意一件事：
 
-四段缺一不可。只要少一段，就会出现典型问题：
+> Character 不是简单的钱包映射层，而是一个真正的权限容器。
 
-- 没有玩家签名：变成平台可代用户乱发
-- 没有后端校验：变成谁都能白嫖赞助
-- 没有服务器签名：链上受限入口直接失败
+它把“人、角色、设施、权限”这几个维度组织在了一起：
+
+- 钱包是签名入口
+- Character 是经营主体
+- OwnerCap 是具体设施权限
+- 设施对象是被控制的资产
+
+这样的好处是，当你以后做：
+
+- 账号迁移
+- 多签控制
+- 联盟托管
+- 角色转让
+
+你不需要重写一整套权限系统，而是围绕 `Character` 这层做变更。
 
 ---
 
-## 11.4 构建简单的后端赞助服务
+##  11.4 Borrow-Use-Return 完整模式
 
-### 项目结构
+执行任何需要 OwnerCap 的操作，都必须遵循「借用 → 使用 → 归还」三步原子事务：
 
+```move
+// Character 模块提供的接口
+public fun borrow_owner_cap<T: key>(
+    character: &mut Character,
+    owner_cap_ticket: Receiving<OwnerCap<T>>,  // 使用 Receiving 模式
+    ctx: &TxContext,
+): (OwnerCap<T>, ReturnOwnerCapReceipt)        // 返回 Cap + 热土豆收据
+
+public fun return_owner_cap<T: key>(
+    character: &Character,
+    owner_cap: OwnerCap<T>,
+    receipt: ReturnOwnerCapReceipt,             // 必须消耗收据
+)
 ```
-backend/
-├── src/
-│   ├── server.ts          # Express 服务器
-│   ├── sponsor.ts          # 赞助交易逻辑
-│   ├── validators.ts       # 业务验证
-│   └── config.ts           # 配置
-└── package.json
-```
 
-### `sponsor.ts`：核心赞助逻辑
+`ReturnOwnerCapReceipt` 是一个热土豆（无 Abilities），确保 OwnerCap **必须被归还**，不能在交易外流失。
+
+### 这个模式真正防的是什么？
+
+它不是单纯为了“写法优雅”，而是在防几类非常真实的风险：
+
+- 高权限对象在交易中途被截留
+- 脚本忘记归还权限，留下悬空状态
+- 扩展逻辑把权限对象带进了不该到达的路径
+- 多步骤操作中，权限边界变得不再可审计
+
+把 `borrow -> use -> return` 强制收束在同一笔事务里，相当于给高权限操作加了一条硬约束：
+
+> 你可以临时拿来做事，但不能把它带走。
+
+### 为什么要配合 Hot Potato Receipt？
+
+因为只靠“开发者自觉调用 return”是不够的。
+
+只要类型系统允许你漏掉归还步骤，迟早会有人：
+
+- 在脚本里忘掉
+- 在重构时删掉
+- 在错误分支里直接 `return`
+
+加入 receipt 之后，编译器和类型系统会一起逼你把流程走完。
+
+### 完整 TypeScript 调用示例
 
 ```typescript
-// src/sponsor.ts
-import { SuiClient } from "@mysten/sui/client";
-import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { Transaction } from "@mysten/sui/transactions";
-import { fromBase64 } from "@mysten/sui/utils";
 
-const client = new SuiClient({
-  url: process.env.SUI_RPC_URL ?? "https://fullnode.testnet.sui.io:443",
-});
+const WORLD_PKG = "0x...";
 
-// 服务器签名密钥（安全存储在环境变量中）
-const serverKeypair = Ed25519Keypair.fromSecretKey(
-  fromBase64(process.env.SERVER_PRIVATE_KEY!)
-);
-
-export interface SponsoredTxRequest {
-  txBytes: string;         // 玩家构建的交易（base64）
-  playerSignature: string; // 玩家对 txBytes 的签名（base64）
-  playerAddress: string;
-}
-
-export async function sponsorAndExecute(req: SponsoredTxRequest) {
-  // 1. 反序列化玩家的交易
-  const txBytes = fromBase64(req.txBytes);
-
-  // 2. 服务器设置 Gas 付款人
-  //    这会修改交易，使服务器地址成为 Gas 付款人
-  const tx = Transaction.from(txBytes);
-  tx.setGasOwner(serverKeypair.getPublicKey().toSuiAddress());
-
-  // 3. 服务器签名（作为 Gas 付款人）
-  const sponsoredBytes = await tx.build({ client });
-  const serverSig = await serverKeypair.signTransaction(sponsoredBytes);
-
-  // 4. 执行：同时提交玩家签名和服务器签名
-  const result = await client.executeTransactionBlock({
-    transactionBlock: sponsoredBytes,
-    signature: [
-      req.playerSignature,  // 玩家作为 Sender 的签名
-      serverSig.signature,  // 服务器作为 Gas Owner 的签名
+async function bringGateOnline(
+  tx: Transaction,
+  characterId: string,
+  ownerCapId: string,
+  gateId: string,
+  networkNodeId: string,
+) {
+  // ① 借用 OwnerCap
+  const [ownerCap, receipt] = tx.moveCall({
+    target: `${WORLD_PKG}::character::borrow_owner_cap`,
+    typeArguments: [`${WORLD_PKG}::gate::Gate`],
+    arguments: [
+      tx.object(characterId),
+      tx.receivingRef({ objectId: ownerCapId, version: "...", digest: "..." }),
     ],
-    options: { showEvents: true, showEffects: true },
   });
 
-  return result;
-}
-```
-
-### 服务端在这里最需要防的，不是“请求失败”，而是“请求被滥用”
-
-一个真正可用的赞助服务，至少要考虑这些风控点：
-
-- 同一玩家短时间内重复请求
-- 同一交易被重复提交
-- 某类高成本操作被批量刷
-- 玩家把本不该赞助的交易偷偷塞给服务端
-
-所以在真实项目里，赞助服务通常还会增加：
-
-- 请求频率限制
-- 交易白名单或入口白名单
-- 每个动作的预算限制
-- 请求日志和审计记录
-
-### `validators.ts`：业务验证逻辑
-
-```typescript
-// src/validators.ts
-import { SuiClient } from "@mysten/sui/client";
-
-const client = new SuiClient({ url: process.env.SUI_RPC_URL! });
-
-// 验证临近性（简化版：检查两个组件的游戏坐标是否足够近）
-export async function validateProximity(
-  playerAddress: string,
-  assemblyId: string,
-): Promise<boolean> {
-  // 在真实场景中，这里会查询游戏服务器或链上的位置哈希
-  // 此处仅做示例性实现
-  try {
-    const assembly = await client.getObject({
-      id: assemblyId,
-      options: { showContent: true },
-    });
-
-    // 检查玩家是否在组件附近（游戏物理规则验证）
-    // 真实实现需要与游戏服务器通信
-    return true; // 简化
-  } catch {
-    return false;
-  }
-}
-
-// 验证玩家是否满足条件（如持有特定 NFT）
-export async function validatePlayerCondition(
-  playerAddress: string,
-  requiredNftType: string,
-): Promise<boolean> {
-  const objects = await client.getOwnedObjects({
-    owner: playerAddress,
-    filter: { StructType: requiredNftType },
+  // ② 使用 OwnerCap：将星门上线
+  tx.moveCall({
+    target: `${WORLD_PKG}::gate::online`,
+    arguments: [
+      tx.object(gateId),
+      tx.object(networkNodeId),
+      tx.object(ENERGY_CONFIG_ID),
+      ownerCap,
+    ],
   });
 
-  return objects.data.length > 0;
-}
-```
-
-### 校验逻辑为什么不要和执行逻辑混在一起？
-
-因为这两件事变化速度不同：
-
-- 校验规则会频繁迭代
-- 执行链路需要尽量稳定
-
-把它们拆开后，你会得到几个直接好处：
-
-- 风控规则更容易单独更新
-- 更容易给不同 action 组合不同验证器
-- 更容易做灰度和回放分析
-
-### `server.ts`：REST API 服务器
-
-```typescript
-// src/server.ts
-import express from "express";
-import { sponsorAndExecute, SponsoredTxRequest } from "./sponsor";
-import { validateProximity, validatePlayerCondition } from "./validators";
-
-const app = express();
-app.use(express.json());
-
-// 赞助跳跃请求
-app.post("/api/sponsor/jump", async (req, res) => {
-  const { txBytes, playerSignature, playerAddress, gateId } = req.body;
-
-  try {
-    // 1. 验证临近性（玩家必须在星门附近）
-    const isNear = await validateProximity(playerAddress, gateId);
-    if (!isNear) {
-      return res.status(400).json({ error: "玩家不在星门附近" });
-    }
-
-    // 2. 执行赞助交易
-    const result = await sponsorAndExecute({
-      txBytes,
-      playerSignature,
-      playerAddress,
-    });
-
-    res.json({ success: true, digest: result.digest });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// 赞助通用操作（带自定义验证）
-app.post("/api/sponsor/action", async (req, res) => {
-  const { txBytes, playerSignature, playerAddress, actionType, metadata } = req.body;
-
-  try {
-    // 根据 actionType 做不同验证
-    switch (actionType) {
-      case "deposit_ore": {
-        // 验证是否在存储箱附近
-        const ok = await validateProximity(playerAddress, metadata.ssuId);
-        if (!ok) return res.status(400).json({ error: "不在附近" });
-        break;
-      }
-      case "special_gate": {
-        // 验证是否持有 VIP NFT
-        const hasNft = await validatePlayerCondition(
-          playerAddress,
-          `${process.env.MY_PACKAGE}::vip_pass::VipPass`
-        );
-        if (!hasNft) return res.status(403).json({ error: "需要 VIP 通行证" });
-        break;
-      }
-    }
-
-    const result = await sponsorAndExecute({ txBytes, playerSignature, playerAddress });
-    res.json({ success: true, digest: result.digest });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.listen(3001, () => console.log("赞助服务运行在 :3001"));
-```
-
-### 幂等性是赞助服务最容易被忽略的问题
-
-玩家网络抖动、前端重试、用户狂点按钮，都会导致同一个请求被发多次。
-
-如果你的后端没有幂等设计，就会出现：
-
-- 同一业务请求被重复赞助
-- 用户以为点了一次，链上却发了两次
-- 预算和统计全部失真
-
-实际项目里，至少应该给每次业务动作一个稳定请求 ID，并在服务端记录“这个请求是否已经处理过”。
-
----
-
-## 11.5 前端配合赞助交易
-
-```tsx
-// src/hooks/useSponsoredAction.ts
-import { useWallet } from "@mysten/dapp-kit-react";
-import { Transaction } from "@mysten/sui/transactions";
-import { toBase64 } from "@mysten/sui/utils";
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:3001";
-
-export function useSponsoredAction() {
-  const wallet = useWallet();
-
-  const executeSponsoredJump = async (
-    tx: Transaction,
-    gateId: string,
-  ) => {
-    if (!wallet.currentAccount) throw new Error("请先连接钱包");
-
-    const playerAddress = wallet.currentAccount.address;
-
-    // 1. 玩家只签名，不提交
-    const txBytes = await tx.build({ client: suiClient });
-    const { signature: playerSig } = await wallet.signTransaction({
-      transaction: tx,
-    });
-
-    // 2. 发送到后端，让服务器验证并代付 Gas
-    const response = await fetch(`${BACKEND_URL}/api/sponsor/jump`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        txBytes: toBase64(txBytes),
-        playerSignature: playerSig,
-        playerAddress,
-        gateId,
-      }),
-    });
-
-    if (!response.ok) {
-      const { error } = await response.json();
-      throw new Error(error);
-    }
-
-    return response.json();
-  };
-
-  return { executeSponsoredJump };
+  // ③ 归还 OwnerCap（receipt 被消耗，热土豆使此步不可跳过）
+  tx.moveCall({
+    target: `${WORLD_PKG}::character::return_owner_cap`,
+    arguments: [tx.object(characterId), ownerCap, receipt],
+  });
 }
 ```
 
 ---
 
-## 11.6 赞助交易的安全考量
+##  11.5 所有权转让场景
 
-| 风险 | 防御措施 |
-|------|--------|
-| 服务器私钥泄露 | 使用 HSM 或 KMS 存储私钥；定期轮换 |
-| 恶意玩家重放交易 | Sui 的 TransactionDigest 是唯一的，无法重放 |
-| DDoS 攻击后端 | Rate limiting + IP 封锁 + 要求玩家 auth |
-| 绕过验证直接提交 | 链上合约的 `verify_sponsor` 强制要求授权地址 |
-| Gas 费耗尽 | 监控服务器账户余额，设置告警阈值 |
+### 场景一：转让单个组件的控制权
 
----
-
-## 11.7 `@evefrontier/dapp-kit` 内置赞助支持
-
-官方 SDK 已内置对赞助交易的支持：
+如果你想把一个星门的控制权交给盟友（但保留你的 Character 和其他设施），可以只转让对应的 `OwnerCap`：
 
 ```typescript
-import { signAndExecuteSponsoredTransaction } from "@evefrontier/dapp-kit";
+// 从你的 Character 取出 OwnerCap，发给盟友
+const tx = new Transaction();
 
-// SDK 会自动与 EVE Frontier 后端通信完成赞助
-const result = await signAndExecuteSponsoredTransaction({
-  transaction: tx,
-  // 无需手动处理签名和后端通信
+// 取出 OwnerCap（注意这里不是借用，而是转移）
+// 具体 API 以世界合约为准，此处仅展示思路
+tx.moveCall({
+  target: `${WORLD_PKG}::character::transfer_owner_cap`,
+  typeArguments: [`${WORLD_PKG}::gate::Gate`],
+  arguments: [
+    tx.object(myCharacterId),
+    tx.object(ownerCapId),
+    tx.pure.address(allyAddress),  // 盟友的 Character 地址
+  ],
 });
 ```
 
-**适用场景**：官方游戏操作（如组件上/下线、仓库转移）通常可以用官方赞助服务。
+### 场景二：转让完整角色（所有资产打包转让）
 
-**需要自建后端**：当你的扩展合约需要自定义业务验证时（如检查 NFT 持有、游戏内条件），需要部署自己的赞助服务。
+转移整个 Character 对象，则对应钱包地址即可控制所有绑定资产。适合联盟整体资产交割、账号交易等场景。
+
+这里要区分三件听起来很像、但完全不同的动作：
+
+- **转让单个 OwnerCap**
+  只交出某一个设施的控制权
+- **转让 Character**
+  把一整串权限和资产一起交出去
+- **委托操作**
+  不转移所有权，只给对方有限操作能力
+
+如果这三件事不分开，你的产品设计会很快乱掉。
+
+比如联盟金库场景：
+
+- 财产权可能属于联盟主体
+- 日常操作权可能属于值班成员
+- 紧急停机权可能只属于核心管理员
+
+这就要求你不能只用“一个 owner”去表达全部关系。
+
+### 场景三：委托操作（不转让所有权）
+
+通过编写扩展合约，可以允许特定地址在**有限范围内**操作你的设施，而无需转让 OwnerCap：
+
+```move
+// 在你的扩展合约中，维护一个操作员白名单
+public struct OperatorRegistry has key {
+    id: UID,
+    operators: Table<address, bool>,
+}
+
+public fun delegated_action(
+    registry: &OperatorRegistry,
+    ctx: &TxContext,
+) {
+    // 验证调用者在操作员名单中
+    assert!(registry.operators.contains(ctx.sender()), ENotOperator);
+    // ... 执行操作
+}
+```
+
+### 委托最容易踩的坑
+
+很多人第一次做委托，会把白名单当成“弱化版所有权”。这是不够的。
+
+一个安全的委托设计，至少要回答：
+
+- 委托人能做哪些动作，不能做哪些动作？
+- 委托有没有时间限制？
+- 委托能不能撤销？
+- 委托是不是只对某一个设施有效？
+- 被委托人能不能再次转授？
+
+如果这些边界没有写清，委托就会从“灵活授权”变成“隐形送权”。
+
+---
+
+##  11.6 OwnerCap 的安全边界
+
+### 每个 OwnerCap 只对一个对象有效
+
+```move
+public fun verify_owner_cap<T: key>(
+    obj: &T,
+    owner_cap: &OwnerCap<T>,
+) {
+    // authorized_object_id 确保这个 OwnerCap 只能用于对应的那个对象
+    assert!(
+        owner_cap.authorized_object_id == object::id(obj),
+        EOwnerCapMismatch
+    );
+}
+```
+
+这意味着如果你有两个星门，就有两个 `OwnerCap<Gate>`，它们不能互换使用。
+
+### 为什么 `authorized_object_id` 这么关键？
+
+因为 `phantom T` 只解决了“对象类别不能混用”，但还没解决“同类不同实例不能混用”。
+
+例如：
+
+- `OwnerCap<Gate>` 只能用于 Gate，没有问题
+- 但如果没有 `authorized_object_id`
+  你的一张 Gate 权限就可能错误地操作另一座 Gate
+
+所以完整安全边界其实是两层：
+
+1. **类型边界**
+   `Gate` 和 `StorageUnit` 不能混
+2. **实例边界**
+   这座 Gate 和那座 Gate 也不能混
+
+### 丢失 OwnerCap 意味着失去控制权
+
+如果 OwnerCap 所在的 Character 被转让，你就失去了对所有设施的控制。请**妥善保管你的 Character 对象的所有权私钥**。
+
+从运营角度看，更准确地说，你要保护的不是“某个按钮权限”，而是整条经营控制链：
+
+- 钱包签名权
+- Character 控制权
+- Character 内部的 OwnerCap 集合
+- 关键委托配置和多签设置
+
+一旦这条链断掉，恢复成本会非常高。
+
+---
+
+##  11.7 高级：多签与联盟共有
+
+通过 Sui 的多签（Multisig）功能，可以让一个联盟共同控制关键设施：
+
+```bash
+# 创建 2/3 多签地址（需要 3 个成员中的 2 个同意才能操作）
+sui keytool multi-sig-address \
+  --pks <pk1> <pk2> <pk3> \
+  --weights 1 1 1 \
+  --threshold 2
+```
+
+将 Character 的控制地址设置为多签地址，联盟关键资产就需要多人签名才能操作。
+
+### 多签适合什么，不适合什么？
+
+多签非常适合：
+
+- 联盟金库
+- 超高价值基础设施
+- 关键参数调整
+- 升级与紧急停机
+
+多签不一定适合：
+
+- 高频日常操作
+- 玩家需要秒级响应的交互
+- 大量小额重复管理动作
+
+所以现实做法通常不是“全部都上多签”，而是分层：
+
+- 核心控制权放多签
+- 日常运营权限通过受限委托释放给执行层
+
+这才更接近真实组织结构。
 
 ---
 
 ## 🔖 本章小结
 
-| 知识点 | 核心要点 |
-|--------|--------|
-| 赞助交易本质 | Sender（玩家）与 Gas Owner（服务器）分离 |
-| AdminACL | 游戏合约验证 `ctx.sponsor()` 必须在授权列表 |
-| 后端服务职责 | 业务验证 + 服务器签名 + 合并签名提交 |
-| 安全要点 | 私钥保护 + Rate Limiting + 合约层兜底 |
-| SDK 支持 | `signAndExecuteSponsoredTransaction()` 处理官方场景 |
+| 概念 | 核心要点 |
+|------|--------|
+| 权限层级 | GovernorCap > AdminACL > OwnerCap<T> |
+| Character 钥匙串 | 所有 OwnerCap 集中存储，转让 Character = 转让所有资产 |
+| Borrow-Use-Return | 三步原子操作，ReturnReceipt（热土豆）确保必须归还 |
+| 类型安全 | `OwnerCap<Gate>` ≠ `OwnerCap<StorageUnit>`，无法混用 |
+| 委托操作 | 通过扩展合约 + 白名单实现，无需转让 OwnerCap |
+| 多签 | Sui 原生多签地址适合联盟共有资产场景 |
 
 ## 📚 延伸阅读
 
-- [Interfacing with the World](https://github.com/evefrontier/builder-documentation/blob/main/smart-contracts/interfacing-with-the-eve-frontier-world.md)
-- [Sui 赞助交易文档](https://docs.sui.io/guides/developer/advanced/sponsored-transactions)
-- [ownership-model.md](https://github.com/evefrontier/builder-documentation/blob/main/smart-contracts/ownership-model.md)
+- [Ownership Model 文档](https://github.com/evefrontier/builder-documentation/blob/main/smart-contracts/ownership-model.md)
+- [Smart Character 文档](https://github.com/evefrontier/builder-documentation/blob/main/smart-assemblies/smart-character.md)
+- [character.move 源码](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/character/character.move)
+- [Sui 多签文档](https://docs.sui.io/guides/developer/cryptography/multisig)
+- [Receiving 对象模式](https://docs.sui.io/guides/developer/objects/transfers/transfer-to-object)

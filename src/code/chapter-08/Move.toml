@@ -1,14 +1,9 @@
 [package]
-name = "chapter_08"
+name = "chapter_11"
 edition = "2024"
 
-# NOTE: Requires EVE Frontier World contracts.
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
-World = { git = "https://github.com/evefrontier/world-contracts.git", subdir = "contracts/world", rev = "v0.0.14" }
 
 [addresses]
-my_alliance = "0x0"
-my_finance = "0x0"
-my_market = "0x0"
-# world = "0x_WORLD_PACKAGE_ADDRESS_"
+chapter_11 = "0x0"

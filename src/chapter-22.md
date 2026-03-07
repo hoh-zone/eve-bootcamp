@@ -1,435 +1,327 @@
-# Chapter 22：故障排查手册（常见错误与调试方法）
+# Chapter 22：Move 高级模式 — 升级兼容性设计
 
-> **目标：** 系统整理 EVE Frontier Builder 开发过程中最常遇到的错误类型，掌握高效的调试工作流，把"踩坑"时间降到最低。
-
----
-
-> 状态：工程保障章节。正文以排错路径和调试习惯为主。
-
-## 22.1 错误分类总览
-
-```
-EVE Frontier 开发错误
-├── 合约错误（Move）
-│   ├── 编译错误（构建失败）
-│   ├── 链上 Abort（运行时失败）
-│   └── 逻辑错误（成功执行但结果错误）
-├── 交易错误（Sui）
-│   ├── Gas 问题
-│   ├── 对象版本冲突
-│   └── 权限错误
-├── dApp 错误（TypeScript/React）
-│   ├── 钱包连接失败
-│   ├── 读取链上数据失败
-│   └── 参数构建错误
-└── 环境错误
-    ├── Docker/本地节点问题
-    ├── Sui CLI 配置问题
-    └── ENV 变量缺失
-```
-
-真正高效的排错，不是背错误大全，而是先把问题定位到正确层。
-
-一个很实用的思路是先问：
-
-1. 这是编译前就坏了，还是链上执行时坏了？
-2. 是对象和权限错了，还是前端构参错了？
-3. 是环境不一致，还是逻辑本身真的有 bug？
-
-只要第一层归类做对，后面的排查效率会高很多。
+> **目标：** 掌握生产级 Move 合约的升级兼容架构，包括版本化 API、数据迁移、Policy 控制，以及在不中断服务的情况下平滑升级。
 
 ---
 
-## 22.2 Move 编译错误
+> 状态：设计进阶章节。正文以升级兼容、迁移和时间锁控制为主。
 
-### 错误：`unbound module`
+##  22.1 升级兼容性问题的本质
+
+Move 合约升级面临两个核心约束：
 
 ```
-error[E02001]: unbound module
-  ┌─ sources/my_ext.move:3:5
-  │
-3 │ use world::gate;
-  │     ^^^^^^^^^^^ Unbound module 'world::gate'
+约束1：结构体定义不可修改（不能加/删字段，不能改字段类型）
+约束2：函数签名不可修改（参数和返回值不能变）
+
+BUT：
+✅ 可以添加新函数
+✅ 可以添加新模块
+✅ 可以修改函数内部逻辑（不变签名）
+✅ 可以添加新结构体
 ```
 
-**原因**：`Move.toml` 中缺少对 `world` 包的依赖声明。
+**挑战**：如果你的合约 v1 有个 `Market` 结构体，v2 想增加一个 `expiry_ms` 字段，你不能直接修改。
 
-**解决：**
-```toml
-# Move.toml
-[dependencies]
-World = { git = "https://github.com/evefrontier/world-contracts.git", subdir = "contracts/world", rev = "v0.0.14" }
-```
+升级兼容这一章真正要解决的，不是“怎么发新版本”，而是：
+
+> 怎么让一个已经被对象、前端、脚本、用户共同依赖的系统继续活下去。
+
+所以升级问题本质上是四层兼容问题：
+
+- 链上对象兼容
+- 链上接口兼容
+- 前端解析兼容
+- 运维流程兼容
 
 ---
 
-### 错误：`ability constraint not satisfied`
+##  22.2 扩展模式：用动态字段追加"未来字段"
 
-```
-error[E05001]: ability constraint not satisfied
-   ┌─ sources/market.move:42:30
-   |
-42 │     transfer::public_transfer(listing, recipient);
-   |                               ^^^^^^^ Missing 'store' ability
-```
+**最佳实践**：预先为未来字段留下扩展空间：
 
-**原因**：`Listing` 结构体缺少 `store` ability，无法被 `public_transfer`。
-
-**解决**：
 ```move
-// 添加所需 ability
-public struct Listing has key, store { ... }
-//                            ^^^^^
+module my_market::market_v1;
+
+/// 当前字段
+public struct Market has key {
+    id: UID,
+    toll: u64,
+    owner: address,
+    // 注意：不要试图预测未来需要的字段——因为你改不了
+    // 而是依赖动态字段做扩展
+}
+
+// V1 → V2：用动态字段追加 expiry_ms
+// （升级包发布后，在迁移脚本中调用）
+public entry fun add_expiry_field(
+    market: &mut Market,
+    expiry_ms: u64,
+) {
+    // 如果还没有这个字段，才添加
+    if !df::exists_(&market.id, b"expiry_ms") {
+        df::add(&mut market.id, b"expiry_ms", expiry_ms);
+    }
+}
+
+/// V2 版本读取 expiry（向后兼容：旧对象没有这个字段时返回默认值）
+public fun get_expiry(market: &Market): u64 {
+    if df::exists_(&market.id, b"expiry_ms") {
+        *df::borrow<vector<u8>, u64>(&market.id, b"expiry_ms")
+    } else {
+        0  // 默认永不过期
+    }
+}
 ```
+
+### 动态字段为什么会成为升级逃生口？
+
+因为它让你在不改原始 struct 布局的前提下，给旧对象补充新语义。
+
+但它也有边界：
+
+- 适合追加字段
+- 不适合把所有未来复杂结构都硬塞进去
+
+如果一个版本升级需要往对象上拼很多临时字段，那通常说明你该重新思考模型，而不是无限依赖补丁式扩展。
 
 ---
 
-### 错误：`unused variable` / `unused let binding`
+##  22.3 版本化 API 设计
 
-```
-warning[W09001]: unused let binding
-  = 'receipt' is bound but not used
-```
+当你需要改变函数行为时，保留旧版本，添加新版本：
 
-**解决**：用下划线忽略，或确认是否遗漏了归还步骤（Borrow-Use-Return 模式）：
 ```move
-let (_receipt) = character::borrow_owner_cap(...); // 暂时忽略
-// 更好的做法：确认归还
-character::return_owner_cap(own_cap, receipt);
-```
+module my_market::market;
 
-### 对编译错误最有用的习惯
+/// V1 API（永远保持向后兼容）
+public entry fun buy_item_v1(
+    market: &mut Market,
+    payment: Coin<SUI>,
+    item_type_id: u64,
+    ctx: &mut TxContext,
+): Item {
+    // 原始逻辑
+}
 
-不是复制粘贴报错去搜，而是立刻判断它属于哪一类：
-
-- **依赖解析问题**
-  `unbound module`
-- **类型 / ability 问题**
-  `ability constraint not satisfied`
-- **资源生命周期问题**
-  `unused let binding`、值未消费、借用冲突
-
-Move 编译器给的错误往往已经很接近真实原因，只要别把它当成纯噪音。
-
----
-
-## 22.3 链上 Abort 错误解读
-
-链上 Abort 返回如下格式：
-```
-MoveAbort(MoveLocation { module: ModuleId { address: 0x..., name: Identifier("toll_gate_ext") }, function: 2, instruction: 6, function_name: Some("pay_toll") }, 1)
-```
-
-**关键信息**：`function_name` + abort code（末尾的数字）。
-
-### 常见 Abort Code 对照表
-
-| 错误代码 | 典型含义 | 排查方向 |
-|---------|---------|---------|
-| `0` | 权限不足（`assert!(ctx.sender() == owner)`） | 检查调用者地址 vs 合约中存储的 owner |
-| `1` | 余额/数量不足 | 检查 `coin::value()` vs 所需金额 |
-| `2` | 对象已存在（`table::add` 重复键） | 检查是否已注册/已购买过 |
-| `3` | 对象不存在（`table::borrow` 找不到） | 检查 key 是否正确 |
-| `4` | 时间校验失败（过期 / 未到时间） | `clock.timestamp_ms()` 与合约逻辑对比 |
-| `5` | 状态不正确（如已结束、未开始） | 检查 `is_settled`、`is_online` 等状态字段 |
-
-### 快速定位 Abort 来源
-
-```bash
-# 在源代码中搜索错误码
-grep -n "assert!.*4\b\|abort.*4\b\|= 4;" sources/*.move
-```
-
-### 遇到 Abort 时，第一反应不该是“合约坏了”
-
-更稳的顺序通常是：
-
-1. 先看 `function_name`
-2. 再看 abort code
-3. 再对照当时传入的对象、地址、金额、时间参数
-
-很多 Abort 其实不是代码 bug，而是：
-
-- 用了错对象
-- 当前状态不满足前置条件
-- 前端组装了过期或不完整的参数
-
----
-
-## 22.4 Gas 相关问题
-
-### `InsufficientGas`（Gas 耗尽）
-
-```
-TransactionExecutionError: InsufficientGas
-```
-
-**解决方案：阶梯排查**
-
-```typescript
-// 1. 先 dryRun 估算 Gas
-const estimate = await client.dryRunTransactionBlock({
-  transactionBlock: await tx.build({ client }),
-});
-console.log("Gas 估算：", estimate.effects.gasUsed);
-
-// 2. 在实际交易中设置足够的 Gas Budget（+20% 缓冲）
-const gasUsed = Number(estimate.effects.gasUsed.computationCost)
-              + Number(estimate.effects.gasUsed.storageCost);
-tx.setGasBudget(Math.ceil(gasUsed * 1.2));
-```
-
-### `GasBudgetTooHigh`
-
-你的 Gas Budget 超过了账户余额：
-```typescript
-// 查询账户 SUI 余额
-const balance = await client.getBalance({ owner: address, coinType: "0x2::sui::SUI" });
-const maxBudget = Number(balance.totalBalance) * 0.5; // 最多用 50% 余额做 Gas
-tx.setGasBudget(Math.min(desired_budget, maxBudget));
-```
-
-### Gas 问题最容易被误判成“钱包没钱”
-
-实际上常见成因有三种：
-
-- 真没钱
-- Gas budget 设太保守
-- 交易模型本身就太重
-
-如果你只会不断调大 budget，而不去看 dry run 结果里的成本结构，最后通常只是把结构问题掩盖掉。
-
----
-
-## 22.5 对象版本冲突
-
-```
-TransactionExecutionError: ObjectVersionUnavailableForConsumption
-```
-
-**原因**：你的代码持有一个旧版本的对象引用，但链上已经被其他交易修改。
-
-**常见场景**：同时发起多个使用同一共享对象的交易（如 `Market`）。
-
-**解决**：
-```typescript
-// ❌ 错误：并行发起多个使用同一共享对象的交易
-await Promise.all([buyTx1, buyTx2])
-
-// ✅ 正确：顺序执行
-for (const tx of [buyTx1, buyTx2]) {
-  await client.signAndExecuteTransaction({ transaction: tx })
-  // 等待确认后再发下一笔
+/// V2 API（新功能：支持折扣码）
+public entry fun buy_item_v2(
+    market: &mut Market,
+    payment: Coin<SUI>,
+    item_type_id: u64,
+    discount_code: Option<vector<u8>>,  // 新参数
+    clock: &Clock,                       // 新参数（时效验证）
+    ctx: &mut TxContext,
+): Item {
+    // 新逻辑（包含折扣处理）
+    let effective_price = apply_discount(market, item_type_id, discount_code, clock);
+    // ...
 }
 ```
 
-### 版本冲突本质上在提醒你：对象是活的
-
-只要多个交易都要写同一个对象，就要假设它随时可能在你再次提交前已经变了。
-
-所以这类问题往往不是“偶发玄学”，而是系统设计告诉你：
-
-- 这里存在共享热点
-- 这里需要串行化或刷新对象版本
-- 这里可能需要重新考虑分片或拆对象
-
----
-
-## 22.6 dApp 钱包连接问题
-
-### EVE Vault 未检测到
-
-```
-WalletNotFoundError: No wallet found
-```
-
-**排查清单：**
-1. ✅ EVE Vault 浏览器扩展是否已安装并启用？
-2. ✅ `VITE_SUI_NETWORK` 是否与 Vault 当前网络一致（testnet/mainnet）？
-3. ✅ `@evefrontier/dapp-kit` 版本是否与 Vault 版本兼容？
+**dApp 端适配**：在 TypeScript 端检查合约版本，选择调用哪个函数：
 
 ```typescript
-// 列出所有检测到的钱包（调试用）
-import { getWallets } from "@mysten/wallet-standard";
-const wallets = getWallets();
-console.log("检测到的钱包：", wallets.get().map(w => w.name));
-```
+async function buyItem(useV2: boolean, ...) {
+  const tx = new Transaction();
 
-### 签名请求被静默拒绝（无弹窗）
-
-**原因**：Vault 可能处于锁定状态。
-
-**解决**：在发起签名前检查钱包状态：
-```typescript
-const { currentAccount } = useCurrentAccount();
-if (!currentAccount) {
-  // 引导用户连接钱包，而不是直接发起签名
-  showConnectModal();
-  return;
+  if (useV2) {
+    tx.moveCall({ target: `${PKG}::market::buy_item_v2`, ... });
+  } else {
+    tx.moveCall({ target: `${PKG}::market::buy_item_v1`, ... });
+  }
 }
 ```
 
-### 钱包问题排查顺序
+### 为什么“保留旧入口”往往比“强迫全部迁移”更稳？
 
-最稳的顺序通常是：
+因为线上系统的调用方从来不只有你自己：
 
-1. 钱包有没有被检测到
-2. 当前账户有没有连接
-3. 网络是不是对的
-4. 对象和权限是不是当前账户可用的
+- 旧前端还在跑
+- 用户脚本可能还在用
+- 第三方聚合器可能还没升级
 
-不要一看到签名失败就直接怀疑 Vault 本身。有大量问题其实是前端状态、网络和对象上下文没对齐。
+所以最稳的升级路径往往不是“一刀切替换”，而是：
+
+1. 新旧并存
+2. 给迁移窗口
+3. 逐步下线旧接口
 
 ---
 
-## 22.7 链上数据读取问题
+##  22.4 升级锁定策略
 
-### `getObject` 返回 `null`
+对于高价值合约，可以在 UpgradeCap 上增加时间锁：
 
-```typescript
-const obj = await client.getObject({ id: "0x...", options: { showContent: true } });
-if (!obj.data) {
-  // 对象不存在，或 ID 错误
-  console.error("对象不存在，检查 ID 是否正确（可能是 testnet/mainnet 混淆）");
+```move
+module my_gov::upgrade_timelock;
+
+use sui::package::UpgradeCap;
+use sui::clock::Clock;
+
+public struct TimelockWrapper has key {
+    id: UID,
+    upgrade_cap: UpgradeCap,
+    delay_ms: u64,           // 升级需要提前公告的等待时间
+    announced_at_ms: u64,    // 公告时间（0 = 未公告）
+}
+
+/// 第一步：公告升级意图（开始计时）
+public entry fun announce_upgrade(
+    wrapper: &mut TimelockWrapper,
+    _admin: &AdminCap,
+    clock: &Clock,
+) {
+    assert!(wrapper.announced_at_ms == 0, EAlreadyAnnounced);
+    wrapper.announced_at_ms = clock.timestamp_ms();
+}
+
+/// 第二步：等待延迟期后才能执行升级
+public fun authorize_upgrade(
+    wrapper: &mut TimelockWrapper,
+    clock: &Clock,
+): &mut UpgradeCap {
+    assert!(wrapper.announced_at_ms > 0, ENotAnnounced);
+    assert!(
+        clock.timestamp_ms() >= wrapper.announced_at_ms + wrapper.delay_ms,
+        ETimelockNotExpired,
+    );
+    // 重置，下次升级需要重新公告
+    wrapper.announced_at_ms = 0;
+    &mut wrapper.upgrade_cap
 }
 ```
 
-**常见原因**：
-- 用了 testnet 的 Object ID 去查 mainnet（或反之）
-- 对象已被删除（合约调用了 `id.delete()`）
-- 拼写错误
+### TimeLock 真正保护的不是代码，而是信任关系
 
-### `showContent: true` 但 `content.fields` 为空
+它给社区、协作者和用户留出了观察窗口，让升级不至于变成“管理员今晚想改什么就改什么”。
 
-```typescript
-const content = obj.data?.content;
-if (content?.dataType !== "moveObject") {
-  // 这是一个 package 对象，不是 Move 对象
-  console.error("对象不是 MoveObject，可能 ID 指向的是一个 Package");
+这在高价值协议里非常关键，因为升级风险很多时候不是技术 bug，而是治理风险。
+
+---
+
+##  22.5 大规模数据迁移策略
+
+当需要重建存储结构时，采用"增量迁移"而不是"一次性迁移"：
+
+```move
+// 场景：将 ListingsV1（vector）迁移为 ListingsV2（Table）
+module migration::market_migration;
+
+public struct MigrationState has key {
+    id: UID,
+    migrated_count: u64,
+    total_count: u64,
+    is_complete: bool,
+}
+
+/// 每次迁移一批（避免一笔交易超出计算限制）
+public entry fun migrate_batch(
+    old_market: &mut MarketV1,
+    new_market: &mut MarketV2,
+    state: &mut MigrationState,
+    batch_size: u64,         // 每次处理 batch_size 条记录
+    ctx: &TxContext,
+) {
+    let start = state.migrated_count;
+    let end = min(start + batch_size, state.total_count);
+    let mut i = start;
+
+    while (i < end) {
+        let listing = get_listing_v1(old_market, i);
+        insert_listing_v2(new_market, listing);
+        i = i + 1;
+    };
+
+    state.migrated_count = end;
+    if end == state.total_count {
+        state.is_complete = true;
+    };
 }
 ```
 
-### 读不到数据时，优先检查哪四件事
+**迁移脚本：自动循环执行直到完成**
 
-1. ID 是否来自正确网络
-2. 这个 ID 是对象还是包
-3. 对象是否已经删除或迁移
-4. 前端解析路径是不是和真实字段结构一致
+```typescript
+async function runMigration(stateId: string) {
+  let isComplete = false;
+  let batchNum = 0;
 
-很多“读不到”的问题，根本不是节点坏了，而是你自己查错对象了。
+  while (!isComplete) {
+    const tx = new Transaction();
+    tx.moveCall({
+      target: `${MIGRATION_PKG}::market_migration::migrate_batch`,
+      arguments: [/* ... */, tx.pure.u64(100)], // 每批 100 条
+    });
+
+    const result = await client.signAndExecuteTransaction({ signer: adminKeypair, transaction: tx });
+    console.log(`Batch ${++batchNum} done:`, result.digest);
+
+    // 检查迁移状态
+    const state = await client.getObject({ id: stateId, options: { showContent: true } });
+    isComplete = (state.data?.content as any)?.fields?.is_complete;
+
+    await new Promise(r => setTimeout(r, 1000)); // 间隔 1 秒
+  }
+
+  console.log("迁移完成！");
+}
+```
+
+### 为什么迁移最好增量做，而不是一把梭？
+
+因为真实线上系统里，你通常要同时平衡：
+
+- 计算上限
+- 风险可控
+- 失败可恢复
+- 迁移期间服务还能继续运行
+
+一次性迁移最大的问题不是写不出来，而是：
+
+- 中途失败很难恢复
+- 失败后状态容易半新半旧
+- 交易太大时根本发不出去
 
 ---
 
-## 22.8 本地开发环境问题
-
-### Docker 本地链启动失败
-
-```bash
-# 查看容器日志
-docker compose logs -f
-
-# 常见原因：端口被占用
-lsof -i :9000
-kill -9 <PID>
-
-# 重置本地链状态（清空所有数据重新开始）
-docker compose down -v
-docker compose up -d
-```
-
-### `sui client publish` 失败
-
-```bash
-# 错误：Package verification failed
-# 原因：依赖的 world-contracts 地址与本地节点不一致
-
-# 在 Move.toml 中确认本地测试使用 localnet 的包地址
-[addresses]
-world = "0x_LOCAL_WORLD_ADDRESS_"  # 从本地链部署结果获取
-```
-
-### 合约部署后无法调用（找不到函数）
-
-```bash
-# 检查发布的包 ID 是否与 ENV 配置一致
-echo $VITE_WORLD_PACKAGE
-
-# 验证链上包是否包含预期函数
-sui client object 0x_PACKAGE_ID_ --json | jq '.content.disassembled'
-```
-
-### 环境问题最怕“半正确”
-
-也就是：
-
-- 本地链是好的
-- CLI 也能连
-- 但某个地址、依赖或 ENV 还停在另一套环境
-
-这种问题最烦，因为表面上每一层都“看起来没坏”。所以只要碰到环境类问题，最好把：
-
-- 当前网络
-- 当前地址
-- 当前包 ID
-- 当前 ENV 配置
-
-一次性全打印出来比逐个猜快得多。
-
----
-
-## 22.9 调试工作流：系统化排查
+##  22.6 升级完整工作流
 
 ```
-遇到问题时，按以下顺序排查：
-
-1. 读错误信息（不要忽略任何细节）
-   ├── 是 Move abort？→ 找 abort code → 查合约源码
-   ├── 是 Gas 问题？→ dryRun 估算 → 调整 budget
-   └── 是 TypeScript 错误？→ console.log 每一步的参数
-
-2. 隔离问题
-   ├── 用 Sui Explorer 直接调用合约（绕开 dApp）
-   ├── 写 Move 单元测试重现问题
-   └── 用 curl/Postman 测试 GraphQL 查询
-
-3. 与社区对齐
-   ├── 搜索 Discord #builders 频道
-   ├── 粘贴完整错误信息（包括 Transaction Digest）
-   └── 提供最小可复现代码
+① 开发新版本合约（本地 + testnet 验证）
+② 声明升级意图（TimeLock 开始计时，通知社区）
+③ 社区审查期（72 小时）
+④ TimeLock 到期后，执行 sui client upgrade --upgrade-capability <CAP_ID>
+⑤ 运行数据迁移脚本（如有必要）
+⑥ 更新 dApp 配置（新 Package ID、新接口版本）
+⑦ 公告升级完成
 ```
 
-### 一个更实战的排查心法
+### 一个成熟团队会把升级视为一次“受控发布事件”
 
-每次都先尽量把问题缩成最小：
+也就是说，除了链上动作本身，还应该同步准备：
 
-- 最少对象
-- 最少一步操作
-- 最短调用链
+- 升级公告
+- 前端切换计划
+- 回滚或停机预案
+- 升级后观察指标
 
-因为链上系统一旦把前端、后端、钱包、索引、游戏服都卷进来，问题会迅速放大。先缩小，再定位，效率最高。
-
----
-
-## 22.10 常用调试工具
-
-| 工具 | 用途 | 链接 |
-|------|------|------|
-| **Sui Explorer** | 查看交易详情、对象状态 | https://suiexplorer.com |
-| **Sui GraphQL IDE** | 手动测试 GraphQL 查询 | https://graphql.testnet.sui.io |
-| **Move Prover** | 形式化验证合约属性 | `sui move prove` |
-| **dryRun** | 估算 Gas 与模拟执行 | `client.dryRunTransactionBlock()` |
-| **sui client call** | 命令行直接调用合约 | `sui client call --help` |
+否则“链上已经升级完成”并不等于“系统已经稳定完成升级”。
 
 ---
 
 ## 🔖 本章小结
 
-| 错误类型 | 最快排查路径 |
-|--------|-----------|
-| Move 编译错误 | 查 `Move.toml` 依赖 + ability 声明 |
-| Abort (code N) | 合约源码 grep abort code，对照表速查 |
-| Gas 耗尽 | `dryRun()` 预估 + 设置 20% 缓冲 |
-| 对象版本冲突 | 顺序执行而非并发，等待每笔 confirm |
-| 钱包未检测到 | 检查扩展安装、网络一致性、版本兼容 |
-| 对象读取为空 | 确认网络环境（testnet vs mainnet） |
-| 本地链问题 | `docker compose logs` + 重置数据卷 |
+| 知识点 | 核心要点 |
+|--------|--------|
+| 升级约束 | 结构体/函数签名不可改，但可加新函数/模块 |
+| 动态字段扩展 | `df::add()` 在运行时追加"未来字段" |
+| 版本化 API | `buy_v1()` / `buy_v2()` 并存，dApp 按版本选择 |
+| TimeLock 升级 | 公告 + 等待期 → 社区审查 → 才能执行 |
+| 增量迁移 | `migrate_batch()` 分批处理，避免超出计算限制 |
+
+## 📚 延伸阅读
+
+- [Sui Package 升级](https://docs.sui.io/guides/developer/packages/upgrade)
+- [Chapter 17：安全审计](./chapter-17.md)
+- [EVE Builder 约束](https://github.com/evefrontier/builder-documentation/blob/main/welcome/contstraints.md)

@@ -1,446 +1,585 @@
-# Chapter 12：链下索引与 GraphQL 进阶
+# Chapter 12：Move 进阶 — 泛型、动态字段与事件系统
 
-> **目标：** 掌握链下数据查询的完整工具链，包括 GraphQL、gRPC、事件订阅和自定义索引器，构建高性能的数据驱动 dApp。
-
----
-
-> 状态：工程章节。正文以 GraphQL、事件和索引器设计为主。
-
-## 12.1 读写分离原则
-
-EVE Frontier 开发的黄金法则：
-
-```
-写操作（改变链上状态）→ 通过 Transaction 提交 → 消耗 Gas
-读操作（查询链上状态）→ 通过 GraphQL/gRPC/SuiClient → 完全免费
-```
-
-**设计指导**：将所有可能的逻辑移到链下读取，只在真正需要改变状态时才提交交易。
-
-这条原则看起来简单，但它其实决定了你的整个系统成本结构：
-
-- 链上写得越多，Gas 越高、失败面越大
-- 链下读得越好，前端越快、交互越轻
-
-所以一个成熟的 Builder 系统，通常不是“什么都往链上塞”，而是明确拆成三层：
-
-- **链上对象**
-  存必须可信的状态
-- **链上事件**
-  存发生过的动作
-- **链下索引**
-  存前端真正需要消费的视图
-
-如果这三层不拆开，你的前端迟早会变成一堆昂贵又难维护的实时 RPC 调用。
+> **目标：** 掌握 Move 中泛型编程、动态字段存储、Table/VecMap 数据结构和事件系统，能独立设计复杂的链上数据模型。
 
 ---
 
-## 12.2 SuiClient 基础读取
+> 状态：设计进阶章节。正文以泛型、动态字段、事件和 Table/VecMap 为主。
 
-```typescript
-import { SuiClient } from "@mysten/sui/client";
+##  12.1 泛型（Generics）
 
-const client = new SuiClient({ url: "https://fullnode.testnet.sui.io:443" });
+泛型让你的代码可以适用于多种类型，同时保持类型安全。这在 EVE Frontier 的 OwnerCap 中被广泛使用。
 
-// ❶ 读取单个对象
-const gate = await client.getObject({
-  id: "0x...",
-  options: { showContent: true, showOwner: true, showType: true },
-});
-console.log(gate.data?.content);
+### 基础泛型语法
 
-// ❷ 批量读取多个对象（一次请求）
-const objects = await client.multiGetObjects({
-  ids: ["0x...gate1", "0x...gate2", "0x...ssu"],
-  options: { showContent: true },
-});
+```move
+// T 是类型参数，类似其他语言的 <T>
+public struct Box<T: store> has key, store {
+    id: UID,
+    value: T,
+}
 
-// ❸ 查询某地址拥有的所有对象
-const ownedObjects = await client.getOwnedObjects({
-  owner: "0xALICE",
-  filter: { StructType: `${WORLD_PKG}::gate::Gate` },
-  options: { showContent: true },
-});
+// 泛型函数
+public fun wrap<T: store>(value: T, ctx: &mut TxContext): Box<T> {
+    Box { id: object::new(ctx), value }
+}
 
-// ❹ 分页查询（处理大量数据）
-let cursor: string | null = null;
-const allGates: any[] = [];
-
-do {
-  const page = await client.getOwnedObjects({
-    owner: "0xALICE",
-    cursor,
-    limit: 50,
-  });
-  allGates.push(...page.data);
-  cursor = page.nextCursor ?? null;
-} while (cursor);
-```
-
-### `SuiClient` 最适合做什么？
-
-它最适合：
-
-- 单对象读取
-- 小规模批量读取
-- 调试和脚本验证
-- 前端的轻量查询
-
-它不一定适合直接承担：
-
-- 大规模排行榜
-- 跨多类型对象的聚合视图
-- 高频复杂筛选
-
-一旦你的查询需求开始出现“排序、聚合、跨对象拼表”，就该考虑上 GraphQL 或自定义索引层了。
-
----
-
-## 12.3 GraphQL 深度使用
-
-Sui 的 GraphQL 接口比 JSON-RPC 更强大，支持复杂过滤、嵌套查询和游标分页。
-
-### 连接 GraphQL
-
-```typescript
-import { SuiGraphQLClient, graphql } from "@mysten/sui/graphql";
-
-const graphqlClient = new SuiGraphQLClient({
-  url: "https://graphql.testnet.sui.io/graphql",
-});
-```
-
-### 查询某类型的所有对象
-
-```typescript
-const GET_ALL_GATES = graphql(`
-  query GetAllGates($type: String!, $after: String) {
-    objects(filter: { type: $type }, first: 50, after: $after) {
-      pageInfo {
-        hasNextPage
-        endCursor
-      }
-      nodes {
-        address
-        asMoveObject {
-          contents {
-            json  # 以 JSON 格式返回字段
-          }
-        }
-      }
-    }
-  }
-`);
-
-async function getAllGates(): Promise<any[]> {
-  const results: any[] = [];
-  let after: string | null = null;
-
-  do {
-    const data = await graphqlClient.query({
-      query: GET_ALL_GATES,
-      variables: {
-        type: `${WORLD_PKG}::gate::Gate`,
-        after,
-      },
-    });
-
-    const objects = data.data?.objects;
-    if (!objects) break;
-
-    results.push(...objects.nodes.map(n => n.asMoveObject?.contents?.json));
-    after = objects.pageInfo.hasNextPage ? objects.pageInfo.endCursor : null;
-  } while (after);
-
-  return results;
+public fun unwrap<T: store>(box: Box<T>): T {
+    let Box { id, value } = box;
+    id.delete();
+    value
 }
 ```
 
-### GraphQL 真正的价值，不只是“语法更优雅”
+### Phantom 类型参数
 
-它更重要的价值是让你能按前端视图去组织查询，而不是被 RPC 单对象接口牵着走。
+`phantom T` 不真正持有 T 类型的值，只用于类型区分：
 
-这在实际产品里非常重要，因为页面需要的常常不是“某一个对象原始长什么样”，而是：
+```move
+// T 没有实际被使用，但创造了类型区分
+public struct OwnerCap<phantom T> has key {
+    id: UID,
+    authorized_object_id: ID,
+}
 
-- 当前对象 + 关联对象摘要
-- 一页列表 + 分页信息
-- 多种对象拼成一个 dashboard
-
-### GraphQL 也不是万能的
-
-如果你把它当成数据库去无限制拉取，同样会踩坑：
-
-- 查询过大，前端首屏变慢
-- 一页塞太多嵌套对象，调试困难
-- 复杂查询一变更，前后端一起炸
-
-所以 GraphQL 最好的用法通常是：
-
-- 面向页面拆查询
-- 每个查询只服务一类明确视图
-- 需要聚合统计时让自定义索引器承担更多责任
-
-### 查询多个关联对象（嵌套）
-
-```typescript
-// 查询星门及其关联的网络节点信息
-const GET_GATE_WITH_NODE = graphql(`
-  query GetGateWithNode($gateId: SuiAddress!) {
-    object(address: $gateId) {
-      address
-      asMoveObject {
-        contents { json }
-      }
-    }
-  }
-`);
-
-// 批量: 一次查询多个不同类型
-const GET_ASSEMBLY_OVERVIEW = graphql(`
-  query AssemblyOverview($gateId: SuiAddress!, $ssuId: SuiAddress!) {
-    gate: object(address: $gateId) {
-      asMoveObject { contents { json } }
-    }
-    ssu: object(address: $ssuId) {
-      asMoveObject { contents { json } }
-    }
-  }
-`);
+// 这两个是完全不同的类型，系统不会混淆
+let gate_cap: OwnerCap<Gate> = ...;
+let ssu_cap: OwnerCap<StorageUnit> = ...;
 ```
 
-### 按动态字段查询（Table 内容）
+### 带约束的泛型
 
-```typescript
-// 查询 Market 的 listings Table 中特定条目
-const GET_LISTING = graphql(`
-  query GetListing($marketId: SuiAddress!, $typeId: String!) {
-    object(address: $marketId) {
-      dynamicField(name: { type: "u64", bcs: $typeId }) {
-        value {
-          ... on MoveValue {
-            json
-          }
-        }
-      }
-    }
-  }
-`);
+```move
+// T 必须同时具有 key 和 store abilities
+public fun transfer_to_object<T: key + store, Container: key>(
+    container: &mut Container,
+    value: T,
+) { ... }
+
+// T 必须具有 copy 和 drop（临时值，不是资产）
+public fun log_value<T: copy + drop>(value: T) { ... }
 ```
 
-### 为什么动态字段查询会比普通对象字段更麻烦？
+### 泛型在 Move 里为什么特别重要？
 
-因为动态字段天然更接近“运行时长出来的索引结构”，而不是固定 schema。
+因为 Move 里很多安全设计都不是靠“传一个字符串标识类型”，而是直接把类型本身放进接口里。
 
-这意味着：
+这样做的好处是：
 
-- 你必须非常清楚 key 的编码方式
-- 前端和索引层必须用同一套 key 规则
-- 一旦 key 设计变了，读路径会整体失效
+- 编译期就能发现类型不匹配
+- 权限和对象类别可以被强绑定
+- 你不用在运行时手写一大堆脆弱的类型判断
 
-所以动态字段的设计，不只是合约内部问题，它会直接外溢到查询和前端层。
+### `phantom` 到底解决了什么？
+
+第一次看 `phantom T` 很容易觉得它只是语法技巧。其实它解决的是：
+
+> “我不需要真的存一个 T，但我需要这个类型身份参与安全边界。”
+
+这在权限对象里特别常见，因为权限真正关心的常常不是数据本体，而是“这张权限卡到底是给谁的”。
+
+### 什么时候该上泛型，什么时候不要上？
+
+适合用泛型的场景：
+
+- 权限对象
+- 通用容器
+- 同一套逻辑要服务多个对象类型
+- 类型本身承载安全含义
+
+不适合过度泛型化的场景：
+
+- 业务语义已经非常明确
+- 只有一两种固定对象类型
+- 泛型会让接口阅读成本明显升高
+
+也就是说，泛型不是为了“显得高级”，而是为了把“这套逻辑天然是通用的”表达清楚。
 
 ---
 
-## 12.4 事件实时订阅
+##  12.2 动态字段（Dynamic Fields）
+
+Sui 有一个强大特性：**动态字段（Dynamic Fields）**，允许在运行时向对象添加任意键值对，不需要在编译期定义所有字段。
+
+### 为什么需要动态字段？
+
+假设你的存储箱需要支持任意类型的物品，而物品类型在编译时未知：
+
+```move
+// ❌ 不灵活的方式：固定字段
+public struct Inventory has key {
+    id: UID,
+    fuel: Option<u64>,
+    ore: Option<u64>,
+    // 新增物品类型就要修改合约...
+}
+
+// ✅ 灵活的方式：动态字段
+public struct Inventory has key {
+    id: UID,
+    // 没有预定义字段，用动态字段存储
+}
+```
+
+### 动态字段 API
+
+```move
+use sui::dynamic_field as df;
+use sui::dynamic_object_field as dof;
+
+// 添加动态字段（值不是对象类型）
+df::add(&mut inventory.id, b"fuel_amount", 1000u64);
+
+// 读取动态字段
+let fuel: &u64 = df::borrow(&inventory.id, b"fuel_amount");
+let fuel_mut: &mut u64 = df::borrow_mut(&mut inventory.id, b"fuel_amount");
+
+// 检查是否存在
+let exists = df::exists_(&inventory.id, b"fuel_amount");
+
+// 移除动态字段
+let old_value: u64 = df::remove(&mut inventory.id, b"fuel_amount");
+
+// 动态对象字段（值本身是一个对象，有独立 ObjectID）
+dof::add(&mut storage.id, item_type_id, item_object);
+let item = dof::borrow<u64, Item>(&storage.id, item_type_id);
+let item = dof::remove<u64, Item>(&mut storage.id, item_type_id);
+```
+
+### EVE Frontier 中的实际应用
+
+存储单元的 **临时仓库（Ephemeral Inventory）** 就是用动态字段实现的：
+
+```move
+// 为特定角色创建临时仓库（以角色 OwnerCap ID 为 key）
+df::add(
+    &mut storage_unit.id,
+    owner_cap_id,      // 用角色的 OwnerCap ID 作为 key
+    EphemeralInventory::new(ctx),
+);
+
+// 角色访问自己的临时仓库
+let my_inventory = df::borrow_mut<ID, EphemeralInventory>(
+    &mut storage_unit.id,
+    my_owner_cap_id,
+);
+```
+
+### 动态字段的真正价值
+
+它最大的价值不是“省得改 struct 定义”，而是：
+
+> 让对象在运行时长出新的子状态，而不必提前把所有槽位写死。
+
+这对游戏型系统尤其关键，因为很多状态是天然开放集合：
+
+- 一个仓库可能容纳很多种物品
+- 一个设施可能服务很多个角色
+- 一个市场可能有不断新增的挂单
+
+如果都写成固定字段，你的结构会很快失控。
+
+### 什么时候用 `dynamic_field`，什么时候用 `dynamic_object_field`？
+
+一个很实用的判断标准：
+
+- **值只是一个简单值或普通 struct**
+  用 `dynamic_field`
+- **值本身也应该是独立对象**
+  用 `dynamic_object_field`
+
+后者更适合：
+
+- 需要独立对象 ID
+- 需要单独转移、引用、删除
+- 后续可能被别的逻辑单独操作
+
+### 动态字段最常见的误区
+
+#### 1. 把它当成“万能数据库”
+
+动态字段很灵活，但不是无限免费。它会带来：
+
+- 更高的读写成本
+- 更复杂的索引路径
+- 更高的调试难度
+
+#### 2. 键设计过于随意
+
+如果 key 设计不稳定，后面会出现：
+
+- 同一业务实体找不到原来的数据
+- 链下和链上的映射规则不一致
+- 数据看似写成功，实际读不回来
+
+#### 3. 把频繁遍历的大集合直接塞进去
+
+动态字段适合按 key 定位，不天然适合做高频全量遍历。只要你的业务经常需要“把所有条目扫一遍”，就要开始考虑索引和分页策略。
+
+---
+
+##  12.3 Table 与 VecMap：链上集合类型
+
+### Table：键值映射
+
+```move
+use sui::table::{Self, Table};
+
+public struct Registry has key {
+    id: UID,
+    members: Table<address, MemberInfo>,
+}
+
+// 添加
+table::add(&mut registry.members, member_addr, MemberInfo { ... });
+
+// 查询
+let info = table::borrow(&registry.members, member_addr);
+let info_mut = table::borrow_mut(&mut registry.members, member_addr);
+
+// 存在检查
+let is_member = table::contains(&registry.members, member_addr);
+
+// 移除
+let old_info = table::remove(&mut registry.members, member_addr);
+
+// 长度
+let count = table::length(&registry.members);
+```
+
+> ⚠️ **注意**：Table 中的每个条目在链上都是一个独立的动态字段，每次访问都有单独的 cost。一个交易内最多访问 **1024 个动态字段**。
+
+### VecMap：小规模有序映射
+
+```move
+use sui::vec_map::{Self, VecMap};
+
+// VecMap 存储在对象字段中（不是动态字段），适合小数据集
+public struct Config has key {
+    id: UID,
+    toll_settings: VecMap<u64, u64>,  // zone_id -> toll_amount
+}
+
+// 操作
+vec_map::insert(&mut config.toll_settings, zone_id, amount);
+let amount = vec_map::get(&config.toll_settings, &zone_id);
+vec_map::remove(&mut config.toll_settings, &zone_id);
+```
+
+### 选择建议
+
+| 场景 | 推荐类型 |
+|------|---------|
+| 大规模、动态增长的集合 | `Table` |
+| 小于 100 条、需要遍历 | `VecMap` 或 `vector` |
+| 以对象为值（有独立 ObjectID） | `dynamic_object_field` |
+| 以简单值为值（u64, bool 等） | `dynamic_field` |
+
+### `Table` 本质上是什么？
+
+它本质上不是“内存里的哈希表”，而是构建在动态字段之上的链上集合抽象。
+
+所以你在用 `Table` 时，要始终记得三件事：
+
+- 每次读写都有真实链上成本
+- 条目越多，操作和排查越需要策略
+- 它更像“可扩展索引结构”，不是随手就能乱用的本地容器
+
+### `VecMap` 为什么适合小规模配置？
+
+因为它把数据直接存在对象字段里，通常更适合：
+
+- 配置项数量少
+- 需要整体读取
+- 需要按插入顺序或较小规模遍历
+
+典型例子包括：
+
+- 收费档位表
+- 小规模白名单
+- 模式开关配置
+
+### 选型时真正该问的问题
+
+不要只问“这个容器能不能存”，而要问：
+
+1. 这个集合会增长到多大？
+2. 我是按 key 精确查，还是经常全量遍历？
+3. 值是不是独立对象？
+4. 我未来要不要对它做分页和索引？
+
+这四个问题答清楚，容器选择通常就不会太偏。
+
+---
+
+##  12.4 事件系统（Events）
+
+事件是链上合约与链下应用通信的桥梁。事件不存储在链上状态中，但会附在交易记录里，可以被索引器（indexer）捕获。
+
+### 定义和发射事件
+
+```move
+use sui::event;
+
+// 事件结构体：只需要 copy + drop
+public struct GateJumped has copy, drop {
+    gate_id: ID,
+    character_id: ID,
+    destination_gate_id: ID,
+    timestamp_ms: u64,
+    toll_paid: u64,
+}
+
+public struct ItemSold has copy, drop {
+    storage_unit_id: ID,
+    seller: address,
+    buyer: address,
+    item_type_id: u64,
+    price: u64,
+}
+
+// 在函数中发射事件
+public fun process_purchase(
+    storage_unit: &mut StorageUnit,
+    buyer: &Character,
+    payment: Coin<SUI>,
+    item_type_id: u64,
+    ctx: &mut TxContext,
+): Item {
+    let price = coin::value(&payment);
+    // ... 处理购买逻辑 ...
+
+    // 发射事件（无 gas 消耗差异，发射是免费的索引记录）
+    event::emit(ItemSold {
+        storage_unit_id: object::id(storage_unit),
+        seller: storage_unit.owner_address,
+        buyer: ctx.sender(),
+        item_type_id,
+        price,
+    });
+
+    // ... 返回物品 ...
+}
+```
+
+事件最容易被误解的地方是：
+
+> 它是“交易发生过什么”的记录，不是“系统当前是什么状态”的真相来源。
+
+这句话非常重要。因为很多前端或索引设计问题，都是从把事件当状态开始的。
+
+### 事件适合表达什么？
+
+最适合表达：
+
+- 某件事刚刚发生了
+- 谁触发了这件事
+- 当时的关键参数是什么
+- 链下系统应该据此做什么订阅或通知
+
+比如：
+
+- 成交记录
+- 跳跃记录
+- 理赔触发
+- 授权变更
+
+### 事件不适合独立承担什么？
+
+不适合独立承担：
+
+- 当前库存真相
+- 当前对象是否在线
+- 当前某个设施的完整业务状态
+
+因为事件天然是时间线，不是当前态快照。
+
+### 在 TypeScript 中监听事件
 
 ```typescript
 import { SuiClient } from "@mysten/sui/client";
 
 const client = new SuiClient({ url: "https://fullnode.testnet.sui.io:443" });
 
-// 订阅特定包的所有事件
+// 查询历史事件
+const events = await client.queryEvents({
+  query: {
+    MoveEventType: `${MY_PACKAGE}::toll_gate_ext::GateJumped`,
+  },
+  limit: 50,
+});
+
+events.data.forEach(event => {
+  const fields = event.parsedJson as {
+    gate_id: string;
+    character_id: string;
+    toll_paid: string;
+  };
+  console.log(`跳跃: ${fields.character_id} 支付 ${fields.toll_paid}`);
+});
+
+// 实时订阅（WebSocket）
 const unsubscribe = await client.subscribeEvent({
   filter: { Package: MY_PACKAGE },
   onMessage: (event) => {
-    switch (event.type) {
-      case `${MY_PACKAGE}::toll_gate_ext::GateJumped`:
-        handleGateJump(event.parsedJson);
-        break;
-
-      case `${MY_PACKAGE}::market::ItemSold`:
-        handleItemSold(event.parsedJson);
-        break;
-    }
+    console.log("新事件:", event.type, event.parsedJson);
   },
 });
 
-// 90 秒后取消订阅
-setTimeout(unsubscribe, 90_000);
-
-// 查询历史事件（带过滤）
-const history = await client.queryEvents({
-  query: {
-    And: [
-      { MoveEventType: `${MY_PACKAGE}::toll_gate_ext::GateJumped` },
-      { Sender: "0xPlayerAddress..." },
-    ],
-  },
-  order: "descending",
-  limit: 100,
-});
+// 停止订阅
+setTimeout(() => unsubscribe(), 60_000);
 ```
 
-### 事件订阅最适合解决什么问题？
+### 设计事件时，字段要怎么想？
 
-最适合：
+一个好事件通常至少能回答：
 
-- 实时通知
-- 活动流
-- 轻量增量更新
-- 索引器消费新交易
+1. 谁做的
+2. 对哪个对象做的
+3. 做了什么
+4. 关键业务参数是什么
+5. 链下系统怎样据此定位相关对象
 
-不适合直接当成：
+如果字段太少，链下难以消费；字段太多，又会让事件膨胀、语义模糊。
 
-- 当前态唯一来源
-- 完整业务列表接口
-- 高可靠历史数据库
+### 一个很实用的组合原则
 
-因为事件流天然有两个现实问题：
+成熟的链上系统通常会采用这套组合：
 
-- 你可能会掉线、漏消息
-- 你总得有一套历史回补机制
+- **对象**
+  存当前态
+- **事件**
+  存历史动作
+- **索引层**
+  把对象和事件重新组织成前端好用的数据视图
 
-所以成熟索引器通常都是：
+这也是为什么你后面读 GraphQL、索引器和 dApp 章节时，会一直看到“对象查询 + 事件查询”一起出现。
 
-- 先回放历史
-- 再订阅增量
-- 定期做一致性校验
-
----
-
-## 12.5 gRPC：高吞吐量数据流
-
-对于需要处理大量实时数据的场景（如排行榜、全网状态快照），gRPC 比 GraphQL 更高效：
-
-```typescript
-// 使用 gRPC 流式读取最新 Checkpoints
-import { SuiHTTPTransport } from "@mysten/sui/client";
-
-// gRPC 适合监控整个链的状态变化
-// 例如：每个 Checkpoint 包含该期间内所有交易的摘要
-// 高级用法：构建自定义索引器时使用
-```
-
-### 什么时候值得上 gRPC，而不是继续堆 RPC / GraphQL？
-
-当你开始遇到这些场景时：
-
-- 需要长期消费 checkpoint
-- 需要自己维护一套近实时索引
-- 需要高吞吐、低延迟的链上数据流
-
-如果你只是做一个普通 dApp 页面，通常没必要一开始就上 gRPC。它更像“基础设施建设工具”，不是页面查询工具。
-
----
-
-## 12.6 构建自定义链下索引器
-
-对于复杂的查询需求（如排行榜、聚合统计），可以构建自己的索引服务：
-
-```typescript
-// server/indexer.ts
-import { SuiClient } from "@mysten/sui/client";
-
-const client = new SuiClient({ url: process.env.SUI_RPC! });
-
-// 内存索引（小规模；生产环境用 Redis 或 PostgreSQL）
-const jumpLeaderboard = new Map<string, number>(); // address → jump count
-
-// 启动索引：监听事件并更新本地状态
-async function startIndexer() {
-  console.log("索引器启动...");
-
-  // 先载入历史数据
-  await loadHistoricalEvents();
-
-  // 然后订阅新事件
-  await client.subscribeEvent({
-    filter: { Package: MY_PACKAGE },
-    onMessage: (event) => {
-      if (event.type.includes("GateJumped")) {
-        const { character_id } = event.parsedJson as any;
-        const count = jumpLeaderboard.get(character_id) ?? 0;
-        jumpLeaderboard.set(character_id, count + 1);
-      }
-    },
-  });
-}
-
-async function loadHistoricalEvents() {
-  let cursor = null;
-  do {
-    const page = await client.queryEvents({
-      query: { MoveEventType: `${MY_PACKAGE}::toll_gate_ext::GateJumped` },
-      cursor,
-      limit: 200,
-    });
-
-    for (const event of page.data) {
-      const { character_id } = event.parsedJson as any;
-      const count = jumpLeaderboard.get(character_id) ?? 0;
-      jumpLeaderboard.set(character_id, count + 1);
-    }
-
-    cursor = page.nextCursor;
-  } while (cursor && !cursor.startsWith("0x00")); // 简化终止条件
-}
-
-// API：提供排行榜数据
-import express from "express";
-const app = express();
-
-app.get("/api/leaderboard", (req, res) => {
-  const sorted = [...jumpLeaderboard.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 50)
-    .map(([address, count], rank) => ({ rank: rank + 1, address, count }));
-
-  res.json(sorted);
-});
-
-startIndexer().then(() => app.listen(3002));
-```
-
----
-
-## 12.7 在 dApp 中高效展示链上数据
-
-### 使用 React Query 缓存与自动刷新
+### 用事件驱动 dApp 实时更新
 
 ```tsx
-// src/hooks/useLeaderboard.ts
-import { useQuery } from "@tanstack/react-query";
+// src/hooks/useGateEvents.ts
+import { useEffect, useState } from 'react'
+import { SuiClient } from '@mysten/sui/client'
 
-export function useLeaderboard() {
-  return useQuery({
-    queryKey: ["leaderboard"],
-    queryFn: async () => {
-      const res = await fetch("/api/leaderboard");
-      return res.json();
-    },
-    refetchInterval: 30_000,  // 每 30 秒刷新
-    staleTime: 25_000,        // 25 秒内不重新请求
-  });
+interface JumpEvent {
+  gate_id: string
+  character_id: string
+  toll_paid: string
+  timestamp_ms: string
 }
 
-// 使用
-function Leaderboard() {
-  const { data, isLoading } = useLeaderboard();
+export function useGateEvents(packageId: string) {
+  const [events, setEvents] = useState<JumpEvent[]>([])
 
-  return (
-    <table>
-      <thead><tr><th>#</th><th>玩家</th><th>跳跃次数</th></tr></thead>
-      <tbody>
-        {data?.map(({ rank, address, count }) => (
-          <tr key={address}>
-            <td>{rank}</td>
-            <td>{address.slice(0, 8)}...</td>
-            <td>{count}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
+  useEffect(() => {
+    const client = new SuiClient({ url: 'https://fullnode.testnet.sui.io:443' })
+
+    const subscribe = async () => {
+      await client.subscribeEvent({
+        filter: { MoveEventType: `${packageId}::toll_gate_ext::GateJumped` },
+        onMessage: (event) => {
+          setEvents(prev => [event.parsedJson as JumpEvent, ...prev.slice(0, 49)])
+        },
+      })
+    }
+
+    subscribe()
+  }, [packageId])
+
+  return events
+}
+```
+
+---
+
+##  12.5 动态字段 vs 事件的使用场景
+
+| 需求 | 方案 |
+|------|------|
+| 持久化存储的集合数据 | 动态字段 / Table |
+| 历史记录查询（不需要在合约中保留） | 事件 |
+| 实时通知链下系统 | 事件 |
+| 合约内部的状态检查 | 动态字段 |
+| 分析统计数据（交易量、活跃用户） | 事件 + 链下索引 |
+
+---
+
+##  12.6 实战：设计一个可追踪的拍卖状态机
+
+将本章知识整合，设计一个复杂的拍卖状态对象：
+
+```move
+module my_auction::auction;
+
+use sui::object::{Self, UID, ID};
+use sui::table::{Self, Table};
+use sui::event;
+use sui::clock::Clock;
+
+/// 拍卖状态枚举（用 u8 表示）
+const STATUS_OPEN: u8 = 0;
+const STATUS_ENDED: u8 = 1;
+const STATUS_CANCELLED: u8 = 2;
+
+/// 拍卖对象
+public struct Auction<phantom ItemType: key + store> has key {
+    id: UID,
+    status: u8,
+    min_bid: u64,
+    current_bid: u64,
+    current_winner: Option<address>,
+    end_time_ms: u64,
+    bid_history_count: u64,
+    // 竞价历史用动态字段存储（避免大对象）
+}
+
+/// 竞价事件
+public struct BidPlaced has copy, drop {
+    auction_id: ID,
+    bidder: address,
+    amount: u64,
+    timestamp_ms: u64,
+}
+
+/// 竞价函数
+public fun place_bid<T: key + store>(
+    auction: &mut Auction<T>,
+    payment: Coin<SUI>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let bid_amount = coin::value(&payment);
+    let now = clock.timestamp_ms();
+
+    // 验证
+    assert!(auction.status == STATUS_OPEN, EAuctionNotOpen);
+    assert!(now < auction.end_time_ms, EAuctionEnded);
+    assert!(bid_amount > auction.current_bid, EBidTooLow);
+
+    // 退还前一位竞拍者的出价（简化版）
+    // ...
+
+    // 更新拍卖状态
+    auction.current_bid = bid_amount;
+    auction.current_winner = option::some(ctx.sender());
+
+    // 记录竞价历史（用动态字段）
+    let bid_key = auction.bid_history_count;
+    auction.bid_history_count = bid_key + 1;
+    df::add(&mut auction.id, bid_key, BidRecord {
+        bidder: ctx.sender(),
+        amount: bid_amount,
+        timestamp_ms: now,
+    });
+
+    // 发射事件（供 dApp 实时显示）
+    event::emit(BidPlaced {
+        auction_id: object::id(auction),
+        bidder: ctx.sender(),
+        amount: bid_amount,
+        timestamp_ms: now,
+    });
 }
 ```
 
@@ -448,16 +587,18 @@ function Leaderboard() {
 
 ## 🔖 本章小结
 
-| 工具 | 场景 | 特点 |
-|------|------|------|
-| `SuiClient.getObject()` | 读取单个/多个对象 | 简单直接 |
-| `GraphQL` | 复杂过滤、嵌套查询 | 灵活，TypeScript 类型生成 |
-| `subscribeEvent` | 实时事件推送 | WebSocket，适合 dApp |
-| `queryEvents` | 历史事件分页查询 | 适合数据分析 |
-| 自定义索引器 | 复杂聚合、排行榜 | 全控制，需要自己维护 |
+| 知识点 | 核心要点 |
+|--------|--------|
+| 泛型 | `<T>` 类型参数 + `phantom T` 类型区分 |
+| 动态字段 | 运行时添加字段，`df::add/borrow/remove`，max 1024/tx |
+| Table | 链上大规模 KV 存储，`table::add/borrow/contains` |
+| VecMap | 小型有序 KV，存在字段里，适合配置表 |
+| 事件 | `has copy + drop`，`event::emit()`，可被链下订阅 |
+| 事件 vs 动态字段 | 临时通知用事件；持久状态用动态字段 |
 
 ## 📚 延伸阅读
 
-- [Interfacing with the World](https://github.com/evefrontier/builder-documentation/blob/main/smart-contracts/interfacing-with-the-eve-frontier-world.md)
-- [Sui GraphQL 文档](https://docs.sui.io/guides/developer/accessing-data/query-with-graphql)
-- [Sui Events 文档](https://docs.sui.io/guides/developer/accessing-data/using-events)
+- [Sui 动态字段文档](https://docs.sui.io/concepts/dynamic-fields)
+- [Move Book：泛型](https://move-book.com/reference/generics.html)
+- [Sui 事件文档](https://docs.sui.io/guides/developer/accessing-data/using-events)
+- [inventory.move](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/primitives/inventory.move)

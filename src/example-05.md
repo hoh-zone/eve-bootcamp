@@ -535,7 +535,7 @@ dApp 层
 
 ## 📚 关联文档
 
-- [Chapter 8：链上经济系统设计](./chapter-08.md)
-- [Chapter 7：动态字段与事件](./chapter-07.md)
+- [Chapter 14：链上经济系统设计](./chapter-14.md)
+- [Chapter 12：动态字段与事件](./chapter-12.md)
 - [Sui Coin 标准](https://docs.sui.io/guides/developer/sui-101/create-coin)
 - [Example 2: 星门收费站](./example-02.md)（收入来源）

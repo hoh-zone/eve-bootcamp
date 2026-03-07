@@ -1,411 +1,343 @@
-# Chapter 15：位置与临近性系统
+# Chapter 15：跨合约组合性（Composability）
 
-> **目标：** 理解 EVE Frontier 的链上位置隐私设计，掌握如何利用临近性系统构建地理化游戏逻辑，以及未来 ZK 证明方向。
-
----
-
-> 状态：教学示例章节。正文以位置隐私、服务器证明和未来 ZK 方向为主。
-
-## 15.1 空间游戏的链上挑战
-
-一个传统MMORPG游戏中，位置信息由游戏服务器统一管理。在链上，这带来两个矛盾：
-
-1. **透明性**：链上数据任何人可查；若坐标明文存储，所有玩家隐藏基地的位置立即暴露
-2. **信任性**：如果位置由客户端上报，玩家可以造假（"我就在你旁边！"）
-
-EVE Frontier 的解决方案：**哈希位置 + 信任游戏服务器签名**。
-
-这里最重要的不是记住“哈希位置”这四个字，而是先看清它到底在平衡什么：
-
-- **隐私**
-  不能把基地、设施、玩家位置直接公开
-- **可验证**
-  又必须让某些距离相关动作能被证明
-- **可用性**
-  还不能把整套系统设计得慢到没法玩
-
-所以位置系统本质上是一个“隐私、可信、实时性”三者之间的工程折中。
+> **目标：** 掌握如何设计对外友好的合约接口，以及如何安全地调用其他 Builder 发布的合约，构建可组合的 EVE Frontier 生态系统。
 
 ---
 
-## 15.2 哈希位置：保护坐标隐私
+> 状态：设计进阶章节。正文以跨合约接口与可组合性为主。
 
-链上存储的不是明文坐标，而是 **哈希值**：
+##  15.1 可组合性的价值
+
+EVE Frontier 最激动人心的特性之一：**你的合约可以直接调用他人的合约，无需任何中间人**。
 
 ```
-存储：hash(x, y, salt) → chain.location_hash
-查询：任何人只能看到哈希，无法反推坐标
-验证：玩家向服务器证明"我知道这个哈希对应的坐标"
+Builder A：发行了 ALLY Token + 价格预言机
+Builder B：调用 A 的价格预言机，以 ALLY Token 定价出售物品
+Builder C：在 B 的市场上架，同时接受 A 的 ALLY 和 SUI 支付
 ```
 
-```move
-// location.move（简化版）
-public struct Location has store {
-    location_hash: vector<u8>,  // 坐标的哈希，而不是明文坐标
-}
+这创造了真正意义上的**开放经济协议栈**。
 
-/// 更新位置（需要游戏服务器签名授权）
-public fun update_location(
-    assembly: &mut Assembly,
-    new_location_hash: vector<u8>,
-    admin_acl: &AdminACL,  // 必须由授权服务器作为赞助者
-    ctx: &TxContext,
-) {
-    verify_sponsor(admin_acl, ctx);
-    assembly.location.location_hash = new_location_hash;
-}
-```
+可组合性真正厉害的地方，不是“大家都能互相调用”这句口号，而是：
 
-### 哈希位置能保护什么，不能保护什么？
+> 你写的协议一旦足够清晰，别人就能把它当积木，而不是把它当黑盒。
 
-它能保护的是：
+这会直接改变 Builder 的思路：
 
-- 链上不直接暴露明文坐标
-- 普通观察者无法直接从对象字段看到真实地点
+- 你不再只是做一个单点功能
+- 你是在决定自己要成为“终端产品”还是“底层能力”
 
-它不能自动保护的是：
-
-- 弱哈希或可枚举空间带来的反推风险
-- 链下接口泄露真实位置
-- 前端或日志把映射关系意外暴露出去
-
-也就是说，哈希只是隐私体系的一层，不是全部。
+很多最有价值的协议，并不是自己包办所有事，而是把某一个能力做成别人愿意反复接入的模块。
 
 ---
 
-## 15.3 临近性验证：服务器签名模式
+##  15.2 设计对外友好的 Move 接口
 
-当需要验证"A 在 B 附近"时（如取物品、跳跃），当前采用**服务器签名**：
-
-```
-① 玩家向游戏服务器请求："证明我在星门 0x...附近"
-② 服务器查询玩家的实际游戏坐标
-③ 服务器验证玩家确实在星门附近（<20km）
-④ 服务器用私钥签名"玩家A在星门B附近"的声明
-⑤ 玩家将这个签名附在交易中提交
-⑥ 链上合约验证签名来自授权服务器（AdminACL）
-```
-
-这套设计里最关键的信任边界是：
-
-> 链上并不知道真实坐标，它只相信“被授权的服务器已经替它判断过这件事”。
-
-这意味着系统安全不只取决于链上校验是否严格，也取决于：
-
-- 游戏服务器是否诚实
-- 签名 payload 是否完整
-- 时间窗和 nonce 是否设计正确
+好的 Move 接口设计应遵循：
 
 ```move
-// 星门链接时的距离验证
-public fun link_gates(
-    gate_a: &mut Gate,
-    gate_b: &mut Gate,
-    owner_cap_a: &OwnerCap<Gate>,
-    distance_proof: vector<u8>,  // 服务器签名的"两门距离 > 20km"证明
-    admin_acl: &AdminACL,
-    ctx: &TxContext,
-) {
-    // 验证服务器签名（简化；实际实现验证 ed25519 签名）
-    verify_sponsor(admin_acl, ctx);
-    // ...
+module my_protocol::oracle;
+
+// ── 公开的视图函数（只读，免费调用）──────────────────────
+
+/// 获取 ALLY/SUI 汇率（以 MIST 计）
+public fun get_ally_price(oracle: &PriceOracle): u64 {
+    oracle.ally_per_sui
 }
-```
 
-### 15.3.1 建议的最小证明消息体
-
-不要把“附近证明”做成一个只有服务器自己看得懂的黑盒字节串。最小可落地的 payload 至少要绑定以下字段：
-
-```json
-{
-  "proof_type": "assembly_proximity",
-  "player": "0xPLAYER",
-  "assembly_id": "0xASSEMBLY",
-  "location_hash": "0xHASH",
-  "max_distance_m": 20000,
-  "issued_at_ms": 1735689600000,
-  "expires_at_ms": 1735689660000,
-  "nonce": "4d2f1c..."
+/// 检查价格是否在有效期内
+public fun is_price_fresh(oracle: &PriceOracle, clock: &Clock): bool {
+    clock.timestamp_ms() - oracle.last_updated_ms < PRICE_TTL_MS
 }
-```
 
-每个字段的职责：
+// ── 公开的可组合函数（其他合约可调用）───────────────────
 
-- `player`：防止别的玩家复用证明
-- `assembly_id`：防止把 A 星门的证明拿去调用 B 星门
-- `location_hash`：把链上当前位置状态绑定进证明
-- `issued_at_ms` / `expires_at_ms`：限制重放窗口
-- `nonce`：防止同一窗口内多次重放
-
-### 15.3.2 服务端签名与链上校验的最小闭环
-
-链下服务至少要做两件事：先验证真实坐标关系，再对明确的 payload 签名。
-
-```ts
-type ProximityProofPayload = {
-  proofType: "assembly_proximity";
-  player: string;
-  assemblyId: string;
-  locationHash: string;
-  maxDistanceM: number;
-  issuedAtMs: number;
-  expiresAtMs: number;
-  nonce: string;
-};
-
-async function issueProximityProof(input: {
-  player: string;
-  assemblyId: string;
-  expectedHash: string;
-}) {
-  const location = await getPlayerLocationFromGameServer(input.player);
-  const assembly = await getAssemblyLocation(input.assemblyId);
-
-  assert(hash(location) === input.expectedHash);
-  assert(distance(location, assembly) <= 20_000);
-
-  const payload: ProximityProofPayload = {
-    proofType: "assembly_proximity",
-    player: input.player,
-    assemblyId: input.assemblyId,
-    locationHash: input.expectedHash,
-    maxDistanceM: 20_000,
-    issuedAtMs: Date.now(),
-    expiresAtMs: Date.now() + 60_000,
-    nonce: crypto.randomUUID(),
-  };
-
-  return signPayload(payload);
-}
-```
-
-链上侧至少要校验四层：
-
-```move
-// 简化伪代码：真实实现应把 payload 反序列化后逐字段比对
-public fun verify_proximity_proof(
-    assembly_id: ID,
-    expected_player: address,
-    expected_hash: vector<u8>,
-    proof_bytes: vector<u8>,
-    admin_acl: &AdminACL,
+/// 将 SUI 金额换算为 ALLY 数量
+public fun sui_to_ally_amount(
+    oracle: &PriceOracle,
+    sui_amount: u64,
     clock: &Clock,
-    ctx: &TxContext,
-) {
-    verify_sponsor(admin_acl, ctx);
-
-    let payload = decode_proximity_payload(proof_bytes);
-    assert!(payload.assembly_id == assembly_id, EWrongAssembly);
-    assert!(payload.player == expected_player, EWrongPlayer);
-    assert!(payload.location_hash == expected_hash, EWrongLocationHash);
-    assert!(clock.timestamp_ms() <= payload.expires_at_ms, EProofExpired);
-    assert!(check_and_consume_nonce(payload.nonce), EReplay);
+): u64 {
+    assert!(is_price_fresh(oracle, clock), EPriceStale);
+    sui_amount * oracle.ally_per_sui / 1_000_000_000
 }
 ```
 
-这里真正重要的是：`verify_sponsor(admin_acl, ctx)` 只证明“这笔交易来自授权服务端”，还不够证明“这条位置声明本身是针对当前对象、当前玩家、当前时间窗的”。
+### 设计原则
 
-### 所以位置证明最容易犯的错是什么？
+| 原则 | 实现方式 |
+|------|--------|
+| **只读视图** | `public fun` 不含 `&mut`，零 Gas 调用 |
+| **可组合操作** | 接受 Witness 参数，允许授权调用方执行 |
+| **版本化** | 保留旧接口，新接口以新函数名/类型参数区分 |
+| **事件发射** | 关键操作发射事件，方便监听 |
+| **文档化** | 完整注释说明前置条件和返回值 |
 
-不是“签名算法写错”，而是 payload 绑定不完整。
+### 好接口的标准，不只是“别人能调通”
 
-一旦 payload 少绑定一项，就会出现经典复用问题：
+一个真正对外友好的接口，至少应该让外部集成者能快速回答这些问题：
 
-- 绑定了玩家，没绑定对象
-  玩家能拿着 A 的证明去调 B
-- 绑定了对象，没绑定时间窗
-  旧证明能被反复重放
-- 绑定了时间，没绑定当前位置哈希
-  旧位置能冒充新位置
+1. 这个函数会不会改状态？
+2. 调用前必须准备哪些对象和权限？
+3. 调用失败最常见的原因是什么？
+4. 返回值和事件各自代表什么？
+
+如果这些都不清楚，别人虽然“理论上能调”，但集成成本会高得离谱。
+
+### 接口设计里最容易犯的三个错
+
+#### 1. 把内部实现细节直接暴露成外部依赖
+
+一旦你的接口强依赖内部对象布局，后面每次重构都会把外部集成者一起拖下水。
+
+#### 2. 读接口和写接口混得太近
+
+只读查询最好尽量简单稳定。可写入口则应该明确标注权限和副作用。两者混在一起，集成方很容易误用。
+
+#### 3. 错误边界不清楚
+
+如果函数可能因为：
+
+- 权限不足
+- 数据过期
+- 价格无效
+- 对象状态不匹配
+
+而失败，那这些前提最好能通过文档、命名或辅助只读接口提前暴露出来。
 
 ---
 
-## 15.4 围绕位置系统的策略设计
+##  15.3 调用其他 Builder 的合约
 
-即使位置是哈希的，Builder 仍然可以设计许多地理化逻辑：
+### 在 Move.toml 中添加外部依赖
 
-### 策略一：位置锁定（资产绑定地点）
+```toml
+[dependencies]
+# 依赖其他 Builder 已发布的包（通过 Git）
+AllyOracle = {
+  git = "https://github.com/builder-alice/ally-oracle",
+  subdir = "contracts",
+  rev = "v1.0.0"
+}
+
+# 或直接指定链上地址（对已发布的包）
+AllyOracleOnChain = { local = "../ally-oracle" }  # 本地测试用
+```
+
+### 在 Move 代码中调用
 
 ```move
-// 资产只在特定位置哈希处有效
-public entry fun claim_resource(
-    claim: &mut ResourceClaim,
-    claimant_location_hash: vector<u8>,  // 服务器证明的位置
-    admin_acl: &AdminACL,
+module my_market::ally_market;
+
+// 引入其他 Builder 的模块（需要在 Move.toml 中声明依赖）
+use ally_oracle::oracle::{Self, PriceOracle};
+use ally_dao::ally_token::ALLY_TOKEN;
+
+public entry fun buy_with_ally(
+    storage_unit: &mut world::storage_unit::StorageUnit,
+    character: &Character,
+    price_oracle: &PriceOracle,     // 外部 Builder A 的价格预言机
+    ally_payment: Coin<ALLY_TOKEN>, // 外部 Builder A 的代币
+    item_type_id: u64,
+    clock: &Clock,
     ctx: &mut TxContext,
-) {
-    verify_sponsor(admin_acl, ctx);
-    // 验证玩家位置哈希与资源点匹配
-    assert!(
-        claimant_location_hash == claim.required_location_hash,
-        EWrongLocation,
+): Item {
+    // 调用外部合约的视图函数
+    let price_in_sui = oracle::sui_to_ally_amount(
+        price_oracle,
+        ITEM_BASE_PRICE_SUI,
+        clock,
     );
-    // 发放资源
+
+    assert!(coin::value(&ally_payment) >= price_in_sui, EInsufficientPayment);
+
+    // 处理 ALLY Token 支付（转到联盟金库等）
+    // ...
+
+    // 从自己的 SSU 取出物品
+    storage_unit::withdraw_item(
+        storage_unit, character, MyMarketAuth {}, item_type_id, ctx,
+    )
 }
 ```
 
-位置系统真正有意思的地方在于：你不需要知道明文坐标，也能设计出非常强的空间规则。
+### 依赖别人合约时，真正绑定的是什么？
 
-这意味着 Builder 在上层业务里关心的通常不是“你具体在宇宙哪一点”，而是：
+不是“一个 Git 仓库地址”这么简单，而是同时绑定了：
 
-- 你是否在某个设施附近
-- 你是否在某个区域内
-- 你是否满足进入、提取、激活条件
+- 对方的接口稳定性
+- 对方的升级策略
+- 对方的经济和治理选择
+- 你自己的故障半径
 
-这会让很多玩法更像“条件访问控制”，而不是“地图渲染系统”。
+也就是说，你每引入一个外部协议，就等于把自己的一部分稳定性外包给了别人。
 
-### 策略二：基地范围控制
+### 所以接外部协议前先问四个问题
+
+1. 这个协议的核心接口是否稳定？
+2. 它升级时会不会破坏我当前用法？
+3. 如果它暂停或失效，我有没有降级路径？
+4. 我能不能把关键依赖收敛到只读接口，而不是深度写入耦合？
+
+---
+
+##  15.4 接口版本控制与协议标准
+
+当你的合约被广泛使用后，升级接口必须保证向后兼容：
 
 ```move
-public struct BaseZone has key {
-    id: UID,
-    center_hash: vector<u8>,   // 基地中心位置哈希
-    owner: address,
-    zone_nft_ids: vector<ID>,  // 在这个区域内的友方 NFT 列表
+module my_protocol::market_v2;
+
+// 使用类型标记版本
+public struct V1 has drop {}
+public struct V2 has drop {}
+
+// V1 接口（永远保留）
+public fun get_price_v1(market: &Market, _: V1): u64 {
+    market.price
 }
 
-// 授权组件只对在基地范围内的玩家开放
-public entry fun base_service(
-    zone: &BaseZone,
-    service: &mut StorageUnit,
-    player_in_zone_proof: vector<u8>,  // 服务器证明"玩家在基地范围内"
-    admin_acl: &AdminACL,
-    ctx: &mut TxContext,
-) {
-    verify_sponsor(admin_acl, ctx);
-    // ...提供服务
+// V2 接口（新增，支持动态价格）
+public fun get_price_v2(
+    market: &Market,
+    clock: &Clock,
+    _: V2,
+): u64 {
+    calculate_dynamic_price(market, clock)
 }
 ```
 
-### 策略三：移动路径追踪（链外 + 链上结合）
+### 定义跨合约接口标准（类似 ERC 标准）
+
+在 EVE Frontier 生态中，可以通过文档约定接口标准，让多个 Builder 的合约相互兼容：
+
+```move
+// ── 非官方"市场接口"标准提案 ────────────────────────────
+// 任何想接入聚合市场的 Builder 的合约应实现以下接口：
+
+/// 列出物品：返回当前出售的物品类型和价格
+public fun list_items(market: &T): vector<(u64, u64)>  // (type_id, price_sui)
+
+/// 查询特定物品是否可购买
+public fun is_available(market: &T, item_type_id: u64): bool
+
+/// 购买（返回物品）
+public fun purchase<Auth: drop>(
+    market: &mut T,
+    buyer: &Character,
+    item_type_id: u64,
+    payment: &mut Coin<SUI>,
+    auth: Auth,
+    ctx: &mut TxContext,
+): Item
+```
+
+### 为什么版本控制要从第一版就开始想？
+
+因为只要别人开始依赖你，“改接口”就不再只是你的内部事务。
+
+你要同时考虑：
+
+- 老调用方还能不能继续活
+- 新功能能不能逐步引入
+- 前端、脚本、聚合器是否要同步迁移
+
+很多协议不是死于功能不足，而是死于“第二版把第一版都打碎了”。
+
+### 标准化接口最值钱的地方
+
+不是显得专业，而是能催生二级生态：
+
+- 聚合器更容易接
+- 比价工具更容易做
+- 第三方前端更容易复用
+- 其他 Builder 更愿意基于你继续搭
+
+---
+
+##  15.5 实战：聚合价格比较器
 
 ```typescript
-// 链下：监听玩家位置更新事件
-client.subscribeEvent({
-  filter: { MoveEventType: `${WORLD_PKG}::location::LocationUpdated` },
-  onMessage: (event) => {
-    const { assembly_id, new_hash } = event.parsedJson as any;
-    // 更新本地路径记录
-    locationHistory.push({ assembly_id, hash: new_hash, time: Date.now() });
-  },
-});
+// 在 dApp 中聚合多个 Builder 的市场价格
+async function getAggregatedPrices(
+  itemTypeId: number,
+  marketIds: string[],
+  client: SuiClient,
+): Promise<Array<{ marketId: string; price: number; builder: string }>> {
 
-// 链上：只存储哈希，链下解析路径
-```
-
----
-
-## 15.5 未来方向：零知识证明取代服务器信任
-
-官方文档提到，**未来计划用 ZK 证明**替代当前的服务器签名：
-
-```
-现在：
-  玩家 → 服务器（你在哪里？）→ 服务器签名 → 链上验证签名
-
-未来（ZK）：
-  玩家 → 本地计算 ZK 证明（"我知道满足这个哈希的坐标，且 < 20km"）
-         → 链上 ZK 验证器（无需服务器参与）
-```
-
-**ZK 证明的优势**：
-- 完全去中心化，不依赖服务器诚实性
-- 玩家可以证明"我在这里"而不暴露具体坐标
-- 理论上可以证明任意复杂的空间关系
-
-**实际开发建议**：
-- 当前阶段，与服务器集成时就把 payload 结构、时间窗、nonce 和对象绑定设计清楚（见 Chapter 11）
-- `AdminACL.verify_sponsor()` 只能当“来源验证”的一层，不能替代 payload 校验
-- 未来 ZK 上线后，尽量只替换“证明机制”，不要重写上层业务状态机
-
-### 为什么现在就要按“将来可替换证明机制”的思路设计？
-
-因为真正应该稳定的是上层业务语义，而不是今天采用的证明实现细节。
-
-换句话说，你最好把系统拆成两层：
-
-- **上层业务规则**
-  例如“只有在附近时才能取出物品”
-- **底层证明机制**
-  例如今天是服务器签名，未来可能换成 ZK
-
-这样未来升级时，你替换的是“如何证明”，而不是把整条业务状态机重写一遍。
-
-### 15.5.1 失败场景与防御清单
-
-| 失败场景 | 典型原因 | 最小防御 |
-|------|------|------|
-| 重放证明 | payload 没有 `nonce` 或过期时间 | 加 `nonce` + 短有效期 + 链上消费 |
-| 错对象复用 | 证明没有绑定 `assembly_id` | payload 强绑定目标对象 |
-| 错人复用 | 证明没有绑定 `player` | payload 强绑定调用者地址 |
-| 旧位置复用 | 没有绑定 `location_hash` | 把当前链上哈希写入 payload |
-| 服务端时钟偏差 | 过期判断不一致 | 用链上 `Clock` 做最终裁决 |
-
-### 再补一个常被忽略的失败场景：链下缓存过旧
-
-如果服务端拿到的是旧位置缓存，也可能签出“形式上合法、业务上错误”的证明。
-
-所以真实系统里，还要考虑：
-
-- 服务端位置数据来源是否足够新
-- 位置采样和上链状态是否存在明显延迟
-- 某些动作是否需要更短的证明有效期
-
----
-
-## 15.6 在 dApp 中展示位置信息
-
-```tsx
-// 位置信息对 Builder 不直接可读（哈希），但可以展示游戏内坐标
-// （通过与游戏服务器 API 对接解密）
-
-interface AssemblyDisplayInfo {
-  id: string
-  name: string
-  systemName: string    // 星系名称（从服务器API获取）
-  constellation: string // 星座
-  region: string        // 区域
-  onlineStatus: string
-}
-
-async function getAssemblyDisplayInfo(assemblyId: string): Promise<AssemblyDisplayInfo> {
-  // 1. 从链上读取哈希化位置
-  const obj = await suiClient.getObject({
-    id: assemblyId,
+  // 批量读取所有市场状态
+  const markets = await client.multiGetObjects({
+    ids: marketIds,
     options: { showContent: true },
   });
-  const locationHash = (obj.data?.content as any)?.fields?.location?.fields?.location_hash;
 
-  // 2. 通过游戏服务器 API，用哈希查询星系名称
-  const geoRes = await fetch(`${GAME_API}/location?hash=${locationHash}`);
-  const geoInfo = await geoRes.json();
+  const prices = markets
+    .map((market, i) => {
+      const fields = (market.data?.content as any)?.fields;
+      if (!fields) return null;
 
-  return {
-    id: assemblyId,
-    name: (obj.data?.content as any)?.fields?.name,
-    systemName: geoInfo.system_name,
-    constellation: geoInfo.constellation,
-    region: geoInfo.region,
-    onlineStatus: (obj.data?.content as any)?.fields?.status,
-  };
+      // 读取 listings Table 中的价格（简化）
+      const listing = fields.listings?.fields?.contents?.find(
+        (entry: any) => Number(entry.fields?.key) === itemTypeId
+      );
+
+      if (!listing) return null;
+
+      return {
+        marketId: marketIds[i],
+        price: Number(listing.fields.value.fields.price),
+        builder: fields.owner ?? "未知",
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a!.price - b!.price); // 按价格升序
+
+  return prices as any[];
 }
 ```
 
-### 前端展示位置时，最重要的不是“展示得多详细”，而是“不泄露不该泄露的信息”
+这个例子很适合说明一个现实：
 
-所以前端通常更适合展示：
+> 可组合性的价值，很多时候是在链下被放大的。
 
-- 星系名
-- 星座
-- 区域
-- 是否在线
+也就是说，链上协议只要把接口和事件设计清楚，链下就能做出：
 
-而不应该随意展示：
+- 比价器
+- 聚合器
+- 推荐路由
+- 策略编排
 
-- 过细的内部坐标
-- 可被用来反推精确位置的调试字段
+所以你设计合约时，不要只想着“链上另一个合约会不会调我”，也要想“链下工具会不会愿意消费我”。
 
-这也是为什么位置系统一定要和链下展示层一起设计，而不是只在合约里考虑哈希就完事。
+---
+
+##  15.6 组合性的风险与防御
+
+| 风险 | 描述 | 防御 |
+|------|------|------|
+| **依赖合约升级** | 外部合约升级可能破坏你的调用 | 锁定特定版本（rev = "v1.0.0"） |
+| **外部合约暂停** | 依赖的合约被撤销或修改 | 设计降级路径（fallback 逻辑） |
+| **重入型攻击** | 外部合约回调你的合约 | Move 通过所有权系统天然防御 |
+| **价格操控** | 依赖的预言机被操控 | 使用多个预言机取中位数 |
+
+### 再补三个实际项目里很常见的风险
+
+| 风险 | 描述 | 防御 |
+|------|------|------|
+| **接口语义漂移** | 函数名没变，但行为口径变了 | 用版本号、文档和事件语义一起约束 |
+| **外部协议活着，但数据质量下降** | 预言机没坏，只是更新变慢或价格异常 | 增加 freshness / sanity check |
+| **降级路径缺失** | 外部依赖不可用时，自己的主流程直接瘫痪 | 预设 fallback、暂停开关、手动接管路径 |
+
+### 组合不是越深越好
+
+组合层次越深，你获得的能力越强，但也越难维护。
+
+一个实用原则是：
+
+- 优先依赖稳定、只读、可验证的外部能力
+- 谨慎依赖深度耦合、强状态写入的外部流程
+
+因为前者坏了通常只是“数据变差”，后者坏了可能直接把你的核心业务链打断。
 
 ---
 
@@ -413,14 +345,13 @@ async function getAssemblyDisplayInfo(assemblyId: string): Promise<AssemblyDispl
 
 | 知识点 | 核心要点 |
 |--------|--------|
-| 哈希位置 | 坐标哈希化存储，防止隐私泄露 |
-| 临近性验证 | 当前：服务器签名 → 未来：ZK 证明 |
-| AdminACL 作用 | `verify_sponsor()` 验证服务器的赞助地址 |
-| Builder 机会 | 位置锁定、基地范围、轨迹分析 |
-| ZK 展望 | 无需服务器信任的完全去中心化空间证明 |
+| 可组合性价值 | 你的合约可以被他人调用，形成协议栈 |
+| 接口设计 | 只读视图 + Witness 授权 + 文档注释 |
+| 引用外部包 | Move.toml 依赖 + `use` 语句 |
+| 版本控制 | 保留旧接口 + 类型标记版本 |
+| 聚合 dApp | 批量读取多合约数据，前端聚合展示 |
 
 ## 📚 延伸阅读
 
-- [EVE World Explainer - Privacy](https://github.com/evefrontier/builder-documentation/blob/main/smart-contracts/eve-frontier-world-explainer.md#privacy-location-obfuscation)
-- [Sui ZK Login（相关 ZK 技术背景）](https://docs.sui.io/concepts/cryptography/zklogin)
-- [Constraints 文档](https://github.com/evefrontier/builder-documentation/blob/main/welcome/contstraints.md)
+- [EVE World Explainer](https://github.com/evefrontier/builder-documentation/blob/main/smart-contracts/eve-frontier-world-explainer.md)
+- [Move Book：包系统](https://move-book.com/programmability/packages.html)

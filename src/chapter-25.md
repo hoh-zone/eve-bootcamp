@@ -1,397 +1,418 @@
-# 第25章：链下签名 × 链上验证
+# Chapter 25：从 Builder 到产品——商业化路径与生态运营
 
-> **学习目标**：深入理解 `world::sig_verify` 模块的 Ed25519 签名验证机制，掌握"游戏服务器签名 → Move 合约验证"这一 EVE Frontier 的核心安全模式。
-
----
-
-> 状态：教学示例。正文中的验证流程是对官方实现的拆解版，落地时请优先对照实际源码和测试。
-
-## 最小调用链
-
-`游戏服务器构造消息 -> Ed25519 签名 -> 玩家提交 bytes/signature -> sig_verify 模块校验 -> 合约继续执行`
-
-## 对应代码目录
-
-- [world-contracts/contracts/world](https://github.com/evefrontier/world-contracts/tree/main/contracts/world)
-
-## 关键 Struct / 输入
-
-| 类型或输入 | 作用 | 阅读重点 |
-|------|------|------|
-| 消息 bytes | 链下事实的原始编码 | 看链下签名和链上验证是否使用完全相同的字节序列 |
-| 签名 blob | `flag + raw_sig + public_key` | 看长度、切片顺序和签名算法标识 |
-| `AdminACL` / 授权地址 | 业务允许的服务器身份 | 看“签名正确”和“签名者有权”是两层校验 |
-
-## 关键入口函数
-
-| 入口 | 作用 | 你要确认什么 |
-|------|------|------|
-| `sig_verify` 相关校验入口 | 验证签名与消息绑定 | 是否正确加入 intent 前缀、是否严格比对 bytes |
-| 业务合约中的验证包装函数 | 把签名验证接入业务流程 | 是否同时校验 nonce、过期时间、对象绑定 |
-| sponsor / server 白名单入口 | 限制可接受的服务端身份 | 是否与签名校验分层处理 |
-
-## 最容易误读的点
-
-- 签名通过不等于业务通过，业务字段仍要单独校验
-- 链下签名前的 bytes 只要有一个字段编码不同，链上验证就必然失败
-- `AdminACL` 解决的是“谁可以提交/赞助”，不是“消息内容一定正确”
-
-读签名系统时，建议把验证拆成 4 层，不要混成一个“验签通过就安全”：
-
-1. 字节层：链下和链上看到的 `message_bytes` 是否完全一致。
-2. 密码学层：签名是否真由那把私钥产生。
-3. 身份层：这把私钥对应的地址是否属于被允许的服务器。
-4. 业务层：消息里的玩家、对象、deadline、nonce、数量等字段是否真的和这次调用匹配。
-
-`sig_verify` 只负责前两层和一部分第三层，真正决定业务是否安全的，往往是你在外面那层包装函数写得够不够严。
-
-## 1. 为什么需要链下签名？
-
-EVE Frontier 的一个根本性挑战：**链上合约无法访问游戏世界的实时状态**。
-
-| 信息 | 来源 | 合约可直接读取？ |
-|------|------|----------|
-| 玩家的舰船位置坐标 | 游戏服务器实时计算 | ❌ |
-| 某玩家是否在某建筑附近 | 游戏物理引擎 | ❌ |
-| 今天的 PvP 击杀结果 | 游戏战斗服务器 | ❌ |
-| 链上对象的状态 | Sui 状态树 | ✅ |
-
-**解决方案**：游戏服务器在链下将这些"事实"签名成一个消息，玩家把这个签名提交给合约，合约验证签名的真实性。
+> **目标：** 超越技术层面，理解如何将你的 EVE Frontier 合约和 dApp 打造成有用户、有收入、有社区的真实产品，以及如何在这个新兴生态中找到自己的定位。
 
 ---
 
-## 2. Ed25519 签名格式
+> 状态：产品章节。正文以商业模式、增长和运营机制为主。
 
-Sui 使用标准的 Ed25519 + 个人消息签名格式。
+##  25.1 Builder 的四种商业模式
 
-### 签名的组成
+在 EVE Frontier 生态中，Builder 有四种主要的价值捕获方式：
 
 ```
-signature (97 bytes total):
-┌─────────┬───────────────────┬──────────────────┐
-│  flag   │    raw_sig        │   public_key     │
-│ 1 byte  │    64 bytes       │   32 bytes       │
-│ (0x00)  │  (Ed25519 sig)    │  (Ed25519 PK)    │
-└─────────┴───────────────────┴──────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│               Builder 商业模式图谱                       │
+├─────────────────┬───────────────────────────────────────┤
+│ 模式            │ 代表案例               │ 收入来源      │
+├─────────────────┼───────────────────────┼──────────────┤
+│ 基础设施        │ 星门收费、存储市场      │ 使用费（自动）│
+│ Infrastructure  │ 通用拍卖平台           │              │
+├─────────────────┼───────────────────────┼──────────────┤
+│ 代币经济        │ 联盟 Token + DAO       │ 代币升值、税  │
+│ Token Economy   │ 点数系统               │              │
+├─────────────────┼───────────────────────┼──────────────┤
+│ 平台/SaaS       │ 多租户市场框架         │ 平台抽成      │
+│ Platform        │ 竞赛系统框架           │ 月费/注册费   │
+├─────────────────┼───────────────────────┼──────────────┤
+│ 数据服务        │ 排行榜、分析面板       │ 广告/订阅     │
+│ Data & Tools    │ 价格聚合器             │ 增值服务      │
+└─────────────────┴───────────────────────┴──────────────┘
 ```
 
-### 常量定义（来自源码）
+这张图最重要的不是帮你“选一个赛道名词”，而是看清：
 
-```move
-const ED25519_FLAG: u8 = 0x00;   // Ed25519 scheme 标识符
-const ED25519_SIG_LEN: u64 = 64; // 签名长度
-const ED25519_PK_LEN: u64 = 32;  // 公钥长度
-```
+> 你到底是在卖资产、卖流量、卖协议能力，还是卖信息优势。
+
+很多 Builder 项目做不起来，不是技术不行，而是一开始就没想清楚自己卖的是什么。
 
 ---
 
-## 3. 源码精读：`sig_verify.move`
+##  25.2 定价策略：链上自动收入
 
-### 3.1 从公钥派生 Sui 地址
+最简单的 Builder 收入：**交易自动抽佣**，零运营成本。
 
-```move
-pub fun derive_address_from_public_key(public_key: vector<u8>): address {
-    assert!(public_key.length() == ED25519_PK_LEN, EInvalidPublicKeyLen);
-
-    // Sui 地址 = Blake2b256(flag_byte || public_key)
-    let mut concatenated: vector<u8> = vector::singleton(ED25519_FLAG);
-    concatenated.append(public_key);
-
-    sui::address::from_bytes(hash::blake2b256(&concatenated))
-}
-```
-
-**公式**：`sui_address = Blake2b256(0x00 || ed25519_public_key)`
-
-这意味着如果你知道游戏服务器的 Ed25519 公钥，你就能预知它的 Sui 地址。
-
-### 3.2 PersonalMessage Intent 前缀
+### 双层费率结构
 
 ```move
-// x"030000" 是三个字节：
-// 0x03 = IntentScope::PersonalMessage
-// 0x00 = IntentVersion::V0
-// 0x00 = AppId::Sui
-let mut message_with_intent = x"030000";
-message_with_intent.append(message);
-let digest = hash::blake2b256(&message_with_intent);
-```
-
-> ⚠️ **重要细节**：消息是**直接附加**的（不经过 BCS 序列化），这与 Sui 钱包签名的默认行为不同。原因是游戏服务器的 Go/TypeScript 端使用 `SignPersonalMessage` 的方式直接操作字节。
-
-### 3.3 完整验证流程
-
-```move
-pub fun verify_signature(
-    message: vector<u8>,
-    signature: vector<u8>,
-    expected_address: address,
-): bool {
-    let len = signature.length();
-    assert!(len >= 1, EInvalidLen);
-
-    // 1. 从第一个字节提取 scheme flag
-    let flag = signature[0];
-
-    // 2. Move 2024 match 语法（类似 Rust）
-    let (sig_len, pk_len) = match (flag) {
-        ED25519_FLAG => (ED25519_SIG_LEN, ED25519_PK_LEN),
-        _ => abort EUnsupportedScheme,
-    };
-
-    assert!(len == 1 + sig_len + pk_len, EInvalidLen);
-
-    // 3. 切分签名字节
-    let raw_sig = extract_bytes(&signature, 1, 1 + sig_len);
-    let raw_public_key = extract_bytes(&signature, 1 + sig_len, len);
-
-    // 4. 构造带 intent 前缀的消息摘要
-    let mut message_with_intent = x"030000";
-    message_with_intent.append(message);
-    let digest = hash::blake2b256(&message_with_intent);
-
-    // 5. 验证公钥对应的 Sui 地址
-    let sig_address = derive_address_from_public_key(raw_public_key);
-    if (sig_address != expected_address) {
-        return false
-    };
-
-    // 6. 验证 Ed25519 签名
-    match (flag) {
-        ED25519_FLAG => {
-            ed25519::ed25519_verify(&raw_sig, &raw_public_key, &digest)
-        },
-        _ => abort EUnsupportedScheme,
-    }
-}
-```
-
-### 3.4 字节提取辅助函数
-
-```move
-// Move 2024 的 vector::tabulate! 宏：简洁地创建切片
-fun extract_bytes(source: &vector<u8>, start: u64, end: u64): vector<u8> {
-    vector::tabulate!(end - start, |i| source[start + i])
-}
-```
-
----
-
-## 4. 端到端流程
-
-```
-游戏服务器（Go/Node.js）
-    │
-    ├─ 构造消息：message = bcs_encode(LocationProofMessage)
-    ├─ 添加 intent 前缀：msg_with_intent = 0x030000 + message
-    ├─ 计算摘要：digest = blake2b256(msg_with_intent)
-    └─ 签名：signature = ed25519_sign(server_private_key, digest)
-                          ↓
-玩家调用合约（Sui PTB）
-    │
-    └─ verify_signature(message, flag+sig+pk, server_address)
-                          ↓
-Move 合约
-    ├─ 重建摘要（相同算法）
-    ├─ 从 signature 中提取 public_key
-    ├─ 验证 address(public_key) == server_address（防伪造）
-    └─ ed25519_verify(sig, pk, digest) → true/false
-```
-
-这个端到端流程里最容易被忽略的是“**签名绑定的到底是什么**”。如果服务器签的是“玩家 A 今日可领取奖励”这种宽泛语义，而不是“玩家 A 在 deadline 前可为 item_id=123 执行 action=2 一次”，那么验签虽然正确，权限边界仍然过宽。很多重放漏洞、串用漏洞都不是出在加密算法上，而是出在消息语义过松。
-
----
-
-## 5. 如何在 Builder 合约中使用？
-
-### 5.1 基础用法：验证服务器颁发的许可
-
-```move
-module my_extension::server_permit;
-
-use world::sig_verify;
-use world::access::ServerAddressRegistry;
-use std::bcs;
-
-public struct PermitMessage has copy, drop {
-    player: address,
-    action_type: u8,     // 1=通行证, 2=物品奖励
-    item_id: u64,
-    deadline_ms: u64,
-}
-
-public fun redeem_server_permit(
-    server_registry: &ServerAddressRegistry,
-    message_bytes: vector<u8>,
-    signature: vector<u8>,
+// 结算时：平台费 + Builder 费双层结构
+public fun settle_sale(
+    market: &mut Market,
+    sale_price: u64,
+    mut payment: Coin<SUI>,
     ctx: &mut TxContext,
-) {
-    // 1. 反序列化消息（假设服务器用 BCS 序列化）
-    let msg = bcs::from_bytes<PermitMessage>(message_bytes);
+): Coin<SUI> {
+    // 1. 平台协议费（EVE Frontier 官方，如果有的话）
+    let protocol_fee = sale_price * market.protocol_fee_bps / 10_000;
 
-    // 2. 验证 deadline
-    // （实际需传入 Clock，此处简化）
+    // 2. 你的 Builder 费
+    let builder_fee = sale_price * market.builder_fee_bps / 10_000;    // 例：200 = 2%
 
-    // 3. 验证签名来自授权服务器
-    // 从 registry 中取出服务器地址
-    let server_addr = get_server_address(server_registry);
-    assert!(
-        sig_verify::verify_signature(message_bytes, signature, server_addr),
-        EInvalidSignature,
-    );
+    // 3. 剩余给卖家
+    let seller_amount = sale_price - protocol_fee - builder_fee;
 
-    // 4. 执行业务逻辑
-    assert!(msg.player == ctx.sender(), EPlayerMismatch);
-    // ...发放物品、积分等
+    // 分配
+    transfer::public_transfer(payment.split(builder_fee, ctx), market.fee_recipient);
+    // ... 协议费到官方地址，剩余给卖家
+
+    payment // 返回 seller_amount
 }
 ```
 
-实际写 Builder 合约时，最少要补齐 5 个绑定项：`player`、`action_type`、`target object id`、`deadline`、`nonce/request_id`。少任何一个，都可能出现“签名本身没问题，但被拿去做了原本不想允许的事”。一个简单原则是：**凡是你不希望用户替换、复用、拖延执行的字段，都应该进被签名字节**。
+### 费率范围建议
 
-### 5.2 实战：Location Proof 验证（预览 Ch.26 内容）
+| 类型 | 建议区间 | 说明 |
+|------|---------|------|
+| 星门通行费 | 5-50 SUI/次 | 固定费，体现稀缺性 |
+| 市场佣金 | 1-3% | 对标传统市场 |
+| 拍卖平台费 | 2-5% | 提供的撮合服务 |
+| 多租户平台月费 | 10-100 SUI | 其他 Builder 使用你的框架 |
 
-`location.move` 中的 `verify_proximity` 就是 `sig_verify` 的典型应用：
+### 自动抽佣为什么看起来最美，但也最容易高估
 
-```move
-// world/sources/primitives/location.move
-pub fun verify_proximity(
-    location: &Location,
-    proof: LocationProof,
-    server_registry: &ServerAddressRegistry,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    let LocationProof { message, signature } = proof;
+它的优势很明显：
 
-    // Step 1: 验证消息字段（位置哈希、发送者地址等）
-    validate_proof_message(&message, location, server_registry, ctx.sender());
+- 收入自动化
+- 不用人工追账
+- 和实际使用量直接挂钩
 
-    // Step 2: 对消息做 BCS 编码
-    let message_bytes = bcs::to_bytes(&message);
+但它也有前提：
 
-    // Step 3: 验证 deadline 未过期
-    assert!(is_deadline_valid(message.deadline_ms, clock), EDeadlineExpired);
+- 用户真的愿意持续使用你的设施
+- 你的收费不会被更便宜的替代品瞬间打掉
+- 你的服务有明确差异，而不是纯同质化通道
 
-    // Step 4: 调用 sig_verify 验证签名！
-    assert!(
-        sig_verify::verify_signature(
-            message_bytes,
-            signature,
-            message.server_address,
-        ),
-        ESignatureVerificationFailed,
-    )
-}
-```
+所以链上自动收入不是“写好合约就会来钱”，它只是把商业模式执行得更干净。
 
 ---
 
-## 6. 从 TypeScript 到链上：完整示例
+##  25.3 用户获取：游戏内触达
 
-### 服务器端签名（TypeScript/Node.js）
+玩家发现你的 dApp 的主要路径：
+
+```
+触达路径优先级：
+
+1. 游戏内显示（最高转化率）
+   └── 玩家靠近你的星门/炮塔 → 游戏内浮层自动弹出 → 直接交互
+
+2. EVE Frontier 官方 Builder 目录（预期功能）
+   └── 官方列出认证 Builder 的服务 → 玩家主动查找
+
+3. 玩家社区（Discord / Reddit）
+   └── 口碑传播 → 联盟推荐 → 用户增长
+
+4. 联盟内部推广
+   └── 与大联盟合作 → 嵌入他们的工具链 → 批量用户
+```
+
+### 增长飞轮设计
+
+```
+玩家使用服务
+    ↓
+获得奖励（代币/NFT/特权）
+    ↓
+价值可见、可交易
+    ↓
+向其他玩家炫耀/出售
+    ↓
+更多玩家了解并加入
+    ↓
+（回到顶部）
+```
+
+### 用户获取里最容易被忽视的一点
+
+不是“怎么让更多人第一次点开”，而是“用户点开后为什么会留下来”。
+
+尤其在 EVE 场景里，很多功能天然带强场景性：
+
+- 当下需要就会用
+- 不需要时就会立刻离开
+
+所以真正要设计的是：
+
+- 第一次使用是否足够顺滑
+- 第二次是否还会回来
+- 是否会形成联盟级或群体级依赖
+
+---
+
+##  25.4 社区建设：Builder 的护城河
+
+在 EVE Frontier，**社区是你最不可复制的资产**。技术可以被抄，但关系不能。
+
+### 建立社区的层次
+
+```
+1. Discord 服务器
+   ├── #announcements（版本更新、新功能）
+   ├── #support（用户问题解答）
+   ├── #feedback（收集意见）
+   └── #governance（重要决策投票）
+
+2. 定期沟通
+   ├── 每月 AMA（Ask Me Anything）
+   ├── 收支透明报告（展示 Treasury 余额和分红计划）
+   └── Roadmap 公开更新
+
+3. 社区激励
+   ├── 早期用户 NFT 徽章（见 Example 8）
+   ├── 反馈奖励（提 Bug 得 Token）
+   └── 推荐奖励（带新用户注册联盟）
+```
+
+社区真正的价值不在于人数，而在于关系强度和反馈质量。
+
+一个小但活跃的 Builder 社区，往往比一个大而沉默的频道更有用，因为它能提供：
+
+- 真实需求反馈
+- 问题复现样本
+- 第一批传播者
+- 早期共建者
+
+---
+
+##  25.5 透明度：链上可信的运营
+
+链上数据天然透明，把它变成竞争优势：
 
 ```typescript
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { blake2b } from '@noble/hashes/blake2b';
+// 生成每月公开财务报告
+async function generateMonthlyReport(treasuryId: string) {
+  const treasury = await client.getObject({
+    id: treasuryId,
+    options: { showContent: true },
+  });
+  const fields = (treasury.data?.content as any)?.fields;
 
-const serverKeypair = Ed25519Keypair.fromSecretKey(SERVER_PRIVATE_KEY);
+  const events = await client.queryEvents({
+    query: { MoveEventType: `${PKG}::treasury::FeeCollected` },
+    // 筛选本月时间范围...
+  });
 
-// 构造消息（与 Move 中 BCS 格式一致）
-const message = {
-    server_address: serverKeypair.getPublicKey().toSuiAddress(),
-    player_address: playerAddress,
-    // ...其他字段
-};
+  const totalCollected = events.data.reduce(
+    (sum, e) => sum + Number((e.parsedJson as any).amount), 0
+  );
 
-// 序列化（BCS）
-const messageBytes = bcs.serialize(PermitMessage, message);
-
-// 添加 PersonalMessage intent 前缀
-const intentPrefix = new Uint8Array([0x03, 0x00, 0x00]);
-const msgWithIntent = new Uint8Array([...intentPrefix, ...messageBytes]);
-
-// 计算 Blake2b-256 摘要
-const digest = blake2b(msgWithIntent, { dkLen: 32 });
-
-// 用服务器私钥签名
-const rawSig = serverKeypair.signData(digest); // 64 bytes
-
-// 构建完整签名：flag (1) + sig (64) + pubkey (32) = 97 bytes
-const pubKey = serverKeypair.getPublicKey().toRawBytes(); // 32 bytes
-const fullSignature = new Uint8Array([0x00, ...rawSig, ...pubKey]);
+  return {
+    date: new Date().toISOString().slice(0, 7),  // "2026-03"
+    totalRevenueSUI: totalCollected / 1e9,
+    currentBalanceSUI: Number(fields.balance) / 1e9,
+    totalUserTransactions: events.data.length,
+    topServices: calculateTopServices(events.data),
+  };
+}
 ```
 
-### 玩家提交到链上（TypeScript/PTB）
+透明度这件事，不只是“把数据公开”这么简单，而是让用户能看懂：
 
-```typescript
-const tx = new Transaction();
-tx.moveCall({
-    target: `${PACKAGE_ID}::my_extension::redeem_server_permit`,
-    arguments: [
-        tx.object(SERVER_REGISTRY_ID),
-        tx.pure(bcs.vector(bcs.u8()).serialize(Array.from(messageBytes))),
-        tx.pure(bcs.vector(bcs.u8()).serialize(Array.from(fullSignature))),
-    ],
-});
-await client.signAndExecuteTransaction({ signer: playerKeypair, transaction: tx });
-```
+- 钱从哪里来
+- 钱到哪里去
+- 哪些规则是固定的
+- 哪些调整是后来变的
+
+只要这些能被用户理解，你的协议信任成本就会明显下降。
 
 ---
 
-## 7. Match 语法：Move 2024 的新特性
+##  25.6 合规与风险管理
 
-`sig_verify.move` 大量使用了 Move 2024 的 `match` 表达式：
+虽然 EVE Frontier 是去中心化的，Builder 仍需注意：
 
-```move
-// Move 2024 match（类似 Rust）
-let (sig_len, pk_len) = match (flag) {
-    ED25519_FLAG => (ED25519_SIG_LEN, ED25519_PK_LEN),
-    _ => abort EUnsupportedScheme,
-};
-```
+### 技术风险
 
-对比旧写法：
-```move
-// Move 旧写法
-let sig_len: u64;
-let pk_len: u64;
-if (flag == ED25519_FLAG) {
-    sig_len = ED25519_SIG_LEN;
-    pk_len = ED25519_PK_LEN;
-} else {
-    abort EUnsupportedScheme
-};
-```
-
----
-
-## 8. 安全性注意事项
-
-| 风险 | 防护机制 |
+| 风险 | 缓解措施 |
 |------|---------|
-| 伪造签名 | Ed25519 密码学保障 |
-| 重放攻击（同一个证明被反复提交） | `deadline_ms` 过期时间 + 一次性验证标记 |
-| 错误服务器签名 | `derive_address_from_public_key` 验证地址匹配 |
-| 未注册服务器 | `ServerAddressRegistry` 白名单过滤 |
+| 合约漏洞导致资产损失 | 上线前审计；TimeLock 升级；设置单笔上限 |
+| Package 升级破坏用户 | 版本化 API；公告期；迁移补贴 |
+| Sui 网络故障 | 做好用户预期管理；设时效保护 |
+| 依赖的 World Contracts 升级 | 关注官方 changelog；测试网验证 |
+
+### 社区风险
+
+| 风险 | 缓解措施 |
+|------|---------|
+| 用户流失 | 持续交付价值；倾听反馈 |
+| 竞争者复制 | 加速迭代；建立用户关系护城河 |
+| 负面舆论 | 快速公开响应；透明沟通 |
+
+### 风险管理里最重要的其实是“预案”
+
+不是等出了事再想怎么说，而是提前知道：
+
+- 漏洞时先停哪一层
+- 前端要不要先隐藏某个入口
+- 是否需要暂停赞助服务
+- 哪些状态和资产要先保护
 
 ---
 
-## 9. 实战练习
+##  25.7 长期可持续性：渐进式去中心化
 
-1. **签名验证工具**：用 TypeScript 实现一个"签名生成器"，用测试密钥为玩家生成通行许可证签名
-2. **单次使用凭证**：设计一个合约，接收服务器签发的"单次使用 item"，验证后在链上标记为"已使用"防止重放
-3. **多服务器支持**：阅读 `ServerAddressRegistry` 的设计，思考如何支持多个游戏服务器节点签名同一个凭证
+最健康的 Builder 项目应走向渐进去中心化：
+
+```
+阶段 1（启动期）：Builder 中心化控制
+  • 快速迭代，灵活调整
+  • 建立初始用户群和现金流
+
+阶段 2（成长期）：引入社区治理
+  • 重要参数（费率、新功能）DAO 投票
+  • 代币持有者获得提案权
+
+阶段 3（成熟期）：完全社区自治
+  • 所有关键决策链上治理
+  • Builder 退为贡献者角色
+  • 协议收入完全分配给代币持有者
+```
+
+这里最需要克制的一点是：不是每个项目都必须走到“完全社区自治”。
+
+更现实的问题应该是：
+
+- 这个项目是否真的需要治理代币
+- 社区是否已经成熟到能承担治理责任
+- 哪些权力适合下放，哪些仍应保留在执行层
 
 ---
 
-## 本章小结
+##  25.8 EVE Frontier 生态合作机会
 
-| 概念 | 要点 |
+不要单打独斗，寻找协同效应：
+
+```
+横向合作（同类Builder）：
+  ├── 共用技术标准（接口协议）
+  ├── 联合市场推广
+  └── 互相引流（你的用户 → 我的服务）
+
+纵向合作（不同层级Builder）：
+  ├── 基础设施 Builder 提供 API
+  ├── 应用 Builder 在其上构建
+  └── 用户体验 Builder 做门户聚合
+
+与 CCP 合作：
+  ├── 申请官方 Featured Builder 认证
+  ├── 参与官方测试和反馈项目
+  └── 在官方活动中展示你的工具
+```
+
+合作的真正价值通常有三类：
+
+- **分发**
+  让更多人更快知道你
+- **互补**
+  让你不必自己从零做完整栈
+- **合法性**
+  让用户更敢用你的服务
+
+---
+
+##  25.9 成功 Builder 的核心特质
+
+从技术到产品，你需要的不仅仅是 Move 代码：
+
+```
+技术能力（你已有）                战略能力（同样重要）
+─────────────────────────         ─────────────────────────────
+✅ Move 合约开发                   ✅ 用户需求洞察
+✅ dApp 全栈开发                   ✅ 产品快速迭代
+✅ 安全与测试                      ✅ 社区建设与沟通
+✅ 性能优化                        ✅ 商业模型设计
+✅ 升级与维护                      ✅ 竞争分析与差异化
+```
+
+真正长期能留下来的 Builder，通常不是“最会写代码的人”，而是能把技术、产品、社区和节奏一起拿住的人。
+
+---
+
+##  25.10 你的 Builder 旅程路线图
+
+```
+月份 0-1（学习期）：
+  ├── 完成本课程所有章节和案例
+  ├── 在 testnet 部署 Example 1-2
+  └── 加入 Builder Discord，认识社区
+
+月份 1-3（实验期）：
+  ├── 发布 testnet 版本的第一个产品
+  ├── 邀请测试用户，收集反馈
+  └── 迭代 2-3 轮
+
+月份 3-6（验证期）：
+  ├── 主网发布（小规模，谨慎测试）
+  ├── 实现第一笔链上收入
+  └── 建立初始社区（Discord 100+ 成员）
+
+月份 6-12（成长期）：
+  ├── 月活用户 1000+
+  ├── 引入代币经济（如适合）
+  └── 建立第一个跨 Builder 合作
+
+年份 2+（生态期）：
+  ├── 成为生态中的"基础设施"
+  ├── 渐进社区治理
+  └── 可持续自运营
+```
+
+这条路线图最应该被当成“阶段判断框架”，而不是 KPI 清单。
+
+因为不同产品的节奏会差很多，但有一条判断始终成立：
+
+> 先证明有人真在用，再放大；先证明模式成立，再复杂化。
+
+---
+
+## 🔖 本章小结
+
+| 维度 | 核心要点 |
+|------|--------|
+| 商业模式 | 四类模型：基础设施/代币/平台/数据 |
+| 定价策略 | 链上自动抽佣，运营成本为零 |
+| 用户获取 | 游戏内触达优先，社区口碑次之 |
+| 社区建设 | Discord + 透明报告 + 激励机制 |
+| 风险管理 | 技术审计 + 升级时间锁 + 快速响应 |
+| 长期可持续 | 渐进去中心化，最终社区自治 |
+
+---
+
+## 🎓 课程完成！你现在是 EVE Frontier Builder
+
+恭喜完成这套课程的全部 **23 章 + 10 个实战案例**。
+
+你已经掌握了：
+- ✅ Move 智能合约从入门到高级
+- ✅ 四类智能组件的完整开发与部署
+- ✅ 全栈 dApp 开发与生产级架构
+- ✅ 链上经济、NFT、DAO 治理设计
+- ✅ 安全审计、性能优化、升级策略
+- ✅ 商业化路径与生态运营
+
+**在这个宇宙里，代码就是物理定律。去构建你的宇宙吧。** 🚀
+
+---
+
+## 📚 书签这些资源
+
+| 资源 | 用途 |
 |------|------|
-| Ed25519 签名格式 | `flag(1) + sig(64) + pubkey(32)` = 97 字节 |
-| PersonalMessage intent | `0x030000` 前缀 + 消息，Blake2b256 摘要 |
-| 地址验证 | `Blake2b256(0x00 || pubkey)` = Sui 地址 |
-| Match 语法 | Move 2024 新特性，替代 if/else 分支 |
-| `tabulate!` 宏 | 简洁的字节切片操作 |
-
-> 下一章：**位置证明协议** —— LocationProof 的 BCS 序列化、临近性验证，以及如何在建筑合约中要求玩家"必须在场"。
+| [EVE Frontier 官网](https://evefrontier.com) | 最新官方公告 |
+| [builder-documentation](https://github.com/evefrontier/builder-documentation) | 官方技术文档 |
+| [world-contracts](https://github.com/evefrontier/world-contracts) | World 合约源码 |
+| [builder-scaffold](https://github.com/evefrontier/builder-scaffold) | 项目脚手架 |
+| [Sui 文档](https://docs.sui.io) | Sui 区块链文档 |
+| [Move Book](https://move-book.com) | Move 语言参考 |
+| [EVE Frontier Discord](https://discord.com/invite/evefrontier) | Builder 社区 |
+| [Sui GraphQL IDE](https://graphql.testnet.sui.io) | 链上数据查询 |

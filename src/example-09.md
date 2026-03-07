@@ -339,6 +339,6 @@ export function AggregatedMarket() {
 
 ## 📚 关联文档
 
-- [Chapter 13：跨合约组合性](./chapter-13.md)
-- [Chapter 12：链下索引](./chapter-12.md)
-- [Chapter 18：全栈 dApp 架构](./chapter-18.md)
+- [Chapter 15：跨合约组合性](./chapter-15.md)
+- [Chapter 9：链下索引](./chapter-09.md)
+- [Chapter 19：全栈 dApp 架构](./chapter-19.md)

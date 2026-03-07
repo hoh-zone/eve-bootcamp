@@ -443,6 +443,6 @@ dApp 层
 
 ## 📚 关联文档
 
-- [Chapter 11：赞助交易与服务端集成](./chapter-11.md)
-- [Chapter 12：链下索引](./chapter-12.md)
-- [Chapter 14：NFT 设计](./chapter-14.md)
+- [Chapter 8：赞助交易与服务端集成](./chapter-08.md)
+- [Chapter 9：链下索引](./chapter-09.md)
+- [Chapter 13：NFT 设计](./chapter-13.md)

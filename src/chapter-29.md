@@ -1,316 +1,349 @@
-# 第29章：炮塔 AI 扩展开发
+# 第29章：能量与燃料系统机制
 
-> **学习目标**：深入理解 `world::turret` 模块的目标优先级系统，掌握通过 Extension 模式自定义炮塔 AI 行为的完整实现方法。
+> **学习目标**：深入理解 EVE Frontier 建筑运行的双层能源机制——Energy（电力容量）与 Fuel（燃料消耗），掌握 `world::energy` 和 `world::fuel` 模块的源码设计，并学会编写与这两个系统交互的 Builder 扩展。
 
 ---
 
-> 状态：教学示例。正文关注优先级模型和扩展切入点，具体字段仍应以官方 `turret` 模块源码为准。
+> 状态：教学示例。正文中的能量/燃料模型用于帮助你读懂官方实现，字段和入口请以实际模块为准。
 
 ## 最小调用链
 
-`飞船进入范围/触发 aggression -> turret 模块收集候选目标 -> 扩展规则排序 -> 执行攻击决策`
+`Network Node 分配能量 -> 建筑检查 energy/fuel 条件 -> 业务模块消耗燃料 -> 建筑状态更新`
 
 ## 对应代码目录
 
 - [world-contracts/contracts/world](https://github.com/evefrontier/world-contracts/tree/main/contracts/world)
-- [world-contracts/contracts/extension_examples](https://github.com/evefrontier/world-contracts/tree/main/contracts/extension_examples)
 
 ## 关键 Struct
 
 | 类型 | 作用 | 阅读重点 |
 |------|------|------|
-| `TargetCandidate` | 炮塔决策输入候选集 | 看哪些字段参与过滤、哪些字段参与排序 |
-| `ReturnTargetPriorityList` | 扩展返回的优先级结果 | 看扩展到底返回“排序建议”还是“直接开火命令” |
-| `BehaviourChangeReason` | 触发本次重算的原因 | 看 AI 刷新来自进入范围、攻击行为还是状态变化 |
-| `OnlineReceipt` | 炮塔在线状态相关凭证 | 看扩展逻辑是否依赖在线前置条件 |
+| `EnergyConfig` | 不同装配类型的能量配置 | 看类型到能量需求的映射如何维护 |
+| `EnergySource` | 网络节点的供能状态 | 看最大产能、当前产能、已预留能量三者关系 |
+| `Fuel` 相关结构 | 建筑燃料存量与消耗状态 | 看燃料存量和时间费率如何绑定 |
+| `FuelEfficiency` | 燃料类型与效率差异 | 看不同燃料如何影响续航和成本 |
 
 ## 关键入口函数
 
 | 入口 | 作用 | 你要确认什么 |
 |------|------|------|
-| 炮塔候选集计算路径 | 收集可攻击目标 | 过滤条件是否先于排序 |
-| 扩展优先级入口 | 自定义 AI 排序规则 | 返回值是否符合 World 侧预期 |
-| 授权与上线入口 | 挂接扩展到炮塔 | 扩展是否真的被启用且状态同步 |
+| `available_energy` | 计算剩余可用能量 | 当前产能和已预留量是否同步更新 |
+| 燃料消耗入口 | 业务执行时扣减 fuel | 扣 fuel 是否与业务动作绑在同一事务 |
+| 建筑上线/离线路径 | 结合 energy + fuel 判断状态 | 是否同时满足两套条件 |
 
 ## 最容易误读的点
 
-- 炮塔 AI 的扩展点通常是“排序”，不是绕过内核直接接管开火
-- 只改优先级不改过滤条件，炮塔仍可能攻击不该攻击的目标
-- 候选目标字段来自游戏事件和内核状态，不应凭前端或链下缓存臆造
+- `Energy` 更像容量/配额，不是“可以慢慢花掉的钱包余额”
+- 只补 fuel 不补 energy，建筑仍然可能离线
+- 状态判断必须和资源扣减放在同一事务，否则前端很容易读到过期状态
 
-这一章要先分清两件事：**谁有资格成为候选目标**，以及**候选目标之间谁排第一**。前者是过滤问题，决定目标是否进入候选集；后者是排序问题，决定先打谁。大多数 Builder AI 扩展真正能安全影响的是后者，而不是完全推翻前者。这样设计的目的是把“世界规则”与“局部策略”拆开，避免一个扩展包直接把炮塔变成任何它想要的武器。
+这章最重要的理解，不是记住几个字段名，而是区分**容量约束**和**消耗约束**。Energy 回答的是“这台建筑有没有资格挂在这张电网上运行”；Fuel 回答的是“它此刻还能维持多久”。前者更像并发配额，后者更像时间账本。把这两件事混成一个余额模型，Builder 在设计在线状态、预警逻辑和补给系统时很容易出错。
 
-## 1. 炮塔（Turret）是什么？
+## 1. 为什么需要双层能源系统？
 
-Smart Turret 是 EVE Frontier 中一种可编程空间建筑，可以对进入其范围的飞船自动开火。
+EVE Frontier 的建筑（SmartAssembly）需要同时管理两种不同性质的"资源"：
 
-**两个关键行为触发点**：
+| 概念 | 对应模块 | 性质 | 类比 |
+|------|---------|------|------|
+| **Energy（能量）** | `world::energy` | 功率/容量，持续可用 | 电网容量（KW） |
+| **Fuel（燃料）** | `world::fuel` | 消耗品，有存量 | 发电机的燃油（升） |
 
-| 触发器 | 说明 |
-|--------|------|
-| `InProximity` | 飞船进入炮塔范围 |
-| `Aggression` | 飞船开始/停止攻击己方建筑 |
+- 建筑联网（NetworkNode）会分配一定的 **能量容量** 给各个接入的建筑
+- 建筑本身需要持续燃烧 **燃料** 来维持运行
 
-默认行为：攻击所有进入范围的飞船。
-
-**Builder 扩展的能力**：自定义目标优先级排序——决定炮塔优先攻击哪些目标。
-
----
-
-## 2. TargetCandidate 数据结构
-
-当游戏引擎需要决定炮塔该打谁时，它构造一批 `TargetCandidate` 并传入扩展函数：
-
-```move
-// world/sources/assemblies/turret.move
-
-pub struct TargetCandidate has copy, drop, store {
-    item_id: u64,           // 目标的 in-game ID（飞船/NPC）
-    type_id: u64,           // 目标类型
-    group_id: u64,          // 目标所属组（0=NPC）
-    character_id: u32,      // 飞行员的角色 ID（NPC 为 0）
-    character_tribe: u32,   // 飞行员部族（NPC 为 0）
-    hp_ratio: u64,          // 剩余生命值百分比（0-100）
-    shield_ratio: u64,      // 剩余护盾百分比（0-100）
-    armor_ratio: u64,       // 剩余装甲百分比（0-100）
-    is_aggressor: bool,     // 是否正在攻击建筑
-    priority_weight: u64,   // 优先级权重（越大越优先）
-    behaviour_change: BehaviourChangeReason,  // 触发这次更新的原因
-}
-```
-
-### 触发原因枚举
-
-```move
-pub enum BehaviourChangeReason has copy, drop, store {
-    UNSPECIFIED,
-    ENTERED,         // 飞船进入炮塔范围
-    STARTED_ATTACK,  // 飞船开始攻击
-    STOPPED_ATTACK,  // 飞船停止攻击
-}
-```
-
-**重要设计**：每次调用，每个目标候选人只有**一个**最相关的原因（游戏引擎选最重要的那个）。
-
-这说明 `BehaviourChangeReason` 更像一次决策重算的上下文提示，而不是完整战斗历史。它告诉扩展“为什么这次要重算优先级”，却不保证把过去所有事件都带进来。因此 Builder 在写 AI 时，不要假设单次调用里能看到完整仇恨链或完整战斗日志；如果真的需要长期记忆，应该额外设计自己的配置或统计对象。
+从 Builder 视角看，这意味着很多“离线”其实有两种完全不同的根因：一种是没电网容量了，另一种是没燃料了。它们在玩家体验上都表现为“建筑不能用了”，但在产品动作上不一样。容量不足常常需要做网络拓扑、建筑接入顺序或升级决策；燃料不足更像补给、收费、代运营的问题。把这两个诊断面拆开，后面的告警和收费系统才会清晰。
 
 ---
 
-## 3. 返回格式：ReturnTargetPriorityList
+## 2. Energy 模块
 
-扩展函数最终must返回一个优先级列表：
-
-```move
-pub struct ReturnTargetPriorityList has copy, drop, store {
-    target_item_id: u64,     // 目标的 in-game ID
-    priority_weight: u64,    // 自定义优先级分数（越大越优先）
-}
-```
-
-炮塔攻击的是列表中 `priority_weight` 最高的目标（相同权重时打第一个）。
-
-换句话说，扩展返回的是**建议顺序**，不是“立即执行某个攻击动作”的命令式接口。这个差别很关键。命令式接口意味着扩展可以越权控制底层武器行为，而优先级接口只让扩展在内核已经允许的候选集上表达偏好，整体安全边界会稳很多。
-
----
-
-## 4. 默认优先级规则（内置逻辑）
-
-当 Builder 未配置扩展时，炮塔使用以下默认规则：
+###  2.1 核心数据结构
 
 ```move
-// 默认权重增量常量
-const STARTED_ATTACK_WEIGHT_INCREMENT: u64 = 10000;  // 主动攻击者 +10000
-const ENTERED_WEIGHT_INCREMENT: u64 = 1000;           // 进入范围者 +1000
+// world/sources/primitives/energy.move
 
-// world::turret::get_target_priority_list（默认版本）
-pub fun get_target_priority_list(
-    turret: &Turret,
-    candidates: vector<TargetCandidate>,
-): vector<ReturnTargetPriorityList> {
-    effective_weight_and_excluded(candidates)
-}
-
-fun effective_weight_and_excluded(
-    candidates: vector<TargetCandidate>,
-): vector<ReturnTargetPriorityList> {
-    let mut result = vector::empty();
-    candidates.do!(|candidate| {
-        let weight = match (candidate.behaviour_change) {
-            BehaviourChangeReason::STARTED_ATTACK => {
-                candidate.priority_weight + STARTED_ATTACK_WEIGHT_INCREMENT
-            },
-            BehaviourChangeReason::ENTERED => {
-                candidate.priority_weight + ENTERED_WEIGHT_INCREMENT
-            },
-            _ => candidate.priority_weight,
-        };
-
-        // 使用 0 表示"排除该目标不攻击"，其他值表示优先级
-        if (weight > 0) {
-            result.push_back(ReturnTargetPriorityList {
-                target_item_id: candidate.item_id,
-                priority_weight: weight,
-            });
-        }
-    });
-    result
-}
-```
-
-**默认策略**：主动攻击者 > 进入范围者 > 其他。
-
----
-
-## 5. Extension 机制：TypeName 指向扩展包
-
-```move
-pub struct Turret has key {
+pub struct EnergyConfig has key {
     id: UID,
-    // ...
-    extension: Option<TypeName>,  // 保存了 Builder 扩展包的类型名称
+    // type_id → 该装配类型所需能量数值
+    assembly_energy: Table<u64, u64>,
+}
+
+pub struct EnergySource has store {
+    max_energy_production: u64,      // 最大发电量（NetworkNode 的能量上限）
+    current_energy_production: u64,  // 当前激活的发电量
+    total_reserved_energy: u64,      // 已被各建筑预留的总能量
 }
 ```
 
-当游戏引擎需要决定目标优先级时：
-
-1. 读取 `turret.extension`
-2. 如果是 `None`：调用 `world::turret::get_target_priority_list`（默认逻辑）
-3. 如果是 `Some(TypeName)`：解析包 ID → 调用该包的 `get_target_priority_list` 函数
-
----
-
-## 6. 开发自定义炮塔 AI
-
-### 场景：只攻击联盟成年后的玩家飞船（保护新手）
+###  2.2 能量计算公式
 
 ```move
-module my_turret::ai;
-
-use world::turret::{Turret, TargetCandidate, ReturnTargetPriorityList};
-use sui::dynamic_field as df;
-
-/// 配置：新手保护阈值（低于此 group_id 的不攻击）
-public struct AiConfig has key {
-    id: UID,
-    protected_tribe_ids: vector<u32>,  // 受保护的部族（如新手部族）
-    prefer_aggressors: bool,           // 是否优先攻击主动攻击者
-}
-
-/// 这是游戏引擎会调用的标准入口函数名（固定签名）
-public fun get_target_priority_list(
-    turret: &Turret,
-    candidates: vector<TargetCandidate>,
-    ai_config: &AiConfig,             // Builder 的配置对象
-): vector<ReturnTargetPriorityList> {
-
-    let mut result = vector::empty<ReturnTargetPriorityList>();
-
-    candidates.do!(|candidate| {
-        // 规则1：受保护部族 → 跳过（权重 0 = 排除）
-        if (vector::contains(&ai_config.protected_tribe_ids, &candidate.character_tribe)) {
-            return  // 不加入结果列表 = 不攻击
-        };
-
-        // 规则2：计算优先级权重
-        let mut weight: u64 = 1000;  // 基础权重
-
-        // 主动攻击者优先
-        if (candidate.is_aggressor && ai_config.prefer_aggressors) {
-            weight = weight + 50000;
-        };
-
-        // 血量越低优先级越高（补刀策略）
-        let hp_score = (100 - candidate.hp_ratio) * 100;
-        weight = weight + hp_score;
-
-        // 护盾破碎时附加权重
-        if (candidate.shield_ratio == 0) {
-            weight = weight + 5000;
-        };
-
-        result.push_back(ReturnTargetPriorityList {
-            target_item_id: candidate.item_id,
-            priority_weight: weight,
-        });
-    });
-
-    result
+/// 可用能量 = 当前产能 - 已预留能量
+pub fun available_energy(energy_source: &EnergySource): u64 {
+    if (energy_source.current_energy_production > energy_source.total_reserved_energy) {
+        energy_source.current_energy_production - energy_source.total_reserved_energy
+    } else {
+        0  // 不能为负
+    }
 }
 ```
 
-### 策略对比：多种 AI 模式
+###  2.3 能量预留与释放
 
-```
-默认 AI：
-  主动攻击者 (+10000) > 进入范围 (+1000)
-
-补刀 AI（血最低优先）：
-  is_aggressor bonus + (100-hp_ratio)*100 + shield_broken bonus
-
-精英护卫 AI（保护己方）：
-  同族飞船权重=0 + 敌族根据 hp_ratio 排序
-
-反 PvE AI（优先 NPC）：
-  character_id==0 (NPC) → 超高权重 + 玩家 → 低权重
-```
-
----
-
-## 7. 授权扩展到炮塔
-
-Builder 需要先将扩展的 TypeName 注册到炮塔：
+当一个建筑（如 Gate 或 Turret）加入 NetworkNode 时：
 
 ```move
-// 调用 world 合约提供的函数，将自定义 AI 类型注册到炮塔
-// （需要 OwnerCap<Turret>）
-turret::authorize_extension<my_turret::ai::AiType>(
-    turret,
-    owner_cap,
-    ctx,
-);
-```
-
-之后游戏引擎就会在需要决策时调用该扩展包的 `get_target_priority_list`。
-
-生产环境里更容易出问题的地方通常不是 AI 数学公式本身，而是“扩展到底有没有真的挂上去”。也就是说，Builder 排查顺序应该先查授权是否成功、炮塔是否在线、配置对象是否可读、TypeName 是否匹配，再去查权重算法。否则很容易把一个授权链问题误判成 AI 逻辑问题。
-
----
-
-## 8. 高级：动态配置 AI 参数
-
-```move
-/// 让炮塔 AI 可以动态更新配置（不需要重新部署合约）
-pub fun update_protection_list(
-    ai_config: &mut AiConfig,
-    admin: address,
-    new_protected_tribes: vector<u32>,
+// 内部包函数（Builder 不直接调用）
+pub(package) fun reserve(
+    energy_source: &mut EnergySource,
+    energy_source_id: ID,
+    assembly_type_id: u64,           // 要接入的建筑类型
+    energy_config: &EnergyConfig,    // 读取该类型所需能量数
     ctx: &TxContext,
 ) {
-    assert!(ctx.sender() == admin, 0);
-    ai_config.protected_tribe_ids = new_protected_tribes;
+    let energy_required = energy_config.assembly_energy(assembly_type_id);
+    assert!(energy_source.available_energy() >= energy_required, EInsufficientAvailableEnergy);
+
+    energy_source.total_reserved_energy = energy_source.total_reserved_energy + energy_required;
+    event::emit(EnergyReservedEvent { ... });
 }
 ```
 
----
-
-## 9. 状态处理：OnlineReceipt
+###  2.4 EnergyConfig 的配置（仅管理员）
 
 ```move
-/// 炮塔在线的证明
-pub struct OnlineReceipt {
-    turret_id: ID,
+pub fun set_energy_config(
+    energy_config: &mut EnergyConfig,
+    admin_acl: &AdminACL,
+    assembly_type_id: u64,
+    energy_required: u64,            // 该类型建筑运行需要多少能量
+) {
+    admin_acl.verify_sponsor(ctx);
+    if (energy_config.assembly_energy.contains(assembly_type_id)) {
+        *energy_config.assembly_energy.borrow_mut(assembly_type_id) = energy_required;
+    } else {
+        energy_config.assembly_energy.add(assembly_type_id, energy_required);
+    };
 }
 ```
 
-炮塔在执行某些操作前需要先确认炮塔在线。`OnlineReceipt` 是一次性凭证，用于在函数链中传递"已确认在线"的证明，避免重复检查。
+---
+
+## 3. Fuel 模块（重点：时间费率计算）
+
+###  3.1 核心数据结构
+
+```move
+// world/sources/primitives/fuel.move
+
+pub struct FuelConfig has key {
+    id: UID,
+    // fuel_type_id → 效率倍数（BPS，10000 = 100%）
+    fuel_efficiency: Table<u64, u64>,
+}
+
+public struct Fuel has store {
+    type_id: Option<u64>,           // 当前填充的燃料类型
+    quantity: u64,                  // 剩余燃料数量
+    max_capacity: u64,              // 燃料槽最大容量
+    burn_rate_in_ms: u64,           // 基础燃烧速率（ms/单位）
+    is_burning: bool,               // 是否正在燃烧
+    burn_start_time: u64,           // 最近一次开始燃烧的时间戳
+    previous_cycle_elapsed_time: u64, // 上一次周期的剩余时间（防止精度丢失）
+    last_updated: u64,              // 最后更新时间
+}
+```
+
+###  3.2 燃烧周期计算（精读）
+
+这是 Fuel 模块最复杂的部分：
+
+```move
+fun calculate_units_to_consume(
+    fuel: &Fuel,
+    fuel_config: &FuelConfig,
+    current_time_ms: u64,
+): (u64, u64) {           // 返回：(消耗单位数, 剩余毫秒数)
+
+    if (!fuel.is_burning || fuel.burn_start_time == 0) {
+        return (0, 0)
+    };
+
+    // 1. 从 FuelConfig 读取该燃料类型的效率
+    let fuel_type_id = *option::borrow(&fuel.type_id);
+    let fuel_efficiency = fuel_config.fuel_efficiency.borrow(fuel_type_id);
+
+    // 2. 实际消耗速率 = 基础速率 × 效率系数
+    let actual_consumption_rate_ms =
+        (fuel.burn_rate_in_ms * fuel_efficiency) / PERCENTAGE_DIVISOR;
+    //  例如：burn_rate=3600000ms(1hr/单位), efficiency=5000(50%)
+    //  实际每单位 = 3600000 * 5000 / 10000 = 1800000ms（30分钟）
+
+    // 3. 计算经过的总时间（含上一周期剩余时间）
+    let elapsed_ms = if (current_time_ms > fuel.burn_start_time) {
+        current_time_ms - fuel.burn_start_time
+    } else { 0 };
+
+    // 保留上一周期的"零头"时间，避免精度丢失
+    let total_elapsed_ms = elapsed_ms + fuel.previous_cycle_elapsed_time;
+
+    // 4. 整除得到消耗单位数
+    let units_to_consume = total_elapsed_ms / actual_consumption_rate_ms;
+    // 5. 取余得到下一周期的起始时间
+    let remaining_elapsed_ms = total_elapsed_ms % actual_consumption_rate_ms;
+
+    (units_to_consume, remaining_elapsed_ms)
+}
+```
+
+**为什么需要 `previous_cycle_elapsed_time`？**
+
+```
+
+这段设计体现的是“链上定时计费”常见的一个难点：你没法像游戏服务器那样每秒 tick 一次，只能在离散交易里结算已经流逝的时间。所以 `previous_cycle_elapsed_time` 实际是在保存上次结算没能整除掉的那部分时间尾差。如果没有它，系统每次结算都会向下取整，长期下来会系统性少扣燃料，经济模型就会被慢慢掏空。
+时间轴示例（burn_rate = 1小时/单位）：
+│───────────────────────────────────────────────────│
+0              60min          90min         120min
+
+第一次 update(90min时)：
+  elapsed = 90min
+  units = 90min / 60min = 1 单位消耗
+  remaining = 90min % 60min = 30min  ← 保存到 previous_cycle_elapsed_time
+
+第二次 update(120min时)：
+  elapsed = 30min（从上次 burn_start_time 算）
+  total = 30min + 30min(previous) = 60min
+  units = 60min / 60min = 1 单位消耗
+  remaining = 0
+```
+
+###  3.3 update 函数：批量结算
+
+```move
+/// 游戏服务器定期调用此函数，结算燃料消耗
+pub(package) fun update(
+    fuel: &mut Fuel,
+    assembly_id: ID,
+    assembly_key: TenantItemId,
+    fuel_config: &FuelConfig,
+    clock: &Clock,
+) {
+    // 未燃烧 → 直接返回
+    if (!fuel.is_burning || fuel.burn_start_time == 0) { return };
+
+    let current_time_ms = clock.timestamp_ms();
+    if (fuel.last_updated == current_time_ms) { return }; // 同一区块内幂等
+
+    let (units_to_consume, remaining_elapsed_ms) =
+        calculate_units_to_consume(fuel, fuel_config, current_time_ms);
+
+    if (fuel.quantity >= units_to_consume) {
+        // 有足够燃料：正常消耗
+        consume_fuel_units(fuel, ..., units_to_consume, remaining_elapsed_ms, current_time_ms);
+        fuel.last_updated = current_time_ms;
+    } else {
+        // 燃料耗尽：自动停止燃烧
+        stop_burning(fuel, assembly_id, assembly_key, fuel_config, clock);
+    }
+}
+```
+
+###  3.4 一个已知 Bug（源码注释）
+
+```move
+pub(package) fun start_burning(fuel: &mut Fuel, ...) {
+    // ...
+    if (fuel.quantity != 0) {
+        // todo : fix bug: consider previous cycle elapsed time
+        fuel.quantity = fuel.quantity - 1; // Consume 1 unit to start the clock
+    };
+```
+
+启动燃烧时直接扣 1 单位，但没有考虑 `previous_cycle_elapsed_time` 可能导致这个单位被重复计算。这是源码中明确注释的已知 Bug。学习要点：即使是生产合约也会有 Bug，读源码时要批判性思考。
 
 ---
 
-## 10. 实战练习
+## 4. Builder 如何感知燃料状态？
 
-1. **基础 AI**：实现一个"专注新手保护"AI——对 `hp_ratio > 80` 的飞船（几乎满血，明显是老鸟）优先攻击，对 `hp_ratio < 30` 的（可能是新手）权重设为 0
-2. **联盟守护 AI**：读取一个联盟成员列表，对非成员的飞船分配高优先级，对成员飞船权重为 0
-3. **排行榜 AI**：记录被炮塔击落的各飞船类型数量，每周自动调整策略（击落越多的类型优先级越低——因为该类型玩家已经学会回避了）
+Builder 扩展通常**不直接操作** Fuel 对象（它是 `pub(package)` 内部字段），但可以通过建筑的状态间接判断：
+
+```move
+use world::assemblies::gate::{Self, Gate};
+use world::status;
+
+/// 检查 Gate 是否在线（间接反映燃料状态）
+pub fun is_gate_operational(gate: &Gate): bool {
+    gate.status().is_online()
+}
+```
+
+当燃料耗尽时，游戏服务器会调用 `stop_burning`，然后建筑的 `Status` 会变为 `Offline`，Builder 合约通过 `Status` 感知：
+
+```move
+// 只有在线建筑才能处理跳跃请求
+assert!(source_gate.status.is_online(), ENotOnline);
+```
+
+这也是一个很重要的边界：World 内核把燃料细节藏在包内，不是为了限制 Builder，而是为了避免扩展直接篡改底层计费状态。Builder 更适合围绕“是否在线”“剩余补给是否足够”“是否需要提醒/收费/捐赠”来做产品层逻辑，而不是自己发明另一套 fuel 账本。
+
+---
+
+## 5. Energy vs Fuel 的状态流转
+
+```
+Fuel 状态机：
+   EMPTY
+     │ deposit_fuel()
+     ▼
+   LOADED
+     │ start_burning()
+     ▼
+   BURNING ──── update() ────► 燃料充足继续 BURNING
+     │                          │
+     │                          ▼ 燃料耗尽
+     │                        OFFLINE（建筑下线）
+     │ stop_burning()
+     ▼
+   STOPPED（保留 previous_cycle_elapsed_time）
+
+Energy 状态机（更简单）：
+   OFF
+     │ start_energy_production()
+     ▼
+   ON（持续提供 max_energy_production 的容量）
+     │ stop_energy_production()
+     ▼
+   OFF
+```
+
+---
+
+## 6. FuelEfficiency 设计：支持多种燃料类型
+
+```move
+pub struct FuelConfig has key {
+    id: UID,
+    fuel_efficiency: Table<u64, u64>,  // fuel_type_id → efficiency_bps
+}
+```
+
+不同类型的燃料（不同 `type_id`）有不同的效率：
+
+| fuel_type_id | 燃料名称 | efficiency_bps | 说明 |
+|---|---|---|---|
+| 1001 | 标准燃料 | 10000 (100%) | 基准效率 |
+| 1002 | 高效燃料 | 15000 (150%) | 燃烧更久 |
+| 1003 | 普通燃料棒 | 8000 (80%) | 便宜但低效 |
+
+效率越高，同等燃料量能维持建筑运行越长时间。Builder 可以在扩展中要求玩家使用特定类型燃料。
+
+---
+
+## 7. 实战练习
+
+1. **燃料计算器**：给定 `burn_rate_in_ms = 3600000`，`fuel_efficiency = 7500`，剩余 `quantity = 10`，计算还能运行多少小时
+2. **燃料预警合约**：写一个 Builder 扩展，当 Gate 的燃料剩余量不足 5 单位时，自动向物主发送一个链上事件提醒
+3. **燃料捐献系统**：设计一个共享 `FuelDonationPool`，允许任意玩家向建筑捐赠燃料
 
 ---
 
@@ -318,10 +351,10 @@ pub struct OnlineReceipt {
 
 | 概念 | 要点 |
 |------|------|
-| `TargetCandidate` | 目标候选人的完整战斗信息 |
-| `BehaviourChangeReason` | ENTERED / STARTED_ATTACK / STOPPED_ATTACK |
-| `ReturnTargetPriorityList` | 返回格式：`item_id + priority_weight`（0=排除） |
-| `extension: Option<TypeName>` | 炮塔保存扩展包的类型名称，引擎动态调用 |
-| 默认权重 | STARTED_ATTACK +10000, ENTERED +1000 |
+| `EnergySource` | 功率容量系统，预留/释放模式 |
+| `Fuel` | 消耗品系统，基于时间的燃烧周期 |
+| `previous_cycle_elapsed_time` | 防止时间取整导致的精度损失 |
+| `fuel_efficiency` | 不同燃料类型的效率倍数（BPS） |
+| 已知 Bug | `start_burning` 的 1 单位扣除未考虑前序剩余时间 |
 
-> 下一章：**访问控制系统完整解析** —— 深入理解 `world::access` 的 OwnerCap / GovernorCap / AdminACL / Receiving 模式，掌握 EVE Frontier 权限架构的核心设计。
+> 下一章：**Extension 模式实战** —— 用官方 `extension_examples` 的两个真实示例，掌握 Builder 扩展的标准开发流程。

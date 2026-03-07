@@ -339,5 +339,5 @@ export function ForgingStation() {
 
 ## 📚 关联文档
 - [Sui 链上随机数](https://docs.sui.io/guides/developer/advanced/randomness-onchain)
-- [Chapter 14：NFT 设计](./chapter-14.md)
-- [Chapter 20：未来展望](./chapter-20.md)
+- [Chapter 13：NFT 设计](./chapter-13.md)
+- [Chapter 35：未来展望](./chapter-35.md)

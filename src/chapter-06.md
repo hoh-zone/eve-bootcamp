@@ -1,425 +1,431 @@
-# Chapter 6：所有权模型深度解析
+# 第6章：Builder Scaffold 完整使用指南（一）——项目结构与合约开发
 
-> **目标：** 深入理解 EVE Frontier 的能力对象体系，掌握 OwnerCap 的完整生命周期，学会设计安全的委托授权和所有权转移方案。
-
----
-
-> 状态：设计进阶章节。正文以 OwnerCap、委托与所有权生命周期为主。
-
-## 6.1 为什么要有专门的所有权模型？
-
-很多新手在第一次设计权限系统时，直觉都是：
-
-- 记录一个 owner 地址
-- 每次操作时检查调用者是不是这个地址
-
-这种方式短期很省事，但一旦进入 EVE Frontier 这类“设施可经营、可转移、可委托、可组合”的世界，很快就会暴露问题：
-
-- **不可委托**
-  你很难安全地把部分权力临时交给别人
-- **不可组合**
-  权限规则散在各个函数里，系统越做越乱
-- **不可细粒度表达**
-  很难表达“可以操作这个炮塔，但不能操作那个星门”
-- **不可自然转移**
-  一旦设施、角色、经营权发生迁移，地址硬编码会变得很脆
-
-EVE Frontier 使用的是 Sui 原生的 **Capability 对象体系**。它的核心思想不是“看你是谁”，而是：
-
-> 看你手里拿着哪一个权限对象。
-
-这会让所有权从“账户属性”变成“可组合、可转移、可验证的链上实体”。
+> **学习目标**：掌握 `builder-scaffold` 的完整目录结构，理解 Docker 和本机两种开发流程，并能独立完成 smart_gate 合约的本地开发与发布。
 
 ---
 
-## 6.2 权限层级结构
+> 状态：已映射到本地脚手架目录。正文命令以本仓库现有 `builder-scaffold` 目录为准。
+
+## 最小调用链
+
+`启动本地链 -> 编译 smart_gate -> 发布 -> 记录 package/object id -> 配置规则 -> 发 permit`
+
+## 对应代码目录
+
+- [builder-scaffold](https://github.com/evefrontier/builder-scaffold)
+
+## 1. 什么是 Builder Scaffold？
+
+`builder-scaffold` 是 EVE Frontier 官方提供的**一站式 Builder 开发脚手架**，包含：
+
+- **Move 合约模板**：两个完整的 Smart Gate Extension 示例
+- **TypeScript 交互脚本**：发布后立即可用的链上交互脚本
+- **Docker 开发环境**：零配置、开箱即用的本地链
+- **dApp 模板**：React + EVE Frontier dapp-kit 的前端起点
 
 ```
-GovernorCap（部署者持有 — 最高权限）
-    │
-    └── AdminACL（共享对象 — 授权的服务器地址列表）
-            │
-            └── OwnerCap<T>（玩家持有 — 对特定对象的操作权）
+builder-scaffold/
+├── docker/             # Docker 开发环境（Sui CLI + Node.js 容器）
+├── move-contracts/     # Move 合约示例
+│   ├── smart_gate/     # 主要示例：Star Gate Extension
+│   ├── storage_unit/   # 存储单元 Extension 示例
+│   └── tokens/         # 代币合约示例
+├── ts-scripts/         # TypeScript 交互脚本
+│   ├── smart_gate/     # 针对 smart_gate 的 6 个操作脚本
+│   ├── utils/          # 公共工具：env配置、derive-object-id、proof
+│   └── helpers/        # 查询 OwnerCap 等辅助函数
+├── dapps/              # React dApp 模板（EVE Frontier dapp-kit）
+└── docs/               # 完整的部署流程文档
 ```
 
-### GovernorCap：游戏运营层
+这一章最重要的不是背目录，而是理解：
 
-`GovernorCap` 在合约部署时创建，由 CCP Games（游戏运营方）持有。它可以：
-- 向 `AdminACL` 添加/删除服务器授权地址
-- 执行全局配置更改
+> `builder-scaffold` 不是一个示例仓库而已，它其实是在替你把“本地链、合约、脚本、前端”这几条线预先接好。
 
-作为 Builder，你无需关心 `GovernorCap`。
+所以真正的价值是：
 
-### AdminACL：服务器授权层
-
-`AdminACL` 是一个**共享对象**，包含被授权的游戏服务器地址列表。
-
-某些操作（如临近证明、跃迁验证）需要游戏服务器作为**赞助者（Sponsor）**签署交易：
-
-```move
-// 验证调用者是否为授权赞助者
-public fun verify_sponsor(admin_acl: &AdminACL, ctx: &TxContext) {
-    assert!(
-        admin_acl.sponsors.contains(ctx.sponsor().unwrap()),
-        EUnauthorizedSponsor
-    );
-}
-```
-
-这意味着：某些敏感操作玩家不能单独完成，必须经过游戏服务器验证。
-
-### OwnerCap：玩家操作层
-
-```move
-public struct OwnerCap<phantom T> has key {
-    id: UID,
-    authorized_object_id: ID,  // 只对这一个具体对象有效
-}
-```
-
-`phantom T` 使得 `OwnerCap<Gate>` 和 `OwnerCap<StorageUnit>` 是完全不同的类型，无法混用——这是类型系统级别的安全保证。
-
-### 这三层权限为什么要分开？
-
-你可以把它理解成三种完全不同的职责：
-
-- **GovernorCap**
-  解决“世界级规则和全局治理”
-- **AdminACL**
-  解决“哪些服务器或后端流程被信任”
-- **OwnerCap**
-  解决“具体哪个经营主体可以操作哪个设施”
-
-把它们拆开最大的好处是：系统不会把“全局治理权”和“单设施操作权”混成一锅。
-
-否则你很容易出现这种糟糕结构：
-
-- 一个地址既是服务器授权者
-- 又是所有设施管理员
-- 又是某些临时业务的执行者
-
-一旦这个地址出问题，整个系统的权限边界都会塌掉。
+- 降低第一次打通闭环的成本
+- 给你一个能边改边跑的标准骨架
+- 让后面的自定义开发尽量从“改模板”开始，而不是从“自己搭平台”开始
 
 ---
 
-## 6.3 Character 作为钥匙串（Keychain）
+## 2. 选择开发流程
 
-玩家的所有 `OwnerCap` 都存储在 **Character 对象**中，而不是直接发给钱包地址。
+官方支持两种流程：
 
-```
-玩家钱包地址
-    └── Character（共享对象，映射到钱包地址）
-            ├── OwnerCap<NetworkNode>  → 网络节点 0x...a1
-            ├── OwnerCap<Gate>         → 星门 0x...b2
-            ├── OwnerCap<StorageUnit>  → 存储箱 0x...c3
-            └── OwnerCap<Gate>         → 星门 0x...d4（第二个星门）
-```
+| 流程 | 适用场景 | 前置要求 |
+|------|---------|---------|
+| **Docker 流程** | 不想在本机安装 Sui/Node 的用户 | 仅 Docker |
+| **本机（Host）流程** | 已有 Sui CLI + Node.js | Sui CLI + Node.js |
 
-**为什么这样设计？**
-- 所有资产的所有权集中于 Character，转让 Character 等于转让所有资产
-- 即使玩家更换钱包地址，Character 还在，资产不丢失
-- 与联盟机制配合，可以实现集体所有权管理
+### 这两种流程真正的取舍
 
-这里要特别注意一件事：
+- **Docker**
+  更稳，环境差异更少，适合先跑通
+- **Host**
+  更快，更贴近日常开发，但更依赖你本机环境已经干净
 
-> Character 不是简单的钱包映射层，而是一个真正的权限容器。
-
-它把“人、角色、设施、权限”这几个维度组织在了一起：
-
-- 钱包是签名入口
-- Character 是经营主体
-- OwnerCap 是具体设施权限
-- 设施对象是被控制的资产
-
-这样的好处是，当你以后做：
-
-- 账号迁移
-- 多签控制
-- 联盟托管
-- 角色转让
-
-你不需要重写一整套权限系统，而是围绕 `Character` 这层做变更。
+如果你的目标是“先理解完整闭环”，优先 Docker。  
+如果你的目标是“高频迭代自己写代码”，后面通常会逐步转向 Host。
 
 ---
 
-## 6.4 Borrow-Use-Return 完整模式
+## 3. Docker 开发环境（推荐新手）
 
-执行任何需要 OwnerCap 的操作，都必须遵循「借用 → 使用 → 归还」三步原子事务：
-
-```move
-// Character 模块提供的接口
-public fun borrow_owner_cap<T: key>(
-    character: &mut Character,
-    owner_cap_ticket: Receiving<OwnerCap<T>>,  // 使用 Receiving 模式
-    ctx: &TxContext,
-): (OwnerCap<T>, ReturnOwnerCapReceipt)        // 返回 Cap + 热土豆收据
-
-public fun return_owner_cap<T: key>(
-    character: &Character,
-    owner_cap: OwnerCap<T>,
-    receipt: ReturnOwnerCapReceipt,             // 必须消耗收据
-)
-```
-
-`ReturnOwnerCapReceipt` 是一个热土豆（无 Abilities），确保 OwnerCap **必须被归还**，不能在交易外流失。
-
-### 这个模式真正防的是什么？
-
-它不是单纯为了“写法优雅”，而是在防几类非常真实的风险：
-
-- 高权限对象在交易中途被截留
-- 脚本忘记归还权限，留下悬空状态
-- 扩展逻辑把权限对象带进了不该到达的路径
-- 多步骤操作中，权限边界变得不再可审计
-
-把 `borrow -> use -> return` 强制收束在同一笔事务里，相当于给高权限操作加了一条硬约束：
-
-> 你可以临时拿来做事，但不能把它带走。
-
-### 为什么要配合 Hot Potato Receipt？
-
-因为只靠“开发者自觉调用 return”是不够的。
-
-只要类型系统允许你漏掉归还步骤，迟早会有人：
-
-- 在脚本里忘掉
-- 在重构时删掉
-- 在错误分支里直接 `return`
-
-加入 receipt 之后，编译器和类型系统会一起逼你把流程走完。
-
-### 完整 TypeScript 调用示例
-
-```typescript
-import { Transaction } from "@mysten/sui/transactions";
-
-const WORLD_PKG = "0x...";
-
-async function bringGateOnline(
-  tx: Transaction,
-  characterId: string,
-  ownerCapId: string,
-  gateId: string,
-  networkNodeId: string,
-) {
-  // ① 借用 OwnerCap
-  const [ownerCap, receipt] = tx.moveCall({
-    target: `${WORLD_PKG}::character::borrow_owner_cap`,
-    typeArguments: [`${WORLD_PKG}::gate::Gate`],
-    arguments: [
-      tx.object(characterId),
-      tx.receivingRef({ objectId: ownerCapId, version: "...", digest: "..." }),
-    ],
-  });
-
-  // ② 使用 OwnerCap：将星门上线
-  tx.moveCall({
-    target: `${WORLD_PKG}::gate::online`,
-    arguments: [
-      tx.object(gateId),
-      tx.object(networkNodeId),
-      tx.object(ENERGY_CONFIG_ID),
-      ownerCap,
-    ],
-  });
-
-  // ③ 归还 OwnerCap（receipt 被消耗，热土豆使此步不可跳过）
-  tx.moveCall({
-    target: `${WORLD_PKG}::character::return_owner_cap`,
-    arguments: [tx.object(characterId), ownerCap, receipt],
-  });
-}
-```
-
----
-
-## 6.5 所有权转让场景
-
-### 场景一：转让单个组件的控制权
-
-如果你想把一个星门的控制权交给盟友（但保留你的 Character 和其他设施），可以只转让对应的 `OwnerCap`：
-
-```typescript
-// 从你的 Character 取出 OwnerCap，发给盟友
-const tx = new Transaction();
-
-// 取出 OwnerCap（注意这里不是借用，而是转移）
-// 具体 API 以世界合约为准，此处仅展示思路
-tx.moveCall({
-  target: `${WORLD_PKG}::character::transfer_owner_cap`,
-  typeArguments: [`${WORLD_PKG}::gate::Gate`],
-  arguments: [
-    tx.object(myCharacterId),
-    tx.object(ownerCapId),
-    tx.pure.address(allyAddress),  // 盟友的 Character 地址
-  ],
-});
-```
-
-### 场景二：转让完整角色（所有资产打包转让）
-
-转移整个 Character 对象，则对应钱包地址即可控制所有绑定资产。适合联盟整体资产交割、账号交易等场景。
-
-这里要区分三件听起来很像、但完全不同的动作：
-
-- **转让单个 OwnerCap**
-  只交出某一个设施的控制权
-- **转让 Character**
-  把一整串权限和资产一起交出去
-- **委托操作**
-  不转移所有权，只给对方有限操作能力
-
-如果这三件事不分开，你的产品设计会很快乱掉。
-
-比如联盟金库场景：
-
-- 财产权可能属于联盟主体
-- 日常操作权可能属于值班成员
-- 紧急停机权可能只属于核心管理员
-
-这就要求你不能只用“一个 owner”去表达全部关系。
-
-### 场景三：委托操作（不转让所有权）
-
-通过编写扩展合约，可以允许特定地址在**有限范围内**操作你的设施，而无需转让 OwnerCap：
-
-```move
-// 在你的扩展合约中，维护一个操作员白名单
-public struct OperatorRegistry has key {
-    id: UID,
-    operators: Table<address, bool>,
-}
-
-public fun delegated_action(
-    registry: &OperatorRegistry,
-    ctx: &TxContext,
-) {
-    // 验证调用者在操作员名单中
-    assert!(registry.operators.contains(ctx.sender()), ENotOperator);
-    // ... 执行操作
-}
-```
-
-### 委托最容易踩的坑
-
-很多人第一次做委托，会把白名单当成“弱化版所有权”。这是不够的。
-
-一个安全的委托设计，至少要回答：
-
-- 委托人能做哪些动作，不能做哪些动作？
-- 委托有没有时间限制？
-- 委托能不能撤销？
-- 委托是不是只对某一个设施有效？
-- 被委托人能不能再次转授？
-
-如果这些边界没有写清，委托就会从“灵活授权”变成“隐形送权”。
-
----
-
-## 6.6 OwnerCap 的安全边界
-
-### 每个 OwnerCap 只对一个对象有效
-
-```move
-public fun verify_owner_cap<T: key>(
-    obj: &T,
-    owner_cap: &OwnerCap<T>,
-) {
-    // authorized_object_id 确保这个 OwnerCap 只能用于对应的那个对象
-    assert!(
-        owner_cap.authorized_object_id == object::id(obj),
-        EOwnerCapMismatch
-    );
-}
-```
-
-这意味着如果你有两个星门，就有两个 `OwnerCap<Gate>`，它们不能互换使用。
-
-### 为什么 `authorized_object_id` 这么关键？
-
-因为 `phantom T` 只解决了“对象类别不能混用”，但还没解决“同类不同实例不能混用”。
-
-例如：
-
-- `OwnerCap<Gate>` 只能用于 Gate，没有问题
-- 但如果没有 `authorized_object_id`
-  你的一张 Gate 权限就可能错误地操作另一座 Gate
-
-所以完整安全边界其实是两层：
-
-1. **类型边界**
-   `Gate` 和 `StorageUnit` 不能混
-2. **实例边界**
-   这座 Gate 和那座 Gate 也不能混
-
-### 丢失 OwnerCap 意味着失去控制权
-
-如果 OwnerCap 所在的 Character 被转让，你就失去了对所有设施的控制。请**妥善保管你的 Character 对象的所有权私钥**。
-
-从运营角度看，更准确地说，你要保护的不是“某个按钮权限”，而是整条经营控制链：
-
-- 钱包签名权
-- Character 控制权
-- Character 内部的 OwnerCap 集合
-- 关键委托配置和多签设置
-
-一旦这条链断掉，恢复成本会非常高。
-
----
-
-## 6.7 高级：多签与联盟共有
-
-通过 Sui 的多签（Multisig）功能，可以让一个联盟共同控制关键设施：
+### 快速启动
 
 ```bash
-# 创建 2/3 多签地址（需要 3 个成员中的 2 个同意才能操作）
-sui keytool multi-sig-address \
-  --pks <pk1> <pk2> <pk3> \
-  --weights 1 1 1 \
-  --threshold 2
+# 克隆仓库
+git clone https://github.com/evefrontier/builder-scaffold.git
+cd builder-scaffold
+
+# 启动开发容器（首次会下载镜像约 2-3 分钟）
+cd docker
+docker compose run --rm --service-ports sui-dev
 ```
 
-将 Character 的控制地址设置为多签地址，联盟关键资产就需要多人签名才能操作。
+首次启动时，容器会自动：
+1. 创建 3 个 ed25519 密钥对（`ADMIN`、`PLAYER_A`、`PLAYER_B`）
+2. 启动本地 Sui 节点
+3. 向账户发放测试 SUI
 
-### 多签适合什么，不适合什么？
+密钥持久保存在 Docker Volume，容器重启后不会丢失。
 
-多签非常适合：
+### 容器内工作目录结构
 
-- 联盟金库
-- 超高价值基础设施
-- 关键参数调整
-- 升级与紧急停机
+```
+/workspace/
+├── builder-scaffold/    # 完整仓库（与宿主机同步）
+└── world-contracts/     # 在宿主机克隆后在容器内可见
+```
 
-多签不一定适合：
+在宿主机编辑文件，在容器内运行命令——两者实时同步。
 
-- 高频日常操作
-- 玩家需要秒级响应的交互
-- 大量小额重复管理动作
+### 为什么 build 时用 `-e testnet`?
 
-所以现实做法通常不是“全部都上多签”，而是分层：
+```bash
+sui move build -e testnet   # ← 这里的 testnet 是"构建环境"，不是发布目标
+```
 
-- 核心控制权放多签
-- 日常运营权限通过受限委托释放给执行层
+本地链的 chain ID 每次重启都变化，无法固定在 `Move.toml` 里。`-e testnet` 让依赖解析用 testnet 规则，但实际发布仍然到本地链。
 
-这才更接近真实组织结构。
+这里最容易误解的是把“构建环境”和“发布目标”混成一件事。
+
+这一步用 `-e testnet`，并不是说你现在真的在往 testnet 发，而是告诉构建器：
+
+- 依赖地址按哪套规则解析
+- 包构建按哪套环境约定处理
+
+如果这个概念不分开，后面你在 localnet / testnet / mainnet 切换时会非常容易判断错误。
+
+### 容器常用命令速查
+
+| 任务 | 命令 |
+|------|------|
+| 查看所有密钥 | `cat /workspace/builder-scaffold/docker/.env.sui` |
+| 切换到测试网 | `sui client switch --env testnet` |
+| 导入已有密钥 | `sui keytool import <key> ed25519` |
+| 编译合约 | `cd .../smart_gate && sui move build -e testnet` |
+| 运行 TS 脚本 | `cd /workspace/builder-scaffold && pnpm configure-rules` |
+| 启动 GraphQL | `curl http://localhost:9125/graphql` |
+| 清除重置 | `docker compose down --volumes && docker compose run --rm --service-ports sui-dev` |
+
+### PostgreSQL + GraphQL 索引器
+
+Docker 环境内置了 Sui 索引器和 GraphQL 支持：
+
+```bash
+# 查询链 ID（验证 GraphQL 是否启动）
+curl -X POST http://localhost:9125/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ chainIdentifier }"}'
+```
+
+GraphQL 端点：`http://localhost:9125/graphql`（可用 [Altair](https://altairgraphql.dev/) 调试）
 
 ---
 
-## 🔖 本章小结
+## 4. Smart Gate 合约的文件结构
 
-| 概念 | 核心要点 |
-|------|--------|
-| 权限层级 | GovernorCap > AdminACL > OwnerCap<T> |
-| Character 钥匙串 | 所有 OwnerCap 集中存储，转让 Character = 转让所有资产 |
-| Borrow-Use-Return | 三步原子操作，ReturnReceipt（热土豆）确保必须归还 |
-| 类型安全 | `OwnerCap<Gate>` ≠ `OwnerCap<StorageUnit>`，无法混用 |
-| 委托操作 | 通过扩展合约 + 白名单实现，无需转让 OwnerCap |
-| 多签 | Sui 原生多签地址适合联盟共有资产场景 |
+```
+move-contracts/smart_gate/
+├── Move.toml                # 包配置（依赖 world-contracts）
+├── sources/
+│   ├── config.move          # 共享配置基础：ExtensionConfig + AdminCap + XAuth
+│   ├── tribe_permit.move    # 示例1：部族身份验证通行证
+│   └── corpse_gate_bounty.move # 示例2：提交尸体物品换通行证
+└── tests/
+    └── gate_tests.move      # 测试
+```
 
-## 📚 延伸阅读
+### Move.toml 分析
 
-- [Ownership Model 文档](https://github.com/evefrontier/builder-documentation/blob/main/smart-contracts/ownership-model.md)
-- [Smart Character 文档](https://github.com/evefrontier/builder-documentation/blob/main/smart-assemblies/smart-character.md)
-- [character.move 源码](https://github.com/evefrontier/world-contracts/blob/main/contracts/world/sources/character/character.move)
-- [Sui 多签文档](https://docs.sui.io/guides/developer/cryptography/multisig)
-- [Receiving 对象模式](https://docs.sui.io/guides/developer/objects/transfers/transfer-to-object)
+```toml
+[package]
+name = "smart_gate"
+edition = "2024"
+
+[dependencies]
+# Git 依赖（推荐锁定稳定 tag）
+world = { git = "https://github.com/evefrontier/world-contracts.git", subdir = "contracts/world", rev = "v0.0.14" }
+
+[addresses]
+smart_gate = "0x0"   # 发布时自动替换为实际地址
+```
+
+> **重要**：建议直接使用 git 依赖并锁定 `rev`（如 `v0.0.14`），不要追踪 `main`，否则 world-contracts 主分支的 Breaking Change 会直接影响编译结果。
+
+### 为什么脚手架示例最适合拿来学“扩展模式”
+
+因为它不是抽象 demo，而是把几个最关键的 Builder 要素都放进去了：
+
+- 动态字段配置
+- AdminCap 管理
+- Typed Witness 扩展
+- Gate 组件接入
+
+换句话说，`smart_gate` 不是在教你写某一个具体业务，而是在教你 EVE Builder 最核心的扩展骨架。
+
+---
+
+## 5. config.move：Extension 基础框架
+
+```move
+module smart_gate::config;
+
+use sui::dynamic_field as df;
+
+/// 发布后自动创建，是所有规则的共享存储
+public struct ExtensionConfig has key {
+    id: UID,
+}
+
+/// 管理员权限凭证（init 时转移给部署者）
+public struct AdminCap has key, store {
+    id: UID,
+}
+
+/// 授权见证类型（Typed Witness），传入 gate::issue_jump_permit<XAuth>
+public struct XAuth has drop {}
+
+fun init(ctx: &mut TxContext) {
+    // AdminCap 转移给部署者
+    transfer::transfer(AdminCap { id: object::new(ctx) }, ctx.sender());
+    // ExtensionConfig 共享化（所有人可读，只有 AdminCap 持有者可写）
+    transfer::share_object(ExtensionConfig { id: object::new(ctx) });
+}
+```
+
+### 动态字段规则系统
+
+`ExtensionConfig` 使用动态字段来存储各种规则，这样一个配置对象可以同时支持多种不同的扩展规则：
+
+```move
+// set_rule：插入或覆盖规则（value 需要 drop ability）
+public fun set_rule<K: copy + drop + store, V: store + drop>(
+    config: &mut ExtensionConfig,
+    _: &AdminCap,      // 只有 AdminCap 才能设置
+    key: K,
+    value: V,
+) {
+    if (df::exists_(&config.id, copy key)) {
+        let _old: V = df::remove(&mut config.id, copy key);
+    };
+    df::add(&mut config.id, key, value);
+}
+```
+
+---
+
+## 6. tribe_permit.move：部族通行证（精读）
+
+这是最简单的 Extension 实现，适合理解扩展模式的核心结构：
+
+```move
+module smart_gate::tribe_permit;
+
+// 规则配置（动态字段值）
+public struct TribeConfig has drop, store {
+    tribe: u32,              // 允许通过的部族 ID
+    expiry_duration_ms: u64, // 通行证有效期（毫秒）
+}
+
+// 规则标识（动态字段 Key）
+public struct TribeConfigKey has copy, drop, store {}
+```
+
+### 颁发通行证
+
+```move
+pub fun issue_jump_permit(
+    extension_config: &ExtensionConfig,
+    source_gate: &Gate,
+    destination_gate: &Gate,
+    character: &Character,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // 1. 读取规则配置
+    let tribe_cfg = extension_config.borrow_rule<TribeConfigKey, TribeConfig>(TribeConfigKey {});
+
+    // 2. 验证角色部族
+    assert!(character.tribe() == tribe_cfg.tribe, ENotStarterTribe);
+
+    // 3. 计算过期时间（防溢出检查）
+    let ts = clock.timestamp_ms();
+    assert!(ts <= (0xFFFFFFFFFFFFFFFFu64 - tribe_cfg.expiry_duration_ms), EExpiryOverflow);
+    let expires_at = ts + tribe_cfg.expiry_duration_ms;
+
+    // 4. 调用 world 合约颁发 JumpPermit NFT
+    gate::issue_jump_permit<XAuth>(
+        source_gate, destination_gate, character,
+        config::x_auth(),  // 包内唯一的 XAuth 实例
+        expires_at, ctx,
+    );
+}
+```
+
+> **设计细节**：与 world-contracts 的原版相比，这里增加了**防溢出检查**（`EExpiryOverflow`），是更健壮的生产实现。
+
+### 管理员设置规则
+
+```move
+pub fun set_tribe_config(
+    extension_config: &mut ExtensionConfig,
+    admin_cap: &AdminCap,
+    tribe: u32,
+    expiry_duration_ms: u64,
+) {
+    extension_config.set_rule<TribeConfigKey, TribeConfig>(
+        admin_cap,
+        TribeConfigKey {},
+        TribeConfig { tribe, expiry_duration_ms },
+    );
+}
+```
+
+---
+
+## 7. 编译与测试
+
+```bash
+# 进入 smart_gate 目录
+cd move-contracts/smart_gate
+
+# 编译（使用 testnet 作为构建环境）
+sui move build -e testnet
+
+# 运行测试
+sui move test -e testnet
+```
+
+### 编译失败常见问题
+
+| 错误信息 | 原因 | 解决方案 |
+|---------|------|---------|
+| `Unpublished dependencies: World` | world-contracts 未部署 | 先部署 world-contracts，或切换为 local 依赖 |
+| `Move.lock wrong env` | Move.lock 记录的环境不匹配 | `rm Move.lock && sui move build -e testnet` |
+| `edition = "legacy"` 警告 | 使用了旧版 Move | 在 `Move.toml` 中改为 `edition = "2024"` |
+
+---
+
+## 8. 发布合约到本地链
+
+```bash
+# 确保 world-contracts 已部署，获得其 publication file
+sui client test-publish \
+  --build-env testnet \
+  --pubfile-path ../../deployments/Pub.localnet.toml
+
+# 发布成功后记录输出的 Package ID
+# 填入 .env 文件的 BUILDER_PACKAGE_ID
+```
+
+> **`test-publish` vs `publish`**：`test-publish` 是 Sui 的特殊发布模式，允许在本地链上发布依赖未发布的包（用于测试）。实际发布到测试网/主网时使用 `sui client publish`。
+
+---
+
+## 9. 添加你自己的 Extension 规则
+
+以添加"付费通道规则"为例：
+
+### 第一步：在 `config.move` 旁创建新文件 `toll_gate.move`
+
+```move
+module smart_gate::toll_gate;
+
+use smart_gate::config::{Self, AdminCap, XAuth, ExtensionConfig};
+use sui::coin::{Self, Coin};
+use sui::sui::SUI;
+use sui::balance::{Self, Balance};
+
+// 规则数据
+public struct TollConfig has drop, store {
+    toll_amount: u64,
+    expiry_duration_ms: u64,
+}
+public struct TollConfigKey has copy, drop, store {}
+
+// 收费账本（共享对象）
+public struct TollVault has key {
+    id: UID,
+    balance: Balance<SUI>,
+}
+
+// 初始化时创建金库
+public fun create_vault(ctx: &mut TxContext) {
+    transfer::share_object(TollVault {
+        id: object::new(ctx),
+        balance: balance::zero(),
+    });
+}
+```
+
+### 第二步：实现颁发函数
+
+```move
+pub fun pay_and_jump(
+    extension_config: &ExtensionConfig,
+    vault: &mut TollVault,
+    source_gate: &Gate,
+    destination_gate: &Gate,
+    character: &Character,
+    mut payment: Coin<SUI>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let toll_cfg = extension_config.borrow_rule<TollConfigKey, TollConfig>(TollConfigKey {});
+    assert!(coin::value(&payment) >= toll_cfg.toll_amount, ETollInsufficient);
+
+    let toll = coin::split(&mut payment, toll_cfg.toll_amount, ctx);
+    balance::join(&mut vault.balance, coin::into_balance(toll));
+    if (coin::value(&payment) > 0) {
+        transfer::public_transfer(payment, ctx.sender());
+    } else {
+        coin::destroy_zero(payment);
+    };
+
+    let expires = clock.timestamp_ms() + toll_cfg.expiry_duration_ms;
+    gate::issue_jump_permit<XAuth>(
+        source_gate, destination_gate, character, config::x_auth(), expires, ctx,
+    );
+}
+
+const ETollInsufficient: u64 = 0;
+```
+
+---
+
+## 本章小结
+
+| 组件 | 用途 |
+|------|------|
+| `docker/compose.yml` | 本地 Sui 链 + GraphQL 索引器一键启动 |
+| `move-contracts/smart_gate/` | Gate Extension 主模板 |
+| `config.move` | ExtensionConfig + AdminCap + XAuth 基础框架 |
+| `tribe_permit.move` | 示例①：部族身份验证 |
+| `corpse_gate_bounty.move` | 示例②：物品消耗换通行证 |
+| `-e testnet` 构建标志 | 解决本地链 chain ID 不稳定的问题 |
+
+> 下一章：**TypeScript 脚本与 dApp 开发** —— 合约发布后，如何用 6 个现成脚本与链上合约交互，以及如何基于 dApp 模板构建 EVE Frontier 前端。

@@ -6,7 +6,7 @@
 
 > 状态：基础章节。正文只保留 Sui 与 EVE Frontier 直接相关的安装与配置。
 
-## 2.1 本章只安装什么？
+##  2.1 本章只安装什么？
 
 这一章只处理两类和本书直接相关的安装项：
 
@@ -17,7 +17,7 @@
 
 ---
 
-## 2.2 为什么先只装这两样？
+##  2.2 为什么先只装这两样？
 
 因为你在继续往下读之前，真正必须具备的最小能力只有两项：
 
@@ -32,7 +32,7 @@
 - 脚手架工程工具
 - 前端和脚本运行工具
 
-这些更适合在你进入 [Chapter 31](./chapter-31.md) 和 [Chapter 32](./chapter-32.md) 时，再结合工程目录一起装。
+这些更适合在你进入 [Chapter 6](./chapter-06.md) 和 [Chapter 7](./chapter-07.md) 时，再结合工程目录一起装。
 
 ### 这一章真正要建立的，不只是两个软件
 
@@ -53,7 +53,7 @@
 
 ---
 
-## 2.3 安装 Sui CLI
+##  2.3 安装 Sui CLI
 
 推荐直接使用官方的 `suiup` 安装方式。这样本章就不需要区分 Homebrew、apt、nvm 之类系统工具链。
 
@@ -72,7 +72,7 @@ sui --version
 
 ---
 
-## 2.4 初始化 Sui 客户端
+##  2.4 初始化 Sui 客户端
 
 安装 Sui CLI 后，需要初始化客户端并连接网络：
 
@@ -143,7 +143,7 @@ sui client faucet
 
 ---
 
-## 2.5 安装并初始化 EVE Vault
+##  2.5 安装并初始化 EVE Vault
 
 **EVE Vault** 是你的浏览器身份，用于连接 dApp 和授权交易。
 
@@ -173,7 +173,7 @@ sui client faucet
 
 ---
 
-## 2.6 EVE Vault 在本书里具体负责什么？
+##  2.6 EVE Vault 在本书里具体负责什么？
 
 安装完 EVE Vault 后，它在后续章节里会承担三类职责：
 
@@ -207,7 +207,7 @@ sui client faucet
 
 ---
 
-## 2.7 EVE Vault Faucet：获取测试资产
+##  2.7 EVE Vault Faucet：获取测试资产
 
 在开发和测试阶段，你至少会碰到两种测试资产：
 
@@ -244,7 +244,7 @@ sui client faucet
 
 ---
 
-## 2.8 最小验收清单
+##  2.8 最小验收清单
 
 到这里为止，你不需要马上跑脚手架，也不需要先装前端依赖。先确认下面四件事：
 
@@ -283,8 +283,8 @@ sui client faucet
 
 ### 什么时候再装其他工具？
 
-- 到 [Chapter 31](./chapter-31.md)：再装和使用 `builder-scaffold`
-- 到 [Chapter 32](./chapter-32.md)：再处理脚本与 dApp 依赖
+- 到 [Chapter 6](./chapter-06.md)：再装和使用 `builder-scaffold`
+- 到 [Chapter 7](./chapter-07.md)：再处理脚本与 dApp 依赖
 - 到具体案例章节：再按案例需要补充前端运行环境
 
 ## 🔖 本章小结

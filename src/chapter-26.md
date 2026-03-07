@@ -1,14 +1,14 @@
-# 第26章：位置证明协议深度剖析
+# 第26章：访问控制系统完整解析
 
-> **学习目标**：掌握 `world::location` 模块的核心设计——位置哈希、BCS 反序列化、LocationProof 验证，以及在 Builder 扩展中要求玩家"必须在场"的完整实现。
+> **学习目标**：深入理解 `world::access` 模块的完整权限架构——从 `GovernorCap`、`AdminACL`、`OwnerCap` 到 `Receiving` 模式，掌握 EVE Frontier 访问控制系统的精密设计。
 
 ---
 
-> 状态：教学示例。位置证明的消息组织和签名流程会因业务而变，本章重点是解释协议结构和验证边界。
+> 状态：教学示例。访问控制细节较多，建议直接对照源码与测试逐段阅读，而不是只看概念图。
 
 ## 最小调用链
 
-`游戏服务器观测位置 -> 生成 LocationProof -> 玩家提交 proof -> 合约反序列化并验证 -> 放行/拒绝业务动作`
+`调用入口 -> 权限对象/授权列表校验 -> 借出或消费 capability -> 执行业务动作 -> 归还或销毁能力对象`
 
 ## 对应代码目录
 
@@ -18,357 +18,369 @@
 
 | 类型 | 作用 | 阅读重点 |
 |------|------|------|
-| `Location` | 链上位置哈希容器 | 看链上只保存 hash，不保存明文坐标 |
-| `LocationProofMessage` | 服务器签名的位置证明消息体 | 看玩家、源对象、目标对象、距离、deadline 是否全部绑定 |
-| `LocationProof` | 链上提交的证明载体 | 看 bytes、签名和消息体如何组合 |
+| `AdminACL` | 服务器授权白名单 | 看 sponsor 白名单如何维护 |
+| `GovernorCap` | 系统级最高权限能力 | 看哪些动作必须走 governor 而不是 owner |
+| `OwnerCap<T>` | 泛型所有权凭证 | 看借出、归还、转移三种生命周期 |
+| `Receiving` 相关模式 | 安全借用 object-owned 资产 | 看 object-owned 和 address-owned 的差异 |
+| `ServerAddressRegistry` | 服务端地址注册表 | 看签名身份和业务权限如何串起来 |
 
 ## 关键入口函数
 
 | 入口 | 作用 | 你要确认什么 |
 |------|------|------|
-| `verify_proximity` | 校验“玩家是否在目标附近” | 是否同时校验签名、目标对象、距离阈值、时间窗 |
-| BCS 反序列化路径 | 从 bytes 还原 proof | 字段顺序和链下编码是否完全一致 |
-| 业务模块包装入口 | 把 proximity proof 接进 Gate / Turret / Storage | proof 是否绑定具体业务对象而不是通用复用 |
+| `verify_sponsor` | 校验提交者是否在服务器白名单 | 它解决的是身份来源，不是全部业务约束 |
+| `borrow_owner_cap` / `return_owner_cap` | 借出与归还所有权凭证 | 是否严格遵守 Borrow-Use-Return |
+| governor / registry 管理入口 | 维护系统级权限配置 | 是否把系统管理权限错误下放给普通 owner |
 
 ## 最容易误读的点
 
-- 位置证明不是只证明“我在场”，而是证明“我在某个对象附近、在某个时间窗内”
-- 只校验距离不校验目标对象，proof 就可能被串用到别的业务入口
-- BCS 一旦字段顺序不一致，问题通常不在密码学，而在编码
+- `ctx.sender()` 在 EVE Frontier 里通常不够用，很多场景必须看 capability 或 sponsor
+- `OwnerCap<T>` 不是一次性消耗品，很多时候是临时借用后再归还
+- object-owned 资产不能照搬 address-owned 的权限判断方式
 
-位置证明最好按协议层来理解，而不是按“一个签名对象”来理解。它至少有 4 层含义：谁在场、相对谁在场、在多长时间窗内有效、这份证明还绑定了哪些业务上下文。真正安全的 Builder 设计，不会只拿 `distance` 一个字段做判断，而是会把 `player_address`、`target_structure_id`、`target_location_hash`、`deadline_ms` 甚至 `data` 里的业务标识一起绑定成一份不可拆分的陈述。
+理解这一章最有效的办法，是把权限拆成 3 个来源：**地址身份**、**能力对象**、**服务器背书**。地址身份回答“这笔交易是谁发的”；能力对象回答“他对哪个具体对象拥有什么控制权”；服务器背书回答“这是不是被游戏世界认可的一次系统动作”。EVE Frontier 同时使用这三套来源，是因为单靠 `ctx.sender()` 无法表达复杂的物品托管、建筑控制和链下状态注入。
 
-## 1. 位置系统的核心问题
+## 1. 为什么访问控制系统复杂？
 
-EVE Frontier 的链上合约面临一个根本性挑战：**如何验证一个玩家（飞船）目前位于某个空间位置附近？**
-
-链上合约无法访问游戏世界的实时位置数据。EVE Frontier 的解决方案是**位置证明（LocationProof）**：
+传统智能合约的权限通常只有两层：owner（所有者）和 public（公开）。EVE Frontier 需要更精密的控制：
 
 ```
-游戏服务器观测到"玩家 A 在建筑 B 旁边（距离 < 1000m）"
-    ↓
-服务器将这一"观测事实"签名成一个 LocationProof
-    ↓
-玩家 A 把这个 proof 提交到链上合约
-    ↓
-合约验证签名、位置哈希、过期时间后执行业务逻辑
+游戏公司（CCP Level）      → GovernorCap：系统级别配置
+  ├── 游戏服务器             → AdminACL/verify_sponsor：链上操作授权
+  ├── 建筑所有者（Builder）  → OwnerCap<T>：建筑控制权
+  └── 玩家（Character）      → 通过 OwnerCap 访问自己的物品
 ```
+
+一个角色的物品在另一个玩家的建筑里——谁能操作这个物品？这就是 EVE Frontier 访问控制需要解决的核心问题。
+
+所以你会看到 EVE 的权限不是围绕“某地址是不是 owner”展开，而是围绕“某个对象现在被谁持有、谁能临时借出、谁能代表服务器写入世界状态”展开。对象世界一旦复杂起来，传统合约里常见的单一 owner 字段就不够细了。
 
 ---
 
-## 2. LocationProof 数据结构
+## 2. AdminACL：服务器授权白名单
 
 ```move
-// world/sources/primitives/location.move
+// world/sources/access/access_control.move
 
-/// 位置哈希（32字节，包含 x/y/z 坐标的混合哈希）
-public struct Location has store {
-    location_hash: vector<u8>,  // 32 bytes
+pub struct AdminACL has key {
+    id: UID,
+    authorized_sponsors: Table<address, bool>,  // 服务器地址白名单
 }
 
-/// 服务器签名的位置证明消息体
-public struct LocationProofMessage has copy, drop {
-    server_address: address,          // 签名者（服务器地址）
-    player_address: address,          // 被证明的玩家钱包地址
-    source_structure_id: ID,          // 玩家当前所在结构的 ID
-    source_location_hash: vector<u8>, // 玩家所在位置的哈希
-    target_structure_id: ID,          // 目标建筑的 ID
-    target_location_hash: vector<u8>, // 目标所在位置的哈希  
-    distance: u64,                    // 两者之间的距离（游戏单位）
-    data: vector<u8>,                 // 存储额外的业务数据
-    deadline_ms: u64,                 // 证明的过期时间（毫秒）
-}
-
-/// 完整的位置证明（消息体 + 签名）
-public struct LocationProof has drop {
-    message: LocationProofMessage,
-    signature: vector<u8>,
-}
-```
-
-这里最值得注意的字段其实是 `data`。它的存在不是为了“多塞点备注”，而是为了给不同业务留出扩展绑定位。比如宝箱系统可以把 chest 类型或开启轮次写进去，市场系统可以把 market_id 或订单上下文写进去。这样一份 proof 就不会只是“我在某地”，而是“我在某地，并且这份证明是给某个具体业务入口使用的”。如果放弃这层绑定，proof 很容易在多个入口间被串用。
-
----
-
-## 3. verify_proximity 函数完整解析
-
-```move
-pub fun verify_proximity(
-    location: &Location,           // 目标建筑的链上位置对象
-    proof: LocationProof,          // 玩家提交的证明
-    server_registry: &ServerAddressRegistry, // 授权服务器白名单
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    let LocationProof { message, signature } = proof;
-
-    // ① 验证消息字段的合法性
-    validate_proof_message(&message, location, server_registry, ctx.sender());
-
-    // ② 将消息结构体序列化为字节（BCS 格式）
-    let message_bytes = bcs::to_bytes(&message);
-
-    // ③ 验证 deadline 未过期
-    assert!(is_deadline_valid(message.deadline_ms, clock), EDeadlineExpired);
-
-    // ④ 调用 sig_verify 验证 Ed25519 签名
+/// 仅允许已注册服务器执行特权操作
+pub fun verify_sponsor(admin_acl: &AdminACL, ctx: &TxContext) {
     assert!(
-        sig_verify::verify_signature(
-            message_bytes,
-            signature,
-            message.server_address,
-        ),
-        ESignatureVerificationFailed,
-    )
-}
-```
-
-### validate_proof_message 内部验证
-
-```move
-fun validate_proof_message(
-    message: &LocationProofMessage,
-    expected_location: &Location,
-    server_registry: &ServerAddressRegistry,
-    sender: address,
-) {
-    // 1. 服务器地址在白名单中
-    assert!(
-        access::is_authorized_server_address(server_registry, message.server_address),
-        EUnauthorizedServer,
-    );
-
-    // 2. 消息中的玩家地址与调用者一致（防止别人用你的证明）
-    assert!(message.player_address == sender, EUnverifiedSender);
-
-    // 3. 目标位置哈希与链上 Location 对象匹配
-    assert!(
-        message.target_location_hash == expected_location.location_hash,
-        EInvalidLocationHash,
+        admin_acl.authorized_sponsors.contains(ctx.sender()),
+        EUnauthorizedSponsor,
     );
 }
 ```
 
-**三重验证**保障安全：
-1. ✅ 签名来自授权服务器
-2. ✅ 证明是为当前调用者颁发的（防抢跑）
-3. ✅ 目标位置与链上对象的位置一致（防篡改）
-
-这三重验证解决的是最基本的身份与目标绑定，但 Builder 自己往往还要补第四重验证：**业务绑定**。例如“开这个门”和“开那个宝箱”即使都在同一坐标附近，也不应该共享同一份 proof。最稳妥的做法是让 `data` 或目标对象字段能唯一指向本次业务入口，而不是只依赖空间接近这一件事。
-
----
-
-## 4. BCS 反序列化：从字节还原 LocationProof
-
-当玩家通过 SDK 提交 `proof_bytes`（原始字节）而非结构体时，合约需要手动反序列化：
+**用法**：World 合约中所有需要游戏服务器权限的操作都以 `admin_acl.verify_sponsor(ctx)` 开头：
 
 ```move
-pub fun verify_proximity_proof_from_bytes(
-    server_registry: &ServerAddressRegistry,
-    location: &Location,
-    proof_bytes: vector<u8>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    // 手动 BCS 反序列化
-    let (message, signature) = unpack_proof(proof_bytes);
-    // ...（之后与 verify_proximity 相同）
+// 创建角色（必须由服务器触发）
+pub fun create_character(..., admin_acl: &AdminACL, ...) {
+    admin_acl.verify_sponsor(ctx);
+    // ...
 }
-```
 
-### unpack_proof 的 BCS 手工反序列化
-
-```move
-fun unpack_proof(proof_bytes: vector<u8>): (LocationProofMessage, vector<u8>) {
-    let mut bcs_data = bcs::new(proof_bytes);
-
-    // 按 BCS 字段顺序逐字段 "peel"（剥取）
-    let server_address = bcs_data.peel_address();
-    let player_address = bcs_data.peel_address();
-
-    // ID 类型通过 address 还原
-    let source_structure_id = object::id_from_address(bcs_data.peel_address());
-
-    // vector<u8> 类型用 peel_vec! 宏
-    let source_location_hash = bcs_data.peel_vec!(|bcs| bcs.peel_u8());
-
-    let target_structure_id = object::id_from_address(bcs_data.peel_address());
-    let target_location_hash = bcs_data.peel_vec!(|bcs| bcs.peel_u8());
-    let distance = bcs_data.peel_u64();
-    let data = bcs_data.peel_vec!(|bcs| bcs.peel_u8());
-    let deadline_ms = bcs_data.peel_u64();
-    let signature = bcs_data.peel_vec!(|bcs| bcs.peel_u8());
-
-    let message = LocationProofMessage {
-        server_address, player_address, source_structure_id,
-        source_location_hash, target_structure_id, target_location_hash,
-        distance, data, deadline_ms,
-    };
-    (message, signature)
-}
-```
-
-> **`peel_vec!` 宏**：Move 2024 中处理 BCS 编码的 `vector<u8>` 的标准写法，等价于先读长度，再逐字节读取。
-
----
-
-## 5. 距离验证
-
-除了"是否在附近"，还支持"两个结构之间的距离是否满足要求"：
-
-```move
-pub fun verify_distance(
-    location: &Location,
-    server_registry: &ServerAddressRegistry,
-    proof_bytes: vector<u8>,
-    max_distance: u64,           // Builder 设定的最大距离阈值
-    ctx: &mut TxContext,
-) {
-    let (message, signature) = unpack_proof(proof_bytes);
-    validate_proof_message(&message, location, server_registry, ctx.sender());
-    let message_bytes = bcs::to_bytes(&message);
-
-    // 验证距离不超过 Builder 设定的阈值
-    assert!(message.distance <= max_distance, EOutOfRange);
-
-    assert!(
-        sig_verify::verify_signature(message_bytes, signature, message.server_address),
-        ESignatureVerificationFailed,
-    )
-}
-```
-
-### 同位置验证（无需签名）
-
-```move
-/// 验证两个临时库存在同一位置（用于 EVE 太空 P2P 交易）
-pub fun verify_same_location(location_a_hash: vector<u8>, location_b_hash: vector<u8>) {
-    assert!(location_a_hash == location_b_hash, ENotInProximity);
-}
-```
-
----
-
-## 6. Builder 实战：空间限定交易市场
-
-```move
-module my_market::space_market;
-
-use world::location::{Self, Location, LocationProof};
-use world::access::ServerAddressRegistry;
-use sui::clock::Clock;
-
-/// 只有在市场附近的玩家才能购买
-pub fun buy_item(
-    market: &mut Market,
-    market_location: &Location,          // 市场的链上位置对象
-    proximity_proof: LocationProof,       // 玩家提交的位置证明
-    server_registry: &ServerAddressRegistry,
-    payment: Coin<SUI>,
-    item_id: u64,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    // 验证玩家在市场附近（核心守卫）
-    location::verify_proximity(
-        market_location,
-        proximity_proof,
-        server_registry,
-        clock,
-        ctx,
-    );
-
-    // 后续业务逻辑
+// 创建 KillMail（必须由服务器触发）
+pub fun create_killmail(..., admin_acl: &AdminACL, ...) {
+    admin_acl.verify_sponsor(ctx);
     // ...
 }
 ```
 
----
-
-## 7. Builder 实战：位置锁定宝箱
+### 服务器地址注册（只有 GovernorCap 可操作）
 
 ```move
-module my_treasure::chest;
-
-use world::location::{Self, Location};
-use world::access::ServerAddressRegistry;
-
-/// 只有到达宝箱位置才能打开
-pub fun open_chest(
-    chest: &mut TreasureChest,
-    chest_location: &Location,
-    proximity_proof_bytes: vector<u8>,
-    server_registry: &ServerAddressRegistry,
-    clock: &Clock,
-    ctx: &mut TxContext,
+pub fun add_sponsor_to_acl(
+    admin_acl: &mut AdminACL,
+    _: &GovernorCap,           // 需要最高权限
+    sponsor: address,
 ) {
-    // 使用 bytes 接口（服务器直接传字节，无需在 PTB 中构造结构体）
-    location::verify_proximity_proof_from_bytes(
-        server_registry,
-        chest_location,
-        proximity_proof_bytes,
-        clock,
-        ctx,
-    );
-
-    // 开箱！
-    let loot = chest.claim_loot(ctx);
-    transfer::public_transfer(loot, ctx.sender());
+    admin_acl.authorized_sponsors.add(sponsor, true);
 }
 ```
 
 ---
 
-## 8. 位置证明的过期机制
+## 3. GovernorCap：系统最高权限
 
 ```move
-fun is_deadline_valid(deadline_ms: u64, clock: &Clock): bool {
-    let current_time_ms = clock.timestamp_ms();
-    deadline_ms > current_time_ms
+// GovernorCap 是整个系统的"根密钥"
+// 它的存在意味着游戏公司保留了系统级别的配置能力
+pub struct GovernorCap has key, store { id: UID }
+```
+
+`GovernorCap` 用于：
+- 向 `AdminACL` 添加/删除服务器地址
+- 向 `ServerAddressRegistry` 注册服务器（用于签名验证）
+- 设置全系统级别的配置参数
+
+```move
+pub fun register_server_address(
+    server_address_registry: &mut ServerAddressRegistry,
+    _: &GovernorCap,
+    server_address: address,
+) {
+    server_address_registry.authorized_address.add(server_address, true);
 }
 ```
 
-游戏服务器通常为位置证明设置 **30 秒到 5 分钟**的有效期。过期后，玩家需要重新从服务器申请新的证明。
-
-**设计建议**：
-- 一次性行为（如开宝箱）：设置 30 秒有效期
-- 持续性行为（如采矿会话）：设置 5 分钟有效期，定期刷新
-
-过期时间本质上是在平衡两件事：安全窗口和交互成本。窗口太长，proof 被截获或被玩家延后使用的风险上升；窗口太短，又会让网络抖动、钱包确认延迟、赞助交易排队变成大量误伤。Builder 设计时不要只问“理论上多短最安全”，还要看真实交易路径里从服务器签名到链上落地通常要多久。
-
 ---
 
-## 9. 测试时的特殊处理
+## 4. OwnerCap\<T\>：泛型所有权凭证
 
-由于测试环境无法运行真实的游戏服务器签名，world-contracts 提供了无 deadline 验证的测试版本：
+这是 EVE Frontier 访问控制最精巧的设计：
 
 ```move
-#[test_only]
-pub fun verify_proximity_without_deadline(
-    server_registry: &ServerAddressRegistry,
-    location: &Location,
-    proof: LocationProof,
+/// OwnerCap<T> 证明持有者对某个 T 类型对象的控制权
+pub struct OwnerCap<phantom T: key> has key, store {
+    id: UID,
+    authorized_object_id: ID,   // 绑定了具体对象的 ID
+}
+```
+
+**为什么用泛型？**
+
+```move
+OwnerCap<Gate>           // 对某个 Gate 的控制权
+OwnerCap<Turret>         // 对某个 Turret 的控制权
+OwnerCap<StorageUnit>    // 对某个 StorageUnit 的控制权
+OwnerCap<Character>      // 对某个 Character 的控制权
+```
+
+类型系统天然保证了权限不会错误地跨类型使用。
+
+### OwnerCap 的创建（只有 AdminACL 可创建）
+
+```move
+pub fun create_owner_cap<T: key>(
+    admin_acl: &AdminACL,
+    obj: &T,
     ctx: &mut TxContext,
-): bool {
-    let LocationProof { message, signature } = proof;
-    validate_proof_message(&message, location, server_registry, ctx.sender());
-    let message_bytes = bcs::to_bytes(&message);
-    sig_verify::verify_signature(message_bytes, signature, message.server_address)
+): OwnerCap<T> {
+    admin_acl.verify_sponsor(ctx);
+    let object_id = object::id(obj);
+    let owner_cap = OwnerCap<T> {
+        id: object::new(ctx),
+        authorized_object_id: object_id,
+    };
+    event::emit(OwnerCapCreatedEvent { ... });
+    owner_cap
 }
 ```
 
-在测试中可以预先生成一个固定的"永不过期"签名，绕过时间检查。
+**重要约束**：玩家无法自己创建 `OwnerCap`，只能由游戏服务器（verify_sponsor）颁发。
+
+这层约束的意义是把“权限对象的铸造权”牢牢关在系统边界内。否则一旦任何人都能自己 mint `OwnerCap<T>`，整个能力体系就失去可信度了。能力对象之所以可靠，不只是因为它是个链上对象，而是因为它的来源链条本身也受控。
+
+---
+
+## 5. Receiving 模式：OwnerCap 的安全借用
+
+这是 EVE Frontier 最独特的模式之一——`OwnerCap` 平时存放在角色对象（Character）的控制下，借用时用 Sui 的 `Receiving<T>` 临时取出：
+
+```
+Character（共享对象）
+  └── 持有 → OwnerCap<Gate>（通过 Sui transfer::transfer 存放）
+
+玩家操作时：
+  1. 玩家提交 Receiving<OwnerCap<Gate>> ticket（证明有权取出）
+  2. character::receive_owner_cap() → 临时取出 OwnerCap<Gate>
+  3. 执行操作（如修改 Gate 配置）
+  4. 用 return_owner_cap_to_object() 将 OwnerCap 归还给 Character
+```
+
+### 源码实现
+
+```move
+/// 从 Character 借出 OwnerCap
+pub(package) fun receive_owner_cap<T: key>(
+    receiving_id: &mut UID,
+    ticket: Receiving<OwnerCap<T>>,   // Sui 原生 Receiving ticket
+): OwnerCap<T> {
+    transfer::receive(receiving_id, ticket)
+}
+
+/// 归还 OwnerCap 给 Character
+pub fun return_owner_cap_to_object<T: key>(
+    owner_cap: OwnerCap<T>,
+    character: &mut Character,
+    receipt: ReturnOwnerCapReceipt,   // 操作结束的收据
+) {
+    validate_return_receipt(receipt, object::id(&owner_cap), ...);
+    transfer::transfer(owner_cap, character.character_address);
+}
+```
+
+### ReturnOwnerCapReceipt 防止遗失
+
+```move
+pub struct ReturnOwnerCapReceipt {
+    owner_id: address,
+    owner_cap_id: ID,
+}
+```
+
+在借用 OwnerCap 的函数签名中，必须返回 `ReturnOwnerCapReceipt`，否则编译报错。这样确保了：
+1. OwnerCap 一定会被归还（不能被遗失）
+2. 必须配对使用（无法伪造收据）
+
+`Receiving` 模式表面上看有点繁琐，本质上是在把 object-owned 生命周期显式化。普通地址持有的东西，你拿引用就能用；但 Character、StorageUnit 这类对象持有的能力，如果没有一套“借出-使用-归还”的显式流程，就很容易在复杂调用链里丢失或被截留。EVE 选择把这个过程做得啰嗦一点，换来的是权限流转可审计、可回滚、可强约束。
+
+---
+
+## 6. 完整的权限层级图
+
+```
+GovernorCap（根密钥，CCP 持有）
+    │
+    ▼ 配置
+AdminACL（服务器白名单）
+    │
+    ▼ verify_sponsor
+所有特权操作（创建角色、创建建筑、颁发 OwnerCap...）
+    │
+    ▼ create_owner_cap<T>
+OwnerCap<Gate>  OwnerCap<Turret>  OwnerCap<StorageUnit>...
+    │                                      │
+    ▼ 转给 Character                       ▼ 转给 Builder 玩家
+Character 保管（Receiving 模式）           直接持有
+    │
+    ▼ receive_owner_cap (Receiving<OwnerCap<Gate>>)
+临时借出 → 使用 → 归还
+```
+
+---
+
+## 7. ServerAddressRegistry：签名验证白名单
+
+与 `AdminACL` 不同，`ServerAddressRegistry` 专门用于签名验证（不是函数调用权限）：
+
+```move
+pub struct ServerAddressRegistry has key {
+    id: UID,
+    authorized_address: Table<address, bool>,
+}
+
+pub fun is_authorized_server_address(
+    registry: &ServerAddressRegistry,
+    server_address: address,
+): bool {
+    registry.authorized_address.contains(server_address)
+}
+```
+
+**用途**：在 `location::verify_proximity` 中验证签名来源：
+
+```move
+assert!(
+    access::is_authorized_server_address(server_registry, message.server_address),
+    EUnauthorizedServer,
+);
+```
+
+这里也能看出 `AdminACL` 和 `ServerAddressRegistry` 的分工：前者偏“谁能直接代表服务器发交易”，后者偏“谁的链下签名可以被链上承认”。两者经常来自同一批后台系统，但语义并不一样。把它们混成一个表，短期省事，长期会让权限面变得很难收缩。
+
+---
+
+## 8. Builder 视角：如何正确使用 OwnerCap
+
+### 创建建筑时
+
+```move
+// 游戏服务器为 Builder 创建 Gate 时，自动创建并转移 OwnerCap<Gate>
+pub fun create_gate_with_owner(...) {
+    admin_acl.verify_sponsor(ctx);
+    let gate = Gate { ... };
+    let owner_cap = create_owner_cap(&admin_acl, &gate, ctx);
+    // owner_cap 转移给 builder，builder 掌控这个 Gate
+    transfer::share_object(gate);
+    transfer::public_transfer(owner_cap, builder_address);
+}
+```
+
+### Builder 修改建筑配置时
+
+```move
+// Builder 用 OwnerCap 证明自己有权操作该 Gate
+pub fun set_gate_config(
+    gate: &mut Gate,
+    owner_cap: &OwnerCap<Gate>,      // 持有就有权限
+    new_config: GateConfig,
+    ctx: &TxContext,
+) {
+    // 验证 OwnerCap 对应的对象 ID 与 gate 一致
+    assert!(owner_cap.authorized_object_id == object::id(gate), EOwnerCapMismatch);
+    gate.config = new_config;
+}
+```
+
+---
+
+## 9. 比较：EVE vs 传统合约权限
+
+| 场景 | 传统合约 | EVE Frontier |
+|------|---------|-------------|
+| 建筑所有权 | 记录 owner 地址 | `OwnerCap<T>` 对象 |
+| 转移所有权 | 更新地址字段 | 转移 `OwnerCap<T>` 对象 |
+| 借出权限 | 无标准机制 | Receiving 模式 + ReturnReceipt |
+| 服务器权限 | 硬编码地址 | `AdminACL`（可更新白名单） |
+| 签名验证 | 无 | `ServerAddressRegistry` |
+
+---
+
+## 10. 安全陷阱：不要持有过多 OwnerCap
+
+OwnerCap 是 `has key, store` 的，这意味着它可以被存入任何对象或表中。Builder 需要小心：
+
+```
+❌ 不好的设计：将 OwnerCap 存入公共共享对象
+   → 任何人都可能借助某个漏洞调用
+
+✅ 正确设计：
+   - OwnerCap 存在部署者的个人钱包地址
+   - 或通过 Character 的 Receiving 模式管理
+   - 重要操作使用多签钱包配合 OwnerCap
+```
+
+更直白地说，`OwnerCap<T>` 应该被当成控制面密钥，而不是普通业务资产。它不该随便放进公共共享对象里，也不该为了“方便前端调用”而暴露给过多中间合约。你可以把它和运维里的 root key 类比：真正安全的系统不是没有 root key，而是 root key 极少出现、极少流转、出现时总伴随额外流程约束。
+
+---
+
+## 11. 实战练习
+
+1. **权限分析**：列出 World 合约中所有需要 `admin_acl.verify_sponsor(ctx)` 的函数，分析哪些是玩家永远无法直接调用的
+2. **OwnerCap 委托系统**：设计一个合约，让 Gate Owner 可以将部分权限（如修改通行费）委托给另一个地址，而不需要转移 OwnerCap 本身
+3. **多签 OwnerCap 托管**：实现一个 2-of-3 多签账户，三个维护者需要其中两个同意才能修改建筑配置
 
 ---
 
 ## 本章小结
 
-| 概念 | 要点 |
-|------|------|
-| `Location` | 32 字节哈希，由游戏服务器维护 |
-| `LocationProof` | 消息体 + Ed25519 签名，有效期有限 |
-| 三重验证 | 服务器白名单 + 玩家地址匹配 + 位置哈希匹配 |
-| `verify_distance` | 支持两建筑间距离的上限验证 |
-| BCS peel 手工反序列化 | 字段顺序必须与结构体定义一致 |
+| 组件 | 层级 | 作用 |
+|------|-----|------|
+| `GovernorCap` | 最高（CCP） | 系统级配置，注册服务器 |
+| `AdminACL` | 服务器层 | 游戏操作的函数调用授权 |
+| `ServerAddressRegistry` | 服务器层 | Ed25519 签名来源验证 |
+| `OwnerCap<T>` | 建筑层 | 泛型建筑控制权凭证 |
+| Receiving 模式 | 玩家层 | OwnerCap 安全借用机制 |
+| `ReturnOwnerCapReceipt` | 安全机制 | 强制 OwnerCap 归还，防丢失 |
 
-> 下一章：**能量与燃料系统** —— 深入理解 EVE Frontier 建筑运行所需的双层能源机制，以及燃料消耗率的精确计算逻辑。
+---
+
+## 课程完结
+
+恭喜你完成了 **EVE Frontier Builder 完整课程**！
+
+从基础的 Move 2024 语法，到链上 PvP 记录（KillMail），再到签名验证、位置证明、能量燃料系统、Extension 模式、炮塔 AI 和访问控制——你已经掌握了在 EVE Frontier 上构建复杂应用所需的全部核心知识。
+
+**接下来的路**：
+1. 加入 [EVE Frontier Builders Discord](https://discord.gg/evefrontier)
+2. 在测试网部署属于你的第一个 Extension
+3. 在游戏中找到属于你的星系，点亮一个 Smart Gate
+
+> *在星际中建设，是一种文明的延伸。*

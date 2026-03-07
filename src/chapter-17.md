@@ -1,349 +1,522 @@
-# Chapter 17：性能优化与 Gas 最小化
+# Chapter 17：测试、调试与安全审计
 
-> **目标：** 掌握链上操作的性能优化技巧，最大化利用链下计算，通过批处理、对象设计优化和 Gas 预算控制，构建高效低成本的 EVE Frontier 应用。
-
----
-
-> 状态：工程章节。正文以 Gas、批处理和对象设计优化为主。
-
-## 17.1 Gas 成本模型
-
-Sui 的 Gas 由两部分组成：
-```
-Gas 费 = (计算单元 + 存储差额) × Gas 价格
-```
-
-- **计算单元**：Move 代码执行消耗
-- **存储差额**：链上存储的净增量（新增字节收费，删除字节退款）
-
-**关键洞察**：
-- 读取数据是**免费的**（GraphQL/RPC 读取不上链）
-- 动态字段的增删有显著 Gas 成本
-- 发射事件几乎免费（不占用链上存储）
-
-Gas 优化最容易走偏的一点是：很多人一上来就盯着“怎么省几个单位”，却没先看清：
-
-> 真正昂贵的，往往不是某一行代码，而是你整个状态模型迫使系统反复做的那些事。
-
-所以性能优化最好分三层看：
-
-- **交易层**
-  这笔交易是否能合并、是否重复做了很多小动作
-- **对象层**
-  你的对象是否过大、过热、过于集中
-- **架构层**
-  哪些计算和聚合其实根本不该上链
-
-### 17.1.1 一组可以复用的 Gas 对比记录模板
-
-这一章最容易流于口号。建议至少拿一组固定操作记录“优化前/后”数据：
-
-| 操作 | 低效写法 | 优化写法 | 你要记录的字段 |
-|------|------|------|------|
-| 两个星门上线 + 链接 | 3 笔独立交易 | 1 笔 PTB 批处理 | `gasUsed`、对象写入数、总耗时 |
-| 市场创建挂单 | 大对象追加 `vector` | 独立对象或动态字段 | 对象大小、写入次数、存储退款 |
-| 历史记录 | 持久化到共享对象 | 改发事件 + 链下索引 | 事件数、对象增长字节 |
-
-> 这些数字不需要追求“绝对标准值”，但必须留下同环境下的对比记录，否则优化结论没有说服力。
+> **目标：** 能为 Move 合约编写完整的单元测试，识别常见安全漏洞，制定合约升级策略。
 
 ---
 
-## 17.2 批处理：一笔交易做多件事
+> 状态：工程保障章节。正文以测试、安全与升级风险控制为主。
 
-Sui 的可编程交易块（PTB）允许在**一笔交易**中执行多个 Move 调用：
+##  17.1 为什么安全测试至关重要？
 
-```typescript
-// ❌ 低效：3 笔单独交易
-await client.signAndExecuteTransaction({ transaction: tx_online }); // 上线星门1
-await client.signAndExecuteTransaction({ transaction: tx_online }); // 上线星门2  
-await client.signAndExecuteTransaction({ transaction: tx_link });   // 链接星门
+链上合约一旦部署，资产是真实的。以下是常见损失场景：
+- 价格计算溢出，导致物品以 0 价格出售
+- 权限检查遗漏，任何人都能调用 "仅 Owner" 函数
+- 可重入漏洞（在 Move 中较少见但仍需关注）
+- 升级失误导致旧数据无法被新合约读取
 
-// ✅ 高效：1 笔交易完成所有操作
-const tx = new Transaction();
+**防御策略：** 先测试，再发布。
 
-// 借用 OwnerCap（一次）
-const [ownerCap1, receipt1] = tx.moveCall({ target: `${PKG}::character::borrow_owner_cap`, ... });
-const [ownerCap2, receipt2] = tx.moveCall({ target: `${PKG}::character::borrow_owner_cap`, ... });
+这里最值得建立的观念不是“测试很重要”这种空话，而是：
 
-// 执行所有操作
-tx.moveCall({ target: `${PKG}::gate::online`, arguments: [gate1, ownerCap1, ...] });
-tx.moveCall({ target: `${PKG}::gate::online`, arguments: [gate2, ownerCap2, ...] });
-tx.moveCall({ target: `${PKG}::gate::link`,   arguments: [gate1, gate2, ...] });
+> 链上合约测试的目标，不是证明它能跑，而是证明它在错误输入、错误顺序、错误权限下也不会失控。
 
-// 归还 OwnerCap
-tx.moveCall({ target: `${PKG}::character::return_owner_cap`, arguments: [..., receipt1] });
-tx.moveCall({ target: `${PKG}::character::return_owner_cap`, arguments: [..., receipt2] });
+很多初学者写测试，只会验证“正常路径成功”。但真实资产损失通常来自另外三类路径：
 
-await client.signAndExecuteTransaction({ transaction: tx });
-// 节省 2/3 的 Gas 基础费！
-```
+- 本来就不该成功的调用却成功了
+- 边界值输入让系统进入异常状态
+- 升级或维护后，旧对象与新逻辑不再兼容
 
-### 17.2.1 如何记录一次真实 Gas 对比
-
-1. 先固定输入：同一网络、同一对象数量、同一批操作
-2. 记录低效版本的执行结果：`digest`、`gasUsed`、`effects` 中的写对象数
-3. 再执行 PTB 版本，记录同样字段
-4. 把结果整理成一张对比表，写进你的发布或优化笔记
-
-推荐至少记录这些字段：
-
-```text
-- digest
-- computationCost
-- storageCost
-- storageRebate
-- nonRefundableStorageFee
-- changedObjects count
-```
-
-### PTB 不是“能合就全合”
-
-批处理很强，但也不是无脑把所有动作塞进一笔就最好。
-
-适合合并的情况：
-
-- 原本就强关联的步骤
-- 必须原子成功或一起失败的流程
-- 多次借用同类权限对象的操作
-
-不一定适合过度合并的情况：
-
-- 一笔交易里塞太多无关逻辑
-- 一旦失败就很难定位问题
-- Gas 预算和计算量开始变得不可预测
-
-所以 PTB 的目标不是“最大化长度”，而是“收敛一条真正应该原子化的流程”。
+所以对 Builder 来说，测试不是收尾工作，而是设计工作的一部分。
 
 ---
 
-## 17.3 对象设计优化
+##  17.2 Move 单元测试基础
 
-### 原则一：避免大对象
+Move 内置了测试框架，测试代码写在同一个 `.move` 文件中，用 `#[test]` 注解标记：
 
 ```move
-// ❌ 把所有数据放在一个对象（最大 250KB）
-public struct BadMarket has key {
-    id: UID,
-    listings: vector<Listing>,     // 随商品增多，对象越来越大
-    bid_history: vector<BidRecord>, // 历史数据无限增长
+module my_package::my_module;
+
+// ... 正常合约代码 ...
+
+// 测试模块：只在 test 环境编译
+#[test_only]
+module my_package::my_module_tests;
+
+use my_package::my_module;
+use sui::test_scenario::{Self, Scenario};
+use sui::coin;
+use sui::sui::SUI;
+use sui::clock;
+
+// ── 基础测试 ─────────────────────────────────────────────
+
+#[test]
+fun test_deposit_and_withdraw() {
+    // 初始化测试场景（模拟区块链状态）
+    let mut scenario = test_scenario::begin(@0xALICE);
+
+    // 测试步骤 1：Alice 部署合约
+    {
+        let ctx = scenario.ctx();
+        my_module::init_for_testing(ctx);  // 测试专用 init
+    };
+
+    // 测试步骤 2：Alice 存入物品
+    scenario.next_tx(@0xALICE);
+    {
+        let mut vault = scenario.take_shared<my_module::Vault>();
+        let ctx = scenario.ctx();
+
+        my_module::deposit(&mut vault, 100, ctx);
+        assert!(my_module::balance(&vault) == 100, 0);
+
+        test_scenario::return_shared(vault);
+    };
+
+    // 测试步骤 3：Bob 尝试取款（应该失败）
+    scenario.next_tx(@0xBOB);
+    {
+        let mut vault = scenario.take_shared<my_module::Vault>();
+        // 期望这个调用会失败（abort）
+        // 用 #[test, expected_failure] 测试失败路径
+        test_scenario::return_shared(vault);
+    };
+
+    scenario.end();
 }
 
-// ✅ 用动态字段或独立对象分散存储
-public struct GoodMarket has key {
-    id: UID,
-    listing_count: u64,  // 只存计数器
-    // 具体 Listing 用动态字段存储：df::add(id, item_id, listing)
+// ── 测试失败路径 ────────────────────────────────────────
+
+#[test]
+#[expected_failure(abort_code = my_module::ENotOwner)]
+fun test_unauthorized_withdraw_fails() {
+    let mut scenario = test_scenario::begin(@0xALICE);
+
+    // 部署
+    { my_module::init_for_testing(scenario.ctx()); };
+
+    // Bob 尝试以 Alice 身份操作（应 abort）
+    scenario.next_tx(@0xBOB);
+    {
+        let mut vault = scenario.take_shared<my_module::Vault>();
+        my_module::owner_withdraw(&mut vault, scenario.ctx()); // 应 abort
+        test_scenario::return_shared(vault);
+    };
+
+    scenario.end();
+}
+
+// ── 使用 Clock 测试时间相关逻辑 ─────────────────────────
+
+#[test]
+fun test_time_based_pricing() {
+    let mut scenario = test_scenario::begin(@0xALICE);
+    let mut clock = clock::create_for_testing(scenario.ctx());
+
+    // 设置当前时间
+    clock.set_for_testing(1_000_000);
+
+    {
+        let price = my_module::get_dutch_price(
+            1000,  // 起始价
+            100,   // 最低价
+            0,     // 开始时间
+            2_000_000,  // 持续时间（2秒）
+            &clock,
+        );
+        // 经过一半时间，价格应为中间值
+        assert!(price == 550, 0);
+    };
+
+    clock.destroy_for_testing();
+    scenario.end();
 }
 ```
 
-### 原则二：删除不再需要的对象（获取存储退款）
+运行测试：
+```bash
+# 运行所有测试
+sui move test
 
-```move
-// 拍卖结束后，删除 Listing 获得 Gas 退款
-public entry fun end_auction(auction: DutchAuction) {
-    let DutchAuction { id, .. } = auction;
-    id.delete(); // 删除对象 → 存储退款
-}
+# 只运行特定测试
+sui move test test_deposit_and_withdraw
 
-// 领取完毕后，删除 DividendClaim 对象
-public entry fun close_claim_record(record: DividendClaim) {
-    let DividendClaim { id, .. } = record;
-    id.delete();
-}
+# 显示详细输出
+sui move test --verbose
 ```
 
-### 原则三：用 u8/u16 代替 u64 存储小整数
+### 写测试时，先分四类场景
 
-```move
-// ❌ 浪费空间
-public struct Config has key {
-    id: UID,
-    tier: u64,     // 只存 1-5，但占 8 字节
-    status: u64,   // 只存 0-3，但占 8 字节
-}
+一个实用的测试分层是：
 
-// ✅ 紧凑存储
-public struct Config has key {
-    id: UID,
-    tier: u8,      // 只占 1 字节
-    status: u8,    // 只占 1 字节
-}
-```
+1. **正常路径**
+   合法输入下，系统是否按预期完成
+2. **权限失败路径**
+   没有权限时，是否稳定 abort
+3. **边界值路径**
+   0、最大值、过期、空集合、最后一个条目等情况是否正确
+4. **状态演进路径**
+   做完一步后，再做下一步，系统是否仍然一致
 
-### 对象设计为什么几乎总是性能问题的根源？
+如果你的测试只有第一类，那其实还不够叫“有测试”。
 
-因为在 Sui 上，性能和对象模型是绑在一起的：
+### `test_scenario` 真正适合拿来干什么？
 
-- 对象越大，读写越重
-- 共享对象越热，争用越高
-- 状态越集中，扩展越难
+它最适合模拟：
 
-所以很多性能优化，最后都不是在“重写算法”，而是在“重构对象边界”。
+- 多个地址轮流发起交易
+- 共享对象在多笔交易里的状态变化
+- 时间推进后的行为变化
+- 对象创建、取回、归还的完整生命周期
 
-### 一个很实用的判断标准
+这恰好就是 EVE Builder 项目最常见的风险集中区。
 
-只要一个对象同时具备下面两个特征，就要开始警惕：
+### 测试不是越细碎越好
 
-- 经常被写
-- 还在不断长大
+有些测试太碎，最后只证明“小函数按字面工作”，却没有覆盖真正的业务闭环。
 
-这类对象几乎一定会成为性能热点。
+更有价值的做法通常是：
+
+- 保留少量关键单元测试
+- 再写几条端到端业务场景测试
+
+例如租赁系统里，比起只测 `calc_refund()`，更重要的是测：
+
+1. 创建挂单
+2. 成功租用
+3. 提前归还
+4. 到期回收
+
+这条完整链路是否闭合。
 
 ---
 
-## 17.4 链下计算，链上验证
+##  17.3 常见安全漏洞与防御
 
-**黄金法则**：所有不需要强制执行的计算，都放到链下做。
-
-```move
-// ❌ 在链上排序（极度消耗 Gas）
-public fun get_top_bidders(auction: &Auction, n: u64): vector<address> {
-    let mut sorted = vector::empty<BidRecord>();
-    // ... O(n²) 排序，每次都在链上执行
-}
-
-// ✅ 链上只存原始数据，链下排序
-public fun get_bid_at(auction: &Auction, index: u64): BidRecord {
-    *df::borrow<u64, BidRecord>(&auction.id, index)
-}
-// dApp 或后端读取所有竞价，在内存中排序，展示排行榜
-```
-
-### 复杂路由计算在链下完成
-
-```typescript
-// Example: 星门物流路由（链下计算最优路径）
-function findOptimalRoute(
-  start: string,
-  end: string,
-  gateGraph: Map<string, string[]>, // gate_id → [connected_gate_ids]
-): string[] {
-  // Dijkstra 等路径算法，在 dApp/后端执行
-  // 计算出最优路径后，只把最终跳跃操作提交上链
-  return dijkstra(gateGraph, start, end);
-}
-```
-
-### 链下计算不是偷懒，而是正确分工
-
-很多适合链下做的事，本质上不是“不重要”，而是：
-
-- 结果需要展示，但不需要链上强制执行
-- 算法复杂，但最终只需提交一个结论
-- 可重算、可缓存、可替换
-
-这类工作如果硬放链上，只会把成本和失败面一起拉高。
-
-### 什么时候必须链上验证？
-
-当结果会影响：
-
-- 资产归属
-- 权限放行
-- 金额结算
-- 稀缺资源分配
-
-就必须把关键结论放回链上验证，而不是只信链下算出来就算数。
-
----
-
-## 17.5 Gas 预算设置
-
-```typescript
-const tx = new Transaction();
-
-// 设置 Gas 预算上限（防止意外超额消耗）
-tx.setGasBudget(10_000_000); // 10 SUI上限
-
-// 或使用 dryRun 预估 Gas
-const estimate = await client.dryRunTransactionBlock({
-  transactionBlock: await tx.build({ client }),
-});
-console.log("预估 Gas:", estimate.effects.gasUsed);
-```
-
-### `dryRun` 最值钱的地方，不是“估个数”，而是提前发现模型问题
-
-如果一笔交易的 dry run 结果已经显示：
-
-- 写对象很多
-- 存储成本异常高
-- 返还很少
-
-那通常说明问题不在预算，而在结构本身。
-
----
-
-## 17.6 并行执行：无争用的共享对象设计
-
-Sui 可以并行执行操作不同对象的交易。争用同一共享对象会导致顺序执行：
-
-```
-// ❌ 所有用户都争用同一个 Market 对象
-Market (shared) ← 所有购买交易都需要写锁 → 顺序执行
-（高流量时，队列堆积，延迟上升）
-
-// ✅ 分片设计（多个 SubMarket）
-Market_Shard_0 (shared) ← 物品 type_id % 4 == 0 的交易
-Market_Shard_1 (shared) ← 物品 type_id % 4 == 1 的交易
-Market_Shard_2 (shared) ← 物品 type_id % 4 == 2 的交易
-Market_Shard_3 (shared) ← 物品 type_id % 4 == 3 的交易
-（4 个分片并行执行，吞吐量 ×4）
-```
+### 漏洞一：整数溢出/下溢
 
 ```move
-// 分片路由
-public entry fun buy_item_sharded(
-    shards: &mut vector<MarketShard>,
-    item_type_id: u64,
-    payment: Coin<SUI>,
+// ❌ 危险：u64 减法下溢会 abort，但如果逻辑错误可能算出极大值
+fun unsafe_calc(a: u64, b: u64): u64 {
+    a - b  // 如果 b > a，直接 abort（Move 会检查）
+}
+
+// ✅ 安全：在操作前检查
+fun safe_calc(a: u64, b: u64): u64 {
+    assert!(a >= b, EInsufficientBalance);
+    a - b
+}
+
+// ✅ 对于有意允许的下溢，使用检查后的计算
+fun safe_pct(total: u64, bps: u64): u64 {
+    // bps 最大 10000，防止 total * bps 溢出
+    assert!(bps <= 10_000, EInvalidBPS);
+    total * bps / 10_000  // Move u64 最大 1.8e19，需要注意大数
+}
+```
+
+> ✅ **Move 的优势**：Move 默认会检查 u64 运算溢出，溢出时 abort 而不是静默返回错误值（不同于 Solidity 早期版本）。
+
+但要注意，Move 帮你解决的是“机器级溢出安全”，不是“业务数学正确”。
+
+比如下面这些问题，类型系统并不会替你思考：
+
+- 手续费是否应该先算再扣，还是先扣再算分润
+- 百分比是否该向下取整还是四舍五入
+- 多地址分账后余数应该留在金库还是返给用户
+
+很多经济 bug 最后不是“黑客级漏洞”，而是结算口径本身设计错了。
+
+### 漏洞二：权限检查遗漏
+
+```move
+// ❌ 危险：没有验证调用者
+public fun withdraw_all(treasury: &mut Treasury, ctx: &mut TxContext) {
+    let all = coin::take(&mut treasury.balance, balance::value(&treasury.balance), ctx);
+    transfer::public_transfer(all, ctx.sender()); // 任何人都能取走资金！
+}
+
+// ✅ 安全：要求 OwnerCap
+public fun withdraw_all(
+    treasury: &mut Treasury,
+    _cap: &TreasuryOwnerCap,  // 检查调用者持有 OwnerCap
     ctx: &mut TxContext,
 ) {
-    let shard_index = item_type_id % vector::length(shards);
-    let shard = vector::borrow_mut(shards, shard_index);
-    buy_from_shard(shard, item_type_id, payment, ctx);
+    let all = coin::take(&mut treasury.balance, balance::value(&treasury.balance), ctx);
+    transfer::public_transfer(all, ctx.sender());
 }
 ```
 
-### 并发设计里最该问的问题
+权限检查里最容易犯的错，是只验证“某种权限存在”，却没验证：
 
-不是“能不能并行”，而是：
+- 这张权限是不是这个对象的
+- 这笔调用是不是当前场景允许的
+- 这张权限是不是应该只在某一时段或某一路径里使用
 
-> 我的业务流里，到底哪些状态必须争用同一个共享对象，哪些其实可以天然拆开？
+### 漏洞三：Capability 未正确绑定
 
-比如市场系统里，常见可以拆开的维度包括：
+```move
+// ❌ 危险：OwnerCap 没有验证对应的对象 ID
+public fun admin_action(vault: &mut Vault, _cap: &OwnerCap) {
+    // 任何 OwnerCap 都能控制任何 Vault！
+}
 
-- 物品类型
-- 区域
-- 租户
-- 时间桶
+// ✅ 安全：验证 OwnerCap 和对象的绑定关系
+public fun admin_action(vault: &mut Vault, cap: &OwnerCap) {
+    assert!(cap.authorized_object_id == object::id(vault), ECapMismatch);
+    // ...
+}
+```
 
-只要拆分维度选对，吞吐量通常会明显提升。
+### 漏洞四：时间戳操控
 
-### 分片也有代价
+```move
+// ❌ 不推荐：直接依赖 ctx.epoch() 作为精确时间
+// epoch 的粒度是约 24 小时，不适合细粒度时效
 
-别把分片当成免费午餐。它会带来：
+// ✅ 推荐：使用 Clock 对象
+public fun check_expiry(expiry_ms: u64, clock: &Clock): bool {
+    clock.timestamp_ms() < expiry_ms
+}
+```
 
-- 查询聚合更复杂
-- 路由逻辑更复杂
-- 前端和索引层要额外知道分片规则
+### 漏洞五：共享对象的竞态条件
 
-所以分片是“为了吞吐而增加系统复杂度”的明确交换，不是默认选项。
+共享对象可以被多个交易并发访问。当多个交易同时抢购同一物品时：
+
+```move
+// ❌ 有竞态问题：两个交易可能同时通过检查
+public fun buy_item(market: &mut Market, ...) {
+    let listing = table::borrow(&market.listings, item_type_id);
+    assert!(listing.amount > 0, EOutOfStock);
+    // ← 另一个 TX 可能在这里同时通过同样的检查
+    // ... 然后两个都执行购买，导致超卖
+}
+
+// ✅ Sui 的解决方案：通过对共享对象的写锁确保序列化
+// Sui 的 Move 执行器保证：写同一个共享对象的交易是顺序执行的
+// 所以上面的代码在 Sui 上实际是安全的！但要确保你的逻辑正确处理负库存
+public fun buy_item(market: &mut Market, ...) {
+    // 这次检查是原子的，其他 TX 会等待
+    assert!(table::contains(&market.listings, item_type_id), ENotListed);
+    let listing = table::remove(&mut market.listings, item_type_id);  // 原子移除
+    // ...
+}
+```
+
+虽然 Sui 会对共享对象写入做顺序化，但这不代表你就可以忽略业务竞态。
+
+你仍然要测试：
+
+- 同一商品被连续快速购买
+- 一个对象被先下架再购买
+- 价格更新与购买在相邻交易发生时的表现
+
+也就是说，底层执行器帮你解决了一部分并发安全，但没有替你设计完整业务一致性。
+
+---
+
+##  17.4 使用 Move Prover 进行形式验证
+
+Move Prover 是一个形式化验证工具，可以数学证明某些属性永远成立：
+
+```move
+// spec 块：形式规范
+spec fun total_supply_conserved(treasury: TreasuryCap<TOKEN>): bool {
+    // 声明：铸造后总供应量增加的精确量
+    ensures result == old(total_supply(treasury)) + amount;
+}
+
+#[verify_only]
+spec module {
+    // 不变量：金库余额永远不超过某个上限
+    invariant forall vault: Vault:
+        balance::value(vault.balance) <= MAX_VAULT_SIZE;
+}
+```
+
+运行验证：
+```bash
+sui move prove
+```
+
+### Move Prover 什么时候值得上？
+
+并不是所有项目都需要一开始就做形式验证。更实际的策略通常是：
+
+- 普通案例和中小项目：先把单测和失败路径覆盖做好
+- 高价值金库、清算、权限系统：再引入 Prover 证明关键不变量
+
+最适合用 Prover 的地方通常包括：
+
+- 总量守恒
+- 余额不会为负
+- 某类权限不能越权
+- 某个状态机不会跳非法状态
+
+---
+
+##  17.5 合约升级策略
+
+Move 包一旦发布是**不可变的**，但可以通过升级机制发布新版本：
+
+```bash
+# 首次发布
+sui client publish 
+# 得到 UpgradeCap 对象（升级权凭证）
+
+# 升级（需要 UpgradeCap）
+sui client upgrade \
+  --upgrade-capability <UPGRADE_CAP_ID> \
+
+```
+
+### 升级兼容性规则
+
+| 变更类型 | 是否允许 |
+|---------|---------|
+| 添加新函数 | ✅ 允许 |
+| 添加新模块 | ✅ 允许 |
+| 修改函数逻辑（不变签名） | ✅ 允许 |
+| 修改函数签名 | ❌ 不允许 |
+| 删除函数 | ❌ 不允许 |
+| 修改结构体字段 | ❌ 不允许 |
+| 添加结构体字段 | ❌ 不允许 |
+
+### 升级真正难的不是命令，而是数据继续活着
+
+很多人第一次做升级，会把重点放在“怎么发新包”。但用户真正关心的是：
+
+- 旧对象还能不能继续用
+- 旧前端还能不能读
+- 旧事件和新对象如何一起解释
+
+也就是说，升级本质上是在维护一个还在运行的系统，而不是重新开服。
+
+### 升级前必须问的四个问题
+
+1. 旧对象是否还能被新版本安全读取？
+2. 新版本是否要求额外迁移脚本？
+3. 前端是不是要同步更新字段解析？
+4. 一旦升级后发现问题，有没有回滚或止损路径？
+
+### 数据迁移模式
+
+当需要改变数据结构时，使用"新旧并存"策略：
+
+```move
+// v1：旧版存储结构
+public struct MarketV1 has key {
+    id: UID,
+    price: u64,
+}
+
+// v2：新版增加字段（不能直接修改 V1）
+// 改为用动态字段扩展
+public fun get_expiry_v2(market: &MarketV1): Option<u64> {
+    if df::exists_(&market.id, b"expiry") {
+        option::some(*df::borrow<vector<u8>, u64>(&market.id, b"expiry"))
+    } else {
+        option::none()
+    }
+}
+
+// 给旧对象添加新字段（迁移脚本）
+public entry fun migrate_add_expiry(
+    market: &mut MarketV1,
+    expiry_ms: u64,
+    ctx: &mut TxContext,
+) {
+    df::add(&mut market.id, b"expiry", expiry_ms);
+}
+```
+
+---
+
+##  17.6 EVE Frontier 特有的安全限制
+
+引用官方文档中的关键约束：
+
+| 约束 | 详情 |
+|------|------|
+| **对象大小** | Move 对象最大 250KB |
+| **动态字段** | 单次交易最多访问 1024 个 |
+| **结构体字段** | 单个结构体最多 32 个字段 |
+| **交易计算上限** | 超出计算限制会直接 abort |
+| **某些 Admin 操作** | 仅限游戏服务器签名 |
+
+这些限制不要只当成“文档知识点”。它们会直接影响你的建模方式。
+
+例如：
+
+- 对象有大小上限，你就不能把所有状态塞进一个巨物对象
+- 动态字段有访问上限，你就不能假设一笔交易能扫完整个市场
+- 某些操作依赖服务器签名，你就不能把系统设计成纯用户自驱
+
+---
+
+##  17.7 安全清单
+
+在发布合约前，逐项检查：
+
+```
+权限控制
+✅ 所有写函数是否都有权限验证？
+✅ OwnerCap 是否验证了 authorized_object_id？
+✅ AdminACL 保护的函数是否有赞助者验证？
+
+数学运算
+✅ 所有乘法是否可能溢出？（u64 最大约 1.8 × 10^19）
+✅ 百分比计算是否用 bps（基点）避免精度丢失？
+✅ 减法操作前是否检查了 a >= b？
+
+状态一致性
+✅ 存入和取出逻辑是否完全对称？
+✅ 热土豆对象是否总是被消耗？
+✅ 共享对象的原子操作是否正确？
+
+升级兼容
+✅ 有没有规划 UpgradeCap 的安全存储？
+✅ 是否设计了未来的数据迁移路径？
+
+测试覆盖
+✅ 是否测试了正常路径？
+✅ 是否测试了所有 assert 失败路径？
+✅ 是否测试了边界值（0、最大值）？
+```
+
+### 更实用的排查顺序
+
+每次准备发布前，建议按这个顺序过一遍：
+
+1. **权限**
+   谁能调、调谁、调完会改什么
+2. **钱**
+   钱从哪来，到哪去，中途有没有可能丢
+3. **状态**
+   成功和失败后，对象是否仍保持一致
+4. **升级**
+   现在这版如果以后要改，会不会把自己锁死
+
+这比纯粹照 checklist 打勾更有用，因为它逼你按真正的风险面重新审视设计。
 
 ---
 
 ## 🔖 本章小结
 
-| 优化技巧 | 节省比例 |
+| 知识点 | 核心要点 |
 |--------|--------|
-| PTB 批处理（合并多笔交易） | 30-70% 基础费 |
-| 链下计算，链上验证 | 消除复杂计算 Gas |
-| 删除废弃对象 | 获得存储退款 |
-| 紧凑数据类型（u8 vs u64） | 减小对象尺寸 |
-| 分片共享对象 | 提升并发吞吐量 |
+| Move 测试框架 | `test_scenario`、`#[test]`、`#[expected_failure]` |
+| 溢出安全 | Move 默认检查，但要正确处理逻辑错误 |
+| 权限检查 | 所有写操作必须验证 Capability + object_id 绑定 |
+| 竞态条件 | Sui 写共享对象是顺序执行的，原子操作是安全的 |
+| 合约升级 | UpgradeCap + 兼容性规则 + 动态字段迁移 |
+| EVE Frontier 约束 | 250KB 对象，1024 动态字段/tx，32 个结构体字段 |
 
 ## 📚 延伸阅读
 
-- [Sui Gas 文档](https://docs.sui.io/concepts/tokenomics/gas-in-sui)
-- [PTB 编程指南](https://docs.sui.io/concepts/transactions/prog-txn-blocks)
-- [Sui 对象限制](https://github.com/evefrontier/builder-documentation/blob/main/welcome/contstraints.md)
+- [Builder 约束文档](https://github.com/evefrontier/builder-documentation/blob/main/welcome/contstraints.md)
+- [Move Prover](https://move-language.github.io/move/prover/prover-guide.html)
+- [Sui Package 升级指南](https://docs.sui.io/guides/developer/packages/upgrade)
+- [Move 测试框架](https://docs.sui.io/guides/developer/first-app/write-package#testing-with-sui-move)

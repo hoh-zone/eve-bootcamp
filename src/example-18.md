@@ -383,6 +383,6 @@ export function DiplomacyCenter() {
 | 条约核查 | `is_treaty_active()` 供炮塔/星门扩展调用 |
 
 ## 📚 关联文档
-- [Chapter 11：AdminACL 与服务器验证](./chapter-11.md)
-- [Chapter 6：所有权与 OwnerCap](./chapter-06.md)
+- [Chapter 8：AdminACL 与服务器验证](./chapter-08.md)
+- [Chapter 11：所有权与 OwnerCap](./chapter-11.md)
 - [Example 12：联盟招募](./example-12.md)

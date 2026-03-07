@@ -442,6 +442,6 @@ export function RecruitmentPanel({ isMember, isFounder }: {
 | 成员凭证 | `MemberNFT` 作为投票和权限载体 |
 
 ## 📚 关联文档
-- [Chapter 6：所有权模型](./chapter-06.md)
-- [Chapter 8：经济系统与金库](./chapter-08.md)
+- [Chapter 11：所有权模型](./chapter-11.md)
+- [Chapter 14：经济系统与金库](./chapter-14.md)
 - [Example 5：联盟 DAO](./example-05.md)

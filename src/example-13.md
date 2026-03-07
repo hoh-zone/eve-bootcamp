@@ -283,5 +283,5 @@ export function PassShop() {
 ---
 
 ## 📚 关联文档
-- [Chapter 14：NFT 设计与 TransferPolicy](./chapter-14.md)
+- [Chapter 13：NFT 设计与 TransferPolicy](./chapter-13.md)
 - [Example 2：星门收费站](./example-02.md)

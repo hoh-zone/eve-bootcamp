@@ -1,322 +1,435 @@
-# 第24章：KillMail 系统深度解析
+# Chapter 24：故障排查手册（常见错误与调试方法）
 
-> **学习目标**：理解 EVE Frontier 链上战斗死亡记录的完整架构——从源码结构到与 Builder 扩展的交互方式。
+> **目标：** 系统整理 EVE Frontier Builder 开发过程中最常遇到的错误类型，掌握高效的调试工作流，把"踩坑"时间降到最低。
 
 ---
 
-> 状态：教学示例。正文代码为便于讲解而做了精简，源码验收请以仓库内实际 `world-contracts` 文件为准。
+> 状态：工程保障章节。正文以排错路径和调试习惯为主。
 
-## 最小调用链
+##  24.1 错误分类总览
 
-`游戏服务器 -> AdminACL 校验 -> create_killmail -> derived_object::claim -> share_object -> emit event`
+```
+EVE Frontier 开发错误
+├── 合约错误（Move）
+│   ├── 编译错误（构建失败）
+│   ├── 链上 Abort（运行时失败）
+│   └── 逻辑错误（成功执行但结果错误）
+├── 交易错误（Sui）
+│   ├── Gas 问题
+│   ├── 对象版本冲突
+│   └── 权限错误
+├── dApp 错误（TypeScript/React）
+│   ├── 钱包连接失败
+│   ├── 读取链上数据失败
+│   └── 参数构建错误
+└── 环境错误
+    ├── Docker/本地节点问题
+    ├── Sui CLI 配置问题
+    └── ENV 变量缺失
+```
 
-## 对应代码目录
+真正高效的排错，不是背错误大全，而是先把问题定位到正确层。
 
-- [world-contracts/contracts/world](https://github.com/evefrontier/world-contracts/tree/main/contracts/world)
+一个很实用的思路是先问：
 
-## 关键 Struct
+1. 这是编译前就坏了，还是链上执行时坏了？
+2. 是对象和权限错了，还是前端构参错了？
+3. 是环境不一致，还是逻辑本身真的有 bug？
 
-| 类型 | 作用 | 阅读重点 |
+只要第一层归类做对，后面的排查效率会高很多。
+
+---
+
+##  24.2 Move 编译错误
+
+### 错误：`unbound module`
+
+```
+error[E02001]: unbound module
+  ┌─ sources/my_ext.move:3:5
+  │
+3 │ use world::gate;
+  │     ^^^^^^^^^^^ Unbound module 'world::gate'
+```
+
+**原因**：`Move.toml` 中缺少对 `world` 包的依赖声明。
+
+**解决：**
+```toml
+# Move.toml
+[dependencies]
+World = { git = "https://github.com/evefrontier/world-contracts.git", subdir = "contracts/world", rev = "v0.0.14" }
+```
+
+---
+
+### 错误：`ability constraint not satisfied`
+
+```
+error[E05001]: ability constraint not satisfied
+   ┌─ sources/market.move:42:30
+   |
+42 │     transfer::public_transfer(listing, recipient);
+   |                               ^^^^^^^ Missing 'store' ability
+```
+
+**原因**：`Listing` 结构体缺少 `store` ability，无法被 `public_transfer`。
+
+**解决**：
+```move
+// 添加所需 ability
+public struct Listing has key, store { ... }
+//                            ^^^^^
+```
+
+---
+
+### 错误：`unused variable` / `unused let binding`
+
+```
+warning[W09001]: unused let binding
+  = 'receipt' is bound but not used
+```
+
+**解决**：用下划线忽略，或确认是否遗漏了归还步骤（Borrow-Use-Return 模式）：
+```move
+let (_receipt) = character::borrow_owner_cap(...); // 暂时忽略
+// 更好的做法：确认归还
+character::return_owner_cap(own_cap, receipt);
+```
+
+### 对编译错误最有用的习惯
+
+不是复制粘贴报错去搜，而是立刻判断它属于哪一类：
+
+- **依赖解析问题**
+  `unbound module`
+- **类型 / ability 问题**
+  `ability constraint not satisfied`
+- **资源生命周期问题**
+  `unused let binding`、值未消费、借用冲突
+
+Move 编译器给的错误往往已经很接近真实原因，只要别把它当成纯噪音。
+
+---
+
+##  24.3 链上 Abort 错误解读
+
+链上 Abort 返回如下格式：
+```
+MoveAbort(MoveLocation { module: ModuleId { address: 0x..., name: Identifier("toll_gate_ext") }, function: 2, instruction: 6, function_name: Some("pay_toll") }, 1)
+```
+
+**关键信息**：`function_name` + abort code（末尾的数字）。
+
+### 常见 Abort Code 对照表
+
+| 错误代码 | 典型含义 | 排查方向 |
+|---------|---------|---------|
+| `0` | 权限不足（`assert!(ctx.sender() == owner)`） | 检查调用者地址 vs 合约中存储的 owner |
+| `1` | 余额/数量不足 | 检查 `coin::value()` vs 所需金额 |
+| `2` | 对象已存在（`table::add` 重复键） | 检查是否已注册/已购买过 |
+| `3` | 对象不存在（`table::borrow` 找不到） | 检查 key 是否正确 |
+| `4` | 时间校验失败（过期 / 未到时间） | `clock.timestamp_ms()` 与合约逻辑对比 |
+| `5` | 状态不正确（如已结束、未开始） | 检查 `is_settled`、`is_online` 等状态字段 |
+
+### 快速定位 Abort 来源
+
+```bash
+# 在源代码中搜索错误码
+grep -n "assert!.*4\b\|abort.*4\b\|= 4;" sources/*.move
+```
+
+### 遇到 Abort 时，第一反应不该是“合约坏了”
+
+更稳的顺序通常是：
+
+1. 先看 `function_name`
+2. 再看 abort code
+3. 再对照当时传入的对象、地址、金额、时间参数
+
+很多 Abort 其实不是代码 bug，而是：
+
+- 用了错对象
+- 当前状态不满足前置条件
+- 前端组装了过期或不完整的参数
+
+---
+
+##  24.4 Gas 相关问题
+
+### `InsufficientGas`（Gas 耗尽）
+
+```
+TransactionExecutionError: InsufficientGas
+```
+
+**解决方案：阶梯排查**
+
+```typescript
+// 1. 先 dryRun 估算 Gas
+const estimate = await client.dryRunTransactionBlock({
+  transactionBlock: await tx.build({ client }),
+});
+console.log("Gas 估算：", estimate.effects.gasUsed);
+
+// 2. 在实际交易中设置足够的 Gas Budget（+20% 缓冲）
+const gasUsed = Number(estimate.effects.gasUsed.computationCost)
+              + Number(estimate.effects.gasUsed.storageCost);
+tx.setGasBudget(Math.ceil(gasUsed * 1.2));
+```
+
+### `GasBudgetTooHigh`
+
+你的 Gas Budget 超过了账户余额：
+```typescript
+// 查询账户 SUI 余额
+const balance = await client.getBalance({ owner: address, coinType: "0x2::sui::SUI" });
+const maxBudget = Number(balance.totalBalance) * 0.5; // 最多用 50% 余额做 Gas
+tx.setGasBudget(Math.min(desired_budget, maxBudget));
+```
+
+### Gas 问题最容易被误判成“钱包没钱”
+
+实际上常见成因有三种：
+
+- 真没钱
+- Gas budget 设太保守
+- 交易模型本身就太重
+
+如果你只会不断调大 budget，而不去看 dry run 结果里的成本结构，最后通常只是把结构问题掩盖掉。
+
+---
+
+##  24.5 对象版本冲突
+
+```
+TransactionExecutionError: ObjectVersionUnavailableForConsumption
+```
+
+**原因**：你的代码持有一个旧版本的对象引用，但链上已经被其他交易修改。
+
+**常见场景**：同时发起多个使用同一共享对象的交易（如 `Market`）。
+
+**解决**：
+```typescript
+// ❌ 错误：并行发起多个使用同一共享对象的交易
+await Promise.all([buyTx1, buyTx2])
+
+// ✅ 正确：顺序执行
+for (const tx of [buyTx1, buyTx2]) {
+  await client.signAndExecuteTransaction({ transaction: tx })
+  // 等待确认后再发下一笔
+}
+```
+
+### 版本冲突本质上在提醒你：对象是活的
+
+只要多个交易都要写同一个对象，就要假设它随时可能在你再次提交前已经变了。
+
+所以这类问题往往不是“偶发玄学”，而是系统设计告诉你：
+
+- 这里存在共享热点
+- 这里需要串行化或刷新对象版本
+- 这里可能需要重新考虑分片或拆对象
+
+---
+
+##  24.6 dApp 钱包连接问题
+
+### EVE Vault 未检测到
+
+```
+WalletNotFoundError: No wallet found
+```
+
+**排查清单：**
+1. ✅ EVE Vault 浏览器扩展是否已安装并启用？
+2. ✅ `VITE_SUI_NETWORK` 是否与 Vault 当前网络一致（testnet/mainnet）？
+3. ✅ `@evefrontier/dapp-kit` 版本是否与 Vault 版本兼容？
+
+```typescript
+// 列出所有检测到的钱包（调试用）
+import { getWallets } from "@mysten/wallet-standard";
+const wallets = getWallets();
+console.log("检测到的钱包：", wallets.get().map(w => w.name));
+```
+
+### 签名请求被静默拒绝（无弹窗）
+
+**原因**：Vault 可能处于锁定状态。
+
+**解决**：在发起签名前检查钱包状态：
+```typescript
+const { currentAccount } = useCurrentAccount();
+if (!currentAccount) {
+  // 引导用户连接钱包，而不是直接发起签名
+  showConnectModal();
+  return;
+}
+```
+
+### 钱包问题排查顺序
+
+最稳的顺序通常是：
+
+1. 钱包有没有被检测到
+2. 当前账户有没有连接
+3. 网络是不是对的
+4. 对象和权限是不是当前账户可用的
+
+不要一看到签名失败就直接怀疑 Vault 本身。有大量问题其实是前端状态、网络和对象上下文没对齐。
+
+---
+
+##  24.7 链上数据读取问题
+
+### `getObject` 返回 `null`
+
+```typescript
+const obj = await client.getObject({ id: "0x...", options: { showContent: true } });
+if (!obj.data) {
+  // 对象不存在，或 ID 错误
+  console.error("对象不存在，检查 ID 是否正确（可能是 testnet/mainnet 混淆）");
+}
+```
+
+**常见原因**：
+- 用了 testnet 的 Object ID 去查 mainnet（或反之）
+- 对象已被删除（合约调用了 `id.delete()`）
+- 拼写错误
+
+### `showContent: true` 但 `content.fields` 为空
+
+```typescript
+const content = obj.data?.content;
+if (content?.dataType !== "moveObject") {
+  // 这是一个 package 对象，不是 Move 对象
+  console.error("对象不是 MoveObject，可能 ID 指向的是一个 Package");
+}
+```
+
+### 读不到数据时，优先检查哪四件事
+
+1. ID 是否来自正确网络
+2. 这个 ID 是对象还是包
+3. 对象是否已经删除或迁移
+4. 前端解析路径是不是和真实字段结构一致
+
+很多“读不到”的问题，根本不是节点坏了，而是你自己查错对象了。
+
+---
+
+##  24.8 本地开发环境问题
+
+### Docker 本地链启动失败
+
+```bash
+# 查看容器日志
+docker compose logs -f
+
+# 常见原因：端口被占用
+lsof -i :9000
+kill -9 <PID>
+
+# 重置本地链状态（清空所有数据重新开始）
+docker compose down -v
+docker compose up -d
+```
+
+### `sui client publish` 失败
+
+```bash
+# 错误：Package verification failed
+# 原因：依赖的 world-contracts 地址与本地节点不一致
+
+# 在 Move.toml 中确认本地测试使用 localnet 的包地址
+[addresses]
+world = "0x_LOCAL_WORLD_ADDRESS_"  # 从本地链部署结果获取
+```
+
+### 合约部署后无法调用（找不到函数）
+
+```bash
+# 检查发布的包 ID 是否与 ENV 配置一致
+echo $VITE_WORLD_PACKAGE
+
+# 验证链上包是否包含预期函数
+sui client object 0x_PACKAGE_ID_ --json | jq '.content.disassembled'
+```
+
+### 环境问题最怕“半正确”
+
+也就是：
+
+- 本地链是好的
+- CLI 也能连
+- 但某个地址、依赖或 ENV 还停在另一套环境
+
+这种问题最烦，因为表面上每一层都“看起来没坏”。所以只要碰到环境类问题，最好把：
+
+- 当前网络
+- 当前地址
+- 当前包 ID
+- 当前 ENV 配置
+
+一次性全打印出来比逐个猜快得多。
+
+---
+
+##  24.9 调试工作流：系统化排查
+
+```
+遇到问题时，按以下顺序排查：
+
+1. 读错误信息（不要忽略任何细节）
+   ├── 是 Move abort？→ 找 abort code → 查合约源码
+   ├── 是 Gas 问题？→ dryRun 估算 → 调整 budget
+   └── 是 TypeScript 错误？→ console.log 每一步的参数
+
+2. 隔离问题
+   ├── 用 Sui Explorer 直接调用合约（绕开 dApp）
+   ├── 写 Move 单元测试重现问题
+   └── 用 curl/Postman 测试 GraphQL 查询
+
+3. 与社区对齐
+   ├── 搜索 Discord #builders 频道
+   ├── 粘贴完整错误信息（包括 Transaction Digest）
+   └── 提供最小可复现代码
+```
+
+### 一个更实战的排查心法
+
+每次都先尽量把问题缩成最小：
+
+- 最少对象
+- 最少一步操作
+- 最短调用链
+
+因为链上系统一旦把前端、后端、钱包、索引、游戏服都卷进来，问题会迅速放大。先缩小，再定位，效率最高。
+
+---
+
+##  24.10 常用调试工具
+
+| 工具 | 用途 | 链接 |
 |------|------|------|
-| `Killmail` | 链上击杀记录共享对象 | 看唯一 key、时间戳、击杀双方与发生地如何落盘 |
-| `LossType` | 区分飞船/建筑损失 | 看它如何影响上层业务解释 |
-| `KillmailRegistry` | 注册表与索引入口 | 看它如何避免重复创建、如何定位记录 |
-| `TenantItemId` | 游戏内对象到链上映射键 | 看 tenant + item_id 如何形成稳定业务键 |
-
-## 关键入口函数
-
-| 入口 | 作用 | 你要确认什么 |
-|------|------|------|
-| `create_killmail` | 创建击杀记录 | 是否先做 sponsor 校验、唯一性校验、防重放 |
-| `derived_object::claim` 相关路径 | 生成确定性对象 ID | 业务 key 是否稳定、是否会被重复 claim |
-| registry 读写入口 | 建立查找关系 | Registry 是否只是索引，而不是记录本体 |
-
-## 最容易误读的点
-
-- `Killmail` 不是单纯事件日志，而是可查询、可索引的共享对象
-- `Registry` 不是为了“多存一份数据”，而是为了稳定检索和唯一性约束
-- 唯一性来自业务 key + `derived_object` 路径，不是随手生成一个新 UID 就完事
-
-读这一章时，最好同时带着两个视角：**对象视角**和**索引视角**。对象视角关心的是“链上到底落了什么状态，后续合约能不能直接读它”；索引视角关心的是“链下服务怎样稳定发现它、聚合它、按业务键定位它”。KillMail 之所以比普通事件更重，是因为 EVE 把它当成可长期复用的世界状态，而不是一次性广播消息。很多 Builder 第一次接触时会觉得“既然已经 emit 事件，为什么还要 share_object 一份对象”，根本原因就在这里：事件适合广播和统计，对象才适合后续合约组合、权限校验和确定性寻址。
-
-## 2.1 什么是 KillMail？
-
-在 EVE Frontier 中，每一次玩家对玩家（PvP）的击杀事件都会在链上生成一条不可篡改的记录，称为 **KillMail（击杀邮件）**。这不只是一个日志——它是一个具有唯一对象 ID 的共享对象，任何人都可以在链上查询。
-
-```
-链上结构关系：
-KillmailRegistry（注册表）
-    └── Killmail（共享对象）
-            ├── killer_id    : 击杀者 TenantItemId
-            ├── victim_id    : 被击杀者 TenantItemId
-            ├── kill_timestamp (Unix 秒)
-            ├── loss_type    : SHIP | STRUCTURE
-            └── solar_system_id : 发生地星系
-```
+| **Sui Explorer** | 查看交易详情、对象状态 | https://suiexplorer.com |
+| **Sui GraphQL IDE** | 手动测试 GraphQL 查询 | https://graphql.testnet.sui.io |
+| **Move Prover** | 形式化验证合约属性 | `sui move prove` |
+| **dryRun** | 估算 Gas 与模拟执行 | `client.dryRunTransactionBlock()` |
+| **sui client call** | 命令行直接调用合约 | `sui client call --help` |
 
 ---
 
-## 2.2 KillMail 的核心数据结构
+## 🔖 本章小结
 
-### 源码精读（`world/sources/killmail/killmail.move`）
-
-```move
-// === Enums ===
-/// 击杀类型：飞船 or 建筑
-public enum LossType has copy, drop, store {
-    SHIP,
-    STRUCTURE,
-}
-
-/// 链上 KillMail 共享对象
-public struct Killmail has key {
-    id: UID,
-    key: TenantItemId,                  // 来自 item_id + tenant 的确定性 ID
-    killer_id: TenantItemId,
-    victim_id: TenantItemId,
-    reported_by_character_id: TenantItemId,
-    kill_timestamp: u64,                // Unix timestamp（秒，非毫秒！）
-    loss_type: LossType,
-    solar_system_id: TenantItemId,
-}
-```
-
-> **关键设计**：Killmail 的 `id` 不是随机生成的，而是通过 `derived_object::claim(registry, key)` 从 `KillmailRegistry` 确定性派生而来，保证了 `item_id → object_id` 的映射唯一性。
-
-### TenantItemId 是什么？
-
-```move
-// world/sources/primitives/in_game_id.move
-public struct TenantItemId has copy, drop, store {
-    item_id: u64,    // 游戏内部的业务 ID
-    tenant: String,  // 游戏租户标识（如 "evefrontier"）
-}
-```
-
-```move
-// 创建方式
-let key = in_game_id::create_key(item_id, tenant);
-```
-
-这个设计让同一个 `item_id` 可以在不同 tenant（不同服务器/游戏版本）中复用，互不冲突。
-
----
-
-## 2.3 KillMail 的创建流程
-
-### 全流程解析
-
-```move
-public fun create_killmail(
-    registry: &mut KillmailRegistry,
-    admin_acl: &AdminACL,           // 只有授权服务器才能创建
-    item_id: u64,                   // 击杀记录的 in-game ID
-    killer_id: u64,
-    victim_id: u64,
-    reported_by_character: &Character,  // 提交报告的角色（必须在场）
-    kill_timestamp: u64,            // Unix 秒
-    loss_type: u8,                  // 1=SHIP, 2=STRUCTURE
-    solar_system_id: u64,
-    ctx: &mut TxContext,
-) {
-    // 1. 验证调用者是授权服务器
-    admin_acl.verify_sponsor(ctx);
-
-    // 2. 用报告者的 tenant 生成 key
-    let tenant = reported_by_character.tenant();
-    let killmail_key = in_game_id::create_key(item_id, tenant);
-
-    // 3. 防止重复创建
-    assert!(!registry.object_exists(killmail_key), EKillmailAlreadyExists);
-
-    // 4. 验证关键字段非零
-    assert!(item_id != 0, EKillmailIdEmpty);
-    assert!(killer_id != 0, ECharacterIdEmpty);
-    // ...
-
-    // 5. 从注册表派生确定性 UID（核心机制）
-    let killmail_uid = derived_object::claim(registry.borrow_registry_id(), killmail_key);
-
-    // 6. 创建并共享
-    let killmail = Killmail { id: killmail_uid, ... };
-    transfer::share_object(killmail);
-}
-```
-
-### 流程图
-
-```
-游戏服务器 → create_killmail()
-                ↓
-       verify_sponsor (AdminACL 检查)
-                ↓
-       create_key(item_id, tenant)
-                ↓
-       object_exists? → 是 → ABORT EKillmailAlreadyExists
-                ↓ 否
-       derived_object::claim → 确定性 UID
-                ↓
-       Killmail {..} → share_object
-                ↓
-       emit KillmailCreatedEvent
-```
-
----
-
-## 2.4 事件系统与链下索引
-
-```move
-public struct KillmailCreatedEvent has copy, drop {
-    key: TenantItemId,
-    killer_id: TenantItemId,
-    victim_id: TenantItemId,
-    reported_by_character_id: TenantItemId,
-    loss_type: LossType,
-    kill_timestamp: u64,
-    solar_system_id: TenantItemId,
-}
-```
-
-KillMail 采用**事件索引 + 对象存储双轨制**：
-
-| 组件 | 用途 |
-|------|------|
-| 链上共享对象 `Killmail` | 可被合约读取，Builder 扩展可查询 |
-| `KillmailCreatedEvent` | 供索引服务实时监听，构建排行榜/统计 |
-
-这套双轨设计里，事件不是状态真相，而是**发现机制**。索引器通常先靠事件知道“有一条新 KillMail 出现了”，再根据对象 ID 或业务 key 回到链上读取对象本体。这样做的好处是，链下排行榜、成就系统、战斗报表可以高吞吐地消费事件，但真正涉及奖励发放、争议仲裁、后续扩展读写时，仍然能回到对象这一层拿到稳定状态。否则一旦只靠事件，后续 Builder 合约就没有统一的链上读取入口。
-
----
-
-## 2.5 Builder 如何使用 KillMail？
-
-### 场景：击杀积分奖励系统
-
-Builder 可以监听 `KillmailCreatedEvent` 事件，在自己的扩展合约中接收奖励请求：
-
-```move
-module my_pvp::kill_reward;
-
-use world::killmail::Killmail;
-use world::access::OwnerCap;
-use sui::coin::{Self, Coin};
-use sui::sui::SUI;
-
-public struct RewardPool has key {
-    id: UID,
-    balance: Balance<SUI>,
-    reward_per_kill: u64,
-    owner: address,
-}
-
-/// 玩家提交 KillMail 对象领取 SUI 奖励
-pub fun claim_kill_reward(
-    pool: &mut RewardPool,
-    killmail: &Killmail,           // 传入链上 KillMail 对象
-    character_id: ID,              // 调用者的角色 ID
-    ctx: &mut TxContext,
-) {
-    // 验证 killmail.killer_id 对应当前调用者的角色
-    // （实际需要结合 OwnerCap 验证）
-    assert!(balance::value(&pool.balance) >= pool.reward_per_kill, 0);
-
-    let reward = coin::take(&mut pool.balance, pool.reward_per_kill, ctx);
-    transfer::public_transfer(reward, ctx.sender());
-}
-```
-
-### 场景：基于 KillMail 的 NFT 勋章
-
-```move
-/// 击杀 100 次后铸造"百杀勋章"NFT
-public fun mint_centurion_badge(
-    tracker: &KillTracker,           // 自建的击杀次数追踪对象
-    recipient: address,
-    ctx: &mut TxContext,
-) {
-    assert!(tracker.kill_count >= 100, ENotEnoughKills);
-    // 铸造 NFT...
-}
-```
-
----
-
-## 2.6 `derived_object` 模式深度解析
-
-KillMail 使用了 Sui 的 `derived_object`（确定性对象 ID）模式，这是 EVE Frontier World 合约中的重要设计：
-
-```move
-// 从注册表派生确定性 UID
-let killmail_uid = derived_object::claim(registry.borrow_registry_id(), killmail_key);
-```
-
-**为什么不用 `object::new(ctx)`？**
-
-| 对比 | `object::new(ctx)` | `derived_object::claim()` |
-|---|---|---|
-| ID 来源 | 随机（基于 tx digest） | 确定性（基于 key） |
-| 重复创建 | 无法防止（每次都是新 ID） | 自动防止（key 只能用一次） |
-| 链下预计算 | 不可能 | 可以（已知 key 即知 ID） |
-| 适用场景 | 普通对象 | 游戏资产、KillMail 等有业务 ID 的对象 |
-
----
-
-## 2.7 KillMail 注册表的设计
-
-```move
-// world/sources/registry/killmail_registry.move
-public struct KillmailRegistry has key {
-    id: UID,
-    // 注意：没有其他字段！所有数据通过 derived_object 存储
-}
-
-pub fun object_exists(registry: &KillmailRegistry, key: TenantItemId): bool {
-    derived_object::exists(&registry.id, key)
-}
-```
-
-这个注册表极其精简——它只是一个 `UID` 容器，所有的 KillMail 作为其 `derived children` 存在于 Sui 的状态树中。
-
-这里的关键设计哲学是：**Registry 不保存业务明细，只提供命名空间和唯一性锚点**。这种写法比“Registry 里再放一个 Table<key, object_id>”更轻，因为真正的唯一性已经由 `derived_object` 保证了。你可以把它理解成一个“父目录”而不是“数据库表”。一旦 Builder 读懂这个思路，后面再看角色、建筑、许可、凭证之类的确定性对象模式时会轻松很多。
-
----
-
-## 2.8 安全性分析
-
-### 仅服务器可创建
-
-```move
-admin_acl.verify_sponsor(ctx);
-```
-
-`verify_sponsor` 检查调用者是否在 `AdminACL.authorized_sponsors` 列表中。普通玩家**无法**伪造 KillMail——每条击杀记录都由链接到游戏服务器密钥的地址签发。
-
-### 防重放
-
-```move
-assert!(!registry.object_exists(killmail_key), EKillmailAlreadyExists);
-```
-
-使用 `derived_object` 的存在性检查，天然防止同一场战斗被重复提交。
-
----
-
-## 2.9 实战练习
-
-1. **读取 KillMail**：写一个 PTB（可编程交易块），传入一个 KillMail 对象 ID，打印 `killer_id`、`victim_id`、`kill_timestamp`
-2. **击杀积分合约**：基于 KillMail 实现一个积分系统，每次击杀飞船得 100 分，击杀建筑得 50 分
-3. **KillMail NFT 凭证**：设计一个 Builder 扩展，允许受害者（victim）凭借 KillMail 对象 ID 申请"死亡补偿金"
-
----
-
-## 本章小结
-
-| 概念 | 要点 |
-|------|------|
-| `Killmail` | 不可变的共享对象，记录 PvP 击杀事件 |
-| `TenantItemId` | `item_id + tenant` 的复合键，支持多租户 |
-| `derived_object` | 确定性对象 ID，防止重复，支持链下预计算 |
-| `KillmailRegistry` | 用 UID 作为 derived children 的父节点 |
-| 安全机制 | AdminACL 验证 + derived_object 防重放 |
-
-> 下一章：**链下签名 × 链上验证** —— 游戏服务器如何用密钥签名事件，合约如何验证这些签名的真实性。
+| 错误类型 | 最快排查路径 |
+|--------|-----------|
+| Move 编译错误 | 查 `Move.toml` 依赖 + ability 声明 |
+| Abort (code N) | 合约源码 grep abort code，对照表速查 |
+| Gas 耗尽 | `dryRun()` 预估 + 设置 20% 缓冲 |
+| 对象版本冲突 | 顺序执行而非并发，等待每笔 confirm |
+| 钱包未检测到 | 检查扩展安装、网络一致性、版本兼容 |
+| 对象读取为空 | 确认网络环境（testnet vs mainnet） |
+| 本地链问题 | `docker compose logs` + 重置数据卷 |

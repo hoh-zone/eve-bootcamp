@@ -1,327 +1,459 @@
-# Chapter 19：Move 高级模式 — 升级兼容性设计
+# Chapter 19：全栈 dApp 架构设计
 
-> **目标：** 掌握生产级 Move 合约的升级兼容架构，包括版本化 API、数据迁移、Policy 控制，以及在不中断服务的情况下平滑升级。
-
----
-
-> 状态：设计进阶章节。正文以升级兼容、迁移和时间锁控制为主。
-
-## 19.1 升级兼容性问题的本质
-
-Move 合约升级面临两个核心约束：
-
-```
-约束1：结构体定义不可修改（不能加/删字段，不能改字段类型）
-约束2：函数签名不可修改（参数和返回值不能变）
-
-BUT：
-✅ 可以添加新函数
-✅ 可以添加新模块
-✅ 可以修改函数内部逻辑（不变签名）
-✅ 可以添加新结构体
-```
-
-**挑战**：如果你的合约 v1 有个 `Market` 结构体，v2 想增加一个 `expiry_ms` 字段，你不能直接修改。
-
-升级兼容这一章真正要解决的，不是“怎么发新版本”，而是：
-
-> 怎么让一个已经被对象、前端、脚本、用户共同依赖的系统继续活下去。
-
-所以升级问题本质上是四层兼容问题：
-
-- 链上对象兼容
-- 链上接口兼容
-- 前端解析兼容
-- 运维流程兼容
+> **目标：** 设计和实现生产级的 EVE Frontier dApp，涵盖状态管理、实时数据更新、错误处理、响应式设计和 CI/CD 自动化部署。
 
 ---
 
-## 19.2 扩展模式：用动态字段追加"未来字段"
+> 状态：架构章节。正文以全栈 dApp 组织、状态管理和部署为主。
 
-**最佳实践**：预先为未来字段留下扩展空间：
+##  19.1 全栈架构概览
 
-```move
-module my_market::market_v1;
-
-/// 当前字段
-public struct Market has key {
-    id: UID,
-    toll: u64,
-    owner: address,
-    // 注意：不要试图预测未来需要的字段——因为你改不了
-    // 而是依赖动态字段做扩展
-}
-
-// V1 → V2：用动态字段追加 expiry_ms
-// （升级包发布后，在迁移脚本中调用）
-public entry fun add_expiry_field(
-    market: &mut Market,
-    expiry_ms: u64,
-) {
-    // 如果还没有这个字段，才添加
-    if !df::exists_(&market.id, b"expiry_ms") {
-        df::add(&mut market.id, b"expiry_ms", expiry_ms);
-    }
-}
-
-/// V2 版本读取 expiry（向后兼容：旧对象没有这个字段时返回默认值）
-public fun get_expiry(market: &Market): u64 {
-    if df::exists_(&market.id, b"expiry_ms") {
-        *df::borrow<vector<u8>, u64>(&market.id, b"expiry_ms")
-    } else {
-        0  // 默认永不过期
-    }
-}
+```
+┌─────────────────────────────────────────────────────┐
+│                    用户浏览器                         │
+│  ┌──────────────────────────────────────────────┐   │
+│  │              React / Next.js dApp             │   │
+│  │  ┌──────────┐  ┌──────────┐  ┌────────────┐  │   │
+│  │  │ EVE Vault│  │React     │  │ Tanstack   │  │   │
+│  │  │ Wallet   │  │ dapp-kit │  │ Query      │  │   │
+│  │  └──────────┘  └──────────┘  └────────────┘  │   │
+│  └──────────────────────────────────────────────┘   │
+└─────────────────────────┬───────────────────────────┘
+                          │
+              ┌───────────┼────────────┐
+              ▼           ▼            ▼
+         Sui 全节点    你的后端      游戏服务器
+         GraphQL      赞助服务      位置 / 验证 API
+         事件流        索引服务
 ```
 
-### 动态字段为什么会成为升级逃生口？
+这张图最该传达的不是“技术栈很多”，而是：
 
-因为它让你在不改原始 struct 布局的前提下，给旧对象补充新语义。
+> 一个真实可用的 EVE dApp，从来不是单页前端，而是一整套分层协同系统。
 
-但它也有边界：
+这套系统里每层都在解决不同问题：
 
-- 适合追加字段
-- 不适合把所有未来复杂结构都硬塞进去
+- 浏览器负责交互和状态反馈
+- 钱包负责签名与身份
+- 全节点和 GraphQL 提供链上真相
+- 后端负责赞助、风控、聚合
+- 游戏服务器提供链下世界解释和验证
 
-如果一个版本升级需要往对象上拼很多临时字段，那通常说明你该重新思考模型，而不是无限依赖补丁式扩展。
+如果这些职责不分层，系统表面能跑，后面一定会越来越难维护。
 
 ---
 
-## 19.3 版本化 API 设计
+##  19.2 项目结构（Next.js 示例）
 
-当你需要改变函数行为时，保留旧版本，添加新版本：
+```
+dapp/
+├── app/                          # Next.js App Router
+│   ├── layout.tsx                # 全局布局（Provider）
+│   ├── page.tsx                  # 首页
+│   ├── gate/[id]/page.tsx        # 星门详情页
+│   └── dashboard/page.tsx        # 管理面板
+├── components/
+│   ├── common/
+│   │   ├── WalletButton.tsx
+│   │   ├── TxStatus.tsx
+│   │   └── LoadingSpinner.tsx
+│   ├── gate/
+│   │   ├── GateCard.tsx
+│   │   ├── JumpPanel.tsx
+│   │   └── TollInfo.tsx
+│   └── market/
+│       ├── ItemGrid.tsx
+│       └── BuyButton.tsx
+├── hooks/
+│   ├── useGate.ts                # 星门数据
+│   ├── useMarket.ts              # 市场数据
+│   ├── useSponsoredAction.ts     # 赞助交易
+│   └── useEvents.ts              # 实时事件
+├── lib/
+│   ├── sui.ts                    # SuiClient 实例
+│   ├── contracts.ts              # 合约常量
+│   ├── queries.ts                # GraphQL 查询
+│   └── config.ts                 # 环境配置
+├── store/
+│   └── useAppStore.ts            # Zustand 全局状态
+└── .env.local
+```
 
-```move
-module my_market::market;
+### 目录结构的真正目的不是“好看”，而是防止职责蔓延
 
-/// V1 API（永远保持向后兼容）
-public entry fun buy_item_v1(
-    market: &mut Market,
-    payment: Coin<SUI>,
-    item_type_id: u64,
-    ctx: &mut TxContext,
-): Item {
-    // 原始逻辑
-}
+最常见的失控方式是：
 
-/// V2 API（新功能：支持折扣码）
-public entry fun buy_item_v2(
-    market: &mut Market,
-    payment: Coin<SUI>,
-    item_type_id: u64,
-    discount_code: Option<vector<u8>>,  // 新参数
-    clock: &Clock,                       // 新参数（时效验证）
-    ctx: &mut TxContext,
-): Item {
-    // 新逻辑（包含折扣处理）
-    let effective_price = apply_discount(market, item_type_id, discount_code, clock);
-    // ...
+- 组件里直接塞链上请求
+- Hook 里直接写业务规则
+- 页面里直接拼交易细节
+- 全局 store 里塞一切状态
+
+短期能跑，长期会很难改。
+
+一个更稳的边界通常是：
+
+- `components/` 负责展示和交互
+- `hooks/` 负责页面级数据流
+- `lib/` 负责底层客户端和查询封装
+- `store/` 只放真正跨页面共享的本地 UI 状态
+
+---
+
+##  19.3 全局 Provider 配置
+
+```tsx
+// app/layout.tsx
+"use client";
+
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { SuiClientProvider, WalletProvider } from "@mysten/dapp-kit";
+import { EveFrontierProvider } from "@evefrontier/dapp-kit";
+import { getFullnodeUrl } from "@mysten/sui/client";
+import { EVE_VAULT_WALLET } from "@evefrontier/dapp-kit";
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,    // 30 秒内不重新请求
+      refetchInterval: false,
+      retry: 2,
+    },
+  },
+});
+
+const networks = {
+  testnet: { url: getFullnodeUrl("testnet") },
+  mainnet: { url: getFullnodeUrl("mainnet") },
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="zh-CN">
+      <body>
+        <QueryClientProvider client={queryClient}>
+          <SuiClientProvider networks={networks} defaultNetwork="testnet">
+            <WalletProvider wallets={[EVE_VAULT_WALLET]} autoConnect>
+              <EveFrontierProvider>
+                {children}
+              </EveFrontierProvider>
+            </WalletProvider>
+          </SuiClientProvider>
+        </QueryClientProvider>
+      </body>
+    </html>
+  );
 }
 ```
 
-**dApp 端适配**：在 TypeScript 端检查合约版本，选择调用哪个函数：
+### Provider 链其实是在声明整套应用的运行时依赖顺序
+
+这不是形式问题。顺序一旦错，常见后果包括：
+
+- 钱包上下文拿不到 client
+- Query cache 失效不按预期工作
+- dapp-kit 读取不到需要的环境
+
+所以全局 Provider 最好尽量稳定，不要在业务迭代中频繁改动。
+
+---
+
+##  19.4 状态管理（Zustand + React Query）
 
 ```typescript
-async function buyItem(useV2: boolean, ...) {
-  const tx = new Transaction();
+// store/useAppStore.ts
+import { create } from "zustand";
 
-  if (useV2) {
-    tx.moveCall({ target: `${PKG}::market::buy_item_v2`, ... });
-  } else {
-    tx.moveCall({ target: `${PKG}::market::buy_item_v1`, ... });
-  }
+interface AppStore {
+  selectedGateId: string | null;
+  txPending: boolean;
+  txDigest: string | null;
+  setSelectedGate: (id: string | null) => void;
+  setTxPending: (pending: boolean) => void;
+  setTxDigest: (digest: string | null) => void;
 }
+
+export const useAppStore = create<AppStore>((set) => ({
+  selectedGateId: null,
+  txPending: false,
+  txDigest: null,
+  setSelectedGate: (id) => set({ selectedGateId: id }),
+  setTxPending: (pending) => set({ txPending: pending }),
+  setTxDigest: (digest) => set({ txDigest: digest }),
+}));
 ```
-
-### 为什么“保留旧入口”往往比“强迫全部迁移”更稳？
-
-因为线上系统的调用方从来不只有你自己：
-
-- 旧前端还在跑
-- 用户脚本可能还在用
-- 第三方聚合器可能还没升级
-
-所以最稳的升级路径往往不是“一刀切替换”，而是：
-
-1. 新旧并存
-2. 给迁移窗口
-3. 逐步下线旧接口
-
----
-
-## 19.4 升级锁定策略
-
-对于高价值合约，可以在 UpgradeCap 上增加时间锁：
-
-```move
-module my_gov::upgrade_timelock;
-
-use sui::package::UpgradeCap;
-use sui::clock::Clock;
-
-public struct TimelockWrapper has key {
-    id: UID,
-    upgrade_cap: UpgradeCap,
-    delay_ms: u64,           // 升级需要提前公告的等待时间
-    announced_at_ms: u64,    // 公告时间（0 = 未公告）
-}
-
-/// 第一步：公告升级意图（开始计时）
-public entry fun announce_upgrade(
-    wrapper: &mut TimelockWrapper,
-    _admin: &AdminCap,
-    clock: &Clock,
-) {
-    assert!(wrapper.announced_at_ms == 0, EAlreadyAnnounced);
-    wrapper.announced_at_ms = clock.timestamp_ms();
-}
-
-/// 第二步：等待延迟期后才能执行升级
-public fun authorize_upgrade(
-    wrapper: &mut TimelockWrapper,
-    clock: &Clock,
-): &mut UpgradeCap {
-    assert!(wrapper.announced_at_ms > 0, ENotAnnounced);
-    assert!(
-        clock.timestamp_ms() >= wrapper.announced_at_ms + wrapper.delay_ms,
-        ETimelockNotExpired,
-    );
-    // 重置，下次升级需要重新公告
-    wrapper.announced_at_ms = 0;
-    &mut wrapper.upgrade_cap
-}
-```
-
-### TimeLock 真正保护的不是代码，而是信任关系
-
-它给社区、协作者和用户留出了观察窗口，让升级不至于变成“管理员今晚想改什么就改什么”。
-
-这在高价值协议里非常关键，因为升级风险很多时候不是技术 bug，而是治理风险。
-
----
-
-## 19.5 大规模数据迁移策略
-
-当需要重建存储结构时，采用"增量迁移"而不是"一次性迁移"：
-
-```move
-// 场景：将 ListingsV1（vector）迁移为 ListingsV2（Table）
-module migration::market_migration;
-
-public struct MigrationState has key {
-    id: UID,
-    migrated_count: u64,
-    total_count: u64,
-    is_complete: bool,
-}
-
-/// 每次迁移一批（避免一笔交易超出计算限制）
-public entry fun migrate_batch(
-    old_market: &mut MarketV1,
-    new_market: &mut MarketV2,
-    state: &mut MigrationState,
-    batch_size: u64,         // 每次处理 batch_size 条记录
-    ctx: &TxContext,
-) {
-    let start = state.migrated_count;
-    let end = min(start + batch_size, state.total_count);
-    let mut i = start;
-
-    while (i < end) {
-        let listing = get_listing_v1(old_market, i);
-        insert_listing_v2(new_market, listing);
-        i = i + 1;
-    };
-
-    state.migrated_count = end;
-    if end == state.total_count {
-        state.is_complete = true;
-    };
-}
-```
-
-**迁移脚本：自动循环执行直到完成**
 
 ```typescript
-async function runMigration(stateId: string) {
-  let isComplete = false;
-  let batchNum = 0;
+// hooks/useGate.ts
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSuiClient } from "@mysten/dapp-kit";
+import { Transaction } from "@mysten/sui/transactions";
 
-  while (!isComplete) {
-    const tx = new Transaction();
-    tx.moveCall({
-      target: `${MIGRATION_PKG}::market_migration::migrate_batch`,
-      arguments: [/* ... */, tx.pure.u64(100)], // 每批 100 条
-    });
+export function useGate(gateId: string) {
+  const client = useSuiClient();
 
-    const result = await client.signAndExecuteTransaction({ signer: adminKeypair, transaction: tx });
-    console.log(`Batch ${++batchNum} done:`, result.digest);
+  return useQuery({
+    queryKey: ["gate", gateId],
+    queryFn: async () => {
+      const obj = await client.getObject({
+        id: gateId,
+        options: { showContent: true },
+      });
+      return obj.data?.content?.dataType === "moveObject"
+        ? obj.data.content.fields
+        : null;
+    },
+    refetchInterval: 15_000,
+  });
+}
 
-    // 检查迁移状态
-    const state = await client.getObject({ id: stateId, options: { showContent: true } });
-    isComplete = (state.data?.content as any)?.fields?.is_complete;
+export function useJumpGate(gateId: string) {
+  const queryClient = useQueryClient();
+  const { signAndExecuteSponsoredTransaction } = useSponsoredAction();
 
-    await new Promise(r => setTimeout(r, 1000)); // 间隔 1 秒
-  }
-
-  console.log("迁移完成！");
+  return useMutation({
+    mutationFn: async (characterId: string) => {
+      const tx = new Transaction();
+      tx.moveCall({
+        target: `${TOLL_PACKAGE}::toll_gate_ext::pay_toll_and_get_permit`,
+        arguments: [/* ... */],
+      });
+      return signAndExecuteSponsoredTransaction(tx);
+    },
+    onSuccess: () => {
+      // 交易成功后使相关查询失效（触发重新加载）
+      queryClient.invalidateQueries({ queryKey: ["gate", gateId] });
+      queryClient.invalidateQueries({ queryKey: ["treasury"] });
+    },
+  });
 }
 ```
 
-### 为什么迁移最好增量做，而不是一把梭？
+### React Query 和 Zustand 不要混用职责
 
-因为真实线上系统里，你通常要同时平衡：
+一个非常实用的分工是：
 
-- 计算上限
-- 风险可控
-- 失败可恢复
-- 迁移期间服务还能继续运行
+- **React Query**
+  管链上数据、远程数据、缓存、失效与重取
+- **Zustand**
+  管本地 UI 状态，例如当前选中项、弹窗、临时输入
 
-一次性迁移最大的问题不是写不出来，而是：
+一旦把链上对象也塞进 Zustand，或者把纯 UI 状态硬塞进 Query cache，后面几乎一定会变乱。
 
-- 中途失败很难恢复
-- 失败后状态容易半新半旧
-- 交易太大时根本发不出去
+### 一个成熟 dApp 至少有三层状态
+
+1. **远程真相状态**
+   链上对象、索引结果、游戏服 API 返回
+2. **本地交互状态**
+   表单、hover、loading、弹窗
+3. **事务状态**
+   正在签名、已提交、已确认、失败
+
+这三层状态更新节奏不同，不应该揉成一层。
 
 ---
 
-## 19.6 升级完整工作流
+##  19.5 实时数据推送
 
+```typescript
+// hooks/useEvents.ts
+import { useEffect, useRef, useState } from "react";
+import { useSuiClient } from "@mysten/dapp-kit";
+
+export function useRealtimeEvents<T>(
+  eventType: string,
+  options?: { maxEvents?: number }
+) {
+  const client = useSuiClient();
+  const [events, setEvents] = useState<T[]>([]);
+  const unsubRef = useRef<(() => void) | null>(null);
+  const maxEvents = options?.maxEvents ?? 50;
+
+  useEffect(() => {
+    const subscribe = async () => {
+      unsubRef.current = await client.subscribeEvent({
+        filter: { MoveEventType: eventType },
+        onMessage: (event) => {
+          setEvents((prev) => [event.parsedJson as T, ...prev].slice(0, maxEvents));
+        },
+      });
+    };
+
+    subscribe();
+    return () => { unsubRef.current?.(); };
+  }, [client, eventType, maxEvents]);
+
+  return events;
+}
+
+// 使用
+function JumpFeed() {
+  const jumps = useRealtimeEvents<{character_id: string; toll_paid: string}>(
+    `${TOLL_PACKAGE}::toll_gate_ext::GateJumped`
+  );
+
+  return (
+    <ul>
+      {jumps.map((j, i) => (
+        <li key={i}>
+          {j.character_id.slice(0, 8)}... 支付 {Number(j.toll_paid) / 1e9} SUI
+        </li>
+      ))}
+    </ul>
+  );
+}
 ```
-① 开发新版本合约（本地 + testnet 验证）
-② 声明升级意图（TimeLock 开始计时，通知社区）
-③ 社区审查期（72 小时）
-④ TimeLock 到期后，执行 sui client upgrade --upgrade-capability <CAP_ID>
-⑤ 运行数据迁移脚本（如有必要）
-⑥ 更新 dApp 配置（新 Package ID、新接口版本）
-⑦ 公告升级完成
+
+### 实时流不要拿来替代完整数据加载
+
+它更适合做：
+
+- 增量 feed
+- 提示和通知
+- 局部活跃信息
+
+而不是直接充当页面首屏数据源。更稳的策略通常是：
+
+1. 页面先加载当前快照
+2. 再接事件流补增量
+3. 定时或按需做一致性刷新
+
+---
+
+##  19.6 错误处理与用户体验
+
+```tsx
+// components/common/TxButton.tsx
+import { useState } from "react";
+
+interface TxButtonProps {
+  onClick: () => Promise<void>;
+  children: React.ReactNode;
+  disabled?: boolean;
+}
+
+export function TxButton({ onClick, children, disabled }: TxButtonProps) {
+  const [status, setStatus] = useState<"idle" | "pending" | "success" | "error">("idle");
+  const [message, setMessage] = useState("");
+
+  const handleClick = async () => {
+    setStatus("pending");
+    setMessage("⏳ 提交中...");
+    try {
+      await onClick();
+      setStatus("success");
+      setMessage("✅ 交易成功！");
+      setTimeout(() => setStatus("idle"), 3000);
+    } catch (e: any) {
+      setStatus("error");
+      // 解析 Move abort 错误码为人类可读信息
+      const abortCode = extractAbortCode(e.message);
+      setMessage(`❌ ${translateError(abortCode) ?? e.message}`);
+    }
+  };
+
+  return (
+    <div>
+      <button
+        onClick={handleClick}
+        disabled={disabled || status === "pending"}
+        className={`tx-btn tx-btn--${status}`}
+      >
+        {status === "pending" ? "⏳ 处理中..." : children}
+      </button>
+      {message && <p className={`message message--${status}`}>{message}</p>}
+    </div>
+  );
+}
+
+// 将 Move abort 错误码翻译为友好提示
+function translateError(code: number | null): string | null {
+  const errors: Record<number, string> = {
+    0: "权限不足，请确认钱包已连接",
+    1: "余额不足",
+    2: "物品已售出",
+    3: "星门未上线",
+  };
+  return code !== null ? errors[code] ?? null : null;
+}
+
+function extractAbortCode(message: string): number | null {
+  const match = message.match(/abort_code: (\d+)/);
+  return match ? parseInt(match[1]) : null;
+}
 ```
 
-### 一个成熟团队会把升级视为一次“受控发布事件”
+---
 
-也就是说，除了链上动作本身，还应该同步准备：
+##  19.7 CI/CD 自动部署
 
-- 升级公告
-- 前端切换计划
-- 回滚或停机预案
-- 升级后观察指标
+```yaml
+# .github/workflows/deploy.yml
+name: Deploy dApp
 
-否则“链上已经升级完成”并不等于“系统已经稳定完成升级”。
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - run: npm ci
+      - run: npm run test
+      - run: npm run build
+
+  deploy-preview:
+    if: github.event_name == 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci && npm run build
+        env:
+          VITE_SUI_RPC_URL: ${{ vars.TESTNET_RPC_URL }}
+          VITE_WORLD_PACKAGE: ${{ vars.TESTNET_WORLD_PACKAGE }}
+      - uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+
+  deploy-prod:
+    if: github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci && npm run build
+        env:
+          VITE_SUI_RPC_URL: ${{ vars.MAINNET_RPC_URL }}
+          VITE_WORLD_PACKAGE: ${{ vars.MAINNET_WORLD_PACKAGE }}
+      - uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-args: "--prod"
+```
 
 ---
 
 ## 🔖 本章小结
 
-| 知识点 | 核心要点 |
-|--------|--------|
-| 升级约束 | 结构体/函数签名不可改，但可加新函数/模块 |
-| 动态字段扩展 | `df::add()` 在运行时追加"未来字段" |
-| 版本化 API | `buy_v1()` / `buy_v2()` 并存，dApp 按版本选择 |
-| TimeLock 升级 | 公告 + 等待期 → 社区审查 → 才能执行 |
-| 增量迁移 | `migrate_batch()` 分批处理，避免超出计算限制 |
+| 架构组件 | 技术选择 | 职责 |
+|--------|---------|------|
+| UI 框架 | React + Next.js | 页面渲染、路由 |
+| 链上通信 | @mysten/dapp-kit + SuiClient | 读链/签名/发交易 |
+| 状态管理 | Zustand（全局） + React Query（服务端） | 缓存与同步 |
+| 实时更新 | subscribeEvent（WebSocket） | 事件推送 |
+| 错误处理 | abort code 翻译 + 状态机 | 用户友好提示 |
+| CI/CD | GitHub Actions + Vercel | 自动测试与部署 |
 
 ## 📚 延伸阅读
 
-- [Sui Package 升级](https://docs.sui.io/guides/developer/packages/upgrade)
-- [Chapter 9：安全审计](./chapter-09.md)
-- [EVE Builder 约束](https://github.com/evefrontier/builder-documentation/blob/main/welcome/contstraints.md)
+- [Move Book](https://move-book.com)
+- [Tanstack Query 文档](https://tanstack.com/query/latest)
+- [dapp-kit React 文档](https://sdk.mystenlabs.com/dapp-kit)

@@ -111,7 +111,7 @@ const EInvalidFaction: u64 = 0;
 ```move
 module war_game::war_token;
 
-/// WAR Token（标准 Coin 设计，参考 Chapter 8）
+/// WAR Token（标准 Coin 设计，参考 Chapter 14）
 public struct WAR_TOKEN has drop {}
 
 fun init(witness: WAR_TOKEN, ctx: &mut TxContext) {
@@ -433,15 +433,15 @@ npm run dev
 | Chapter 3：Witness 模式 | `MiningAuth`, `AlphaGateAuth`, `BetaGateAuth` |
 | Chapter 4：组件扩展注册 | 炮塔 + 星门 + 存储箱均有独立扩展 |
 | Chapter 5：dApp + Hooks | `useRealtimeEvents` 驱动战报实时更新 |
-| Chapter 6：OwnerCap | 联盟 Leader 持有各组件的 OwnerCap |
-| Chapter 7：事件系统 | `ResourceMined` 事件驱动 dApp |
-| Chapter 8：代币经济 | WAR Token 作为采矿奖励 |
-| Chapter 9：安全审计 | 权限验证 + 资源不超量扣减 |
-| Chapter 10：发布流程 | 多合约同时发布 + 初始化脚本 |
-| Chapter 11：赞助交易 | 炮塔攻击验证需服务器签名 |
-| Chapter 12：GraphQL | 实时查询矿区和战役状态 |
-| Chapter 13：跨合约 | mining_depot 调用 faction_nft 的只读视图 |
-| Chapter 14：NFT | FactionNFT 的 Display 展示势力信息 |
+| Chapter 11：OwnerCap | 联盟 Leader 持有各组件的 OwnerCap |
+| Chapter 12：事件系统 | `ResourceMined` 事件驱动 dApp |
+| Chapter 14：代币经济 | WAR Token 作为采矿奖励 |
+| Chapter 17：安全审计 | 权限验证 + 资源不超量扣减 |
+| Chapter 23：发布流程 | 多合约同时发布 + 初始化脚本 |
+| Chapter 8：赞助交易 | 炮塔攻击验证需服务器签名 |
+| Chapter 9：GraphQL | 实时查询矿区和战役状态 |
+| Chapter 15：跨合约 | mining_depot 调用 faction_nft 的只读视图 |
+| Chapter 13：NFT | FactionNFT 的 Display 展示势力信息 |
 
 ---
 

@@ -299,6 +299,6 @@ export function LendingDashboard() {
 ---
 
 ## 📚 关联文档
-- [Chapter 7：动态字段](./chapter-07.md)
-- [Chapter 8：经济系统](./chapter-08.md)
-- [Chapter 13：跨合约组合](./chapter-13.md)
+- [Chapter 12：动态字段](./chapter-12.md)
+- [Chapter 14：经济系统](./chapter-14.md)
+- [Chapter 15：跨合约组合](./chapter-15.md)

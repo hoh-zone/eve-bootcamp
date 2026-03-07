@@ -1,16 +1,18 @@
-module chapter_14::snippet_05;
+module chapter_08::snippet_05;
 
-// 使用 NFT 检查权限的方式
-public entry fun enter_restricted_zone(
-    gate: &Gate,
-    character: &Character,
-    badge: &AllianceBadge,   // 持有勋章才能调用
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    // 验证勋章等级（需要金牌才能进入）
-    assert!(badge.tier >= 3, EInsufficientBadgeTier);
-    // 验证勋章属于正确集合（防止伪造）
-    assert!(badge.collection_id == OFFICIAL_COLLECTION_ID, EWrongCollection);
-    // ...
+public fun calculate_price(
+    base_price: u64,
+    buyer: address,
+    member_registry: &Table<address, MemberTier>,
+): u64 {
+    if table::contains(member_registry, buyer) {
+        let tier = table::borrow(member_registry, buyer);
+        match (tier) {
+            MemberTier::Gold => base_price * 80 / 100,   // 8折
+            MemberTier::Silver => base_price * 90 / 100, // 9折
+            _ => base_price,
+        }
+    } else {
+        base_price
+    }
 }

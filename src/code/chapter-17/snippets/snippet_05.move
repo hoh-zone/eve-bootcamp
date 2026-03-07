@@ -1,13 +1,9 @@
-module chapter_17::snippet_05;
+module chapter_09::snippet_05;
 
-// 分片路由
-public entry fun buy_item_sharded(
-    shards: &mut vector<MarketShard>,
-    item_type_id: u64,
-    payment: Coin<SUI>,
-    ctx: &mut TxContext,
-) {
-    let shard_index = item_type_id % vector::length(shards);
-    let shard = vector::borrow_mut(shards, shard_index);
-    buy_from_shard(shard, item_type_id, payment, ctx);
+// ❌ 不推荐：直接依赖 ctx.epoch() 作为精确时间
+// epoch 的粒度是约 24 小时，不适合细粒度时效
+
+// ✅ 推荐：使用 Clock 对象
+public fun check_expiry(expiry_ms: u64, clock: &Clock): bool {
+    clock.timestamp_ms() < expiry_ms
 }

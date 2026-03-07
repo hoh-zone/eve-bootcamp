@@ -492,6 +492,6 @@ dApp 层
 
 ## 📚 关联文档
 
-- [Chapter 7：事件系统](./chapter-07.md#74-事件系统events)
-- [Chapter 8：定价策略](./chapter-08.md#84-动态定价策略)
+- [Chapter 12：事件系统](./chapter-12.md#74-事件系统events)
+- [Chapter 14：定价策略](./chapter-14.md#84-动态定价策略)
 - [Smart Storage Unit](https://github.com/evefrontier/builder-documentation/blob/main/smart-assemblies/storage-unit/README.md)
