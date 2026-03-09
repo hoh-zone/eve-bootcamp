@@ -423,7 +423,7 @@ public fun get_expiry_v2(market: &MarketV1): Option<u64> {
 }
 
 // 给旧对象添加新字段（迁移脚本）
-public entry fun migrate_add_expiry(
+public fun migrate_add_expiry(
     market: &mut MarketV1,
     expiry_ms: u64,
     ctx: &mut TxContext,

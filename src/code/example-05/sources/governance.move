@@ -18,7 +18,7 @@ public struct Proposal has key {
 }
 
 /// 创建提案（需要持有最少 1000 ALLY Token）
-public entry fun create_proposal(
+public fun create_proposal(
     ally_coin: &Coin<ALLY_TOKEN>,
     description: vector<u8>,
     voting_duration_ms: u64,
@@ -42,7 +42,7 @@ public entry fun create_proposal(
 }
 
 /// 投票（用 ALLY Token 数量加权）
-public entry fun vote(
+public fun vote(
     proposal: &mut Proposal,
     ally_coin: &Coin<ALLY_TOKEN>,
     support: bool,

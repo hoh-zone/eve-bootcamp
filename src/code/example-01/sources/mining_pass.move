@@ -36,7 +36,7 @@ fun init(ctx: &mut TxContext) {
 }
 
 /// 颁发矿区通行证（只有持有 AdminCap 才能调用）
-public entry fun issue_pass(
+public fun issue_pass(
     _admin_cap: &AdminCap,             // 验证调用者是管理员
     recipient: address,                 // 接收者地址
     holder_name: vector<u8>,
@@ -64,7 +64,7 @@ public entry fun issue_pass(
 /// 撤销通行证
 /// Owner 可以通过 admin_cap 销毁指定角色的通行证
 /// （实际上，你可以设计成"收回+销毁"，这里简化为让持有者自行烧毁）
-public entry fun revoke_pass(
+public fun revoke_pass(
     _admin_cap: &AdminCap,
     pass: MiningPass,
 ) {

@@ -47,7 +47,7 @@ public struct ItemSold has copy, drop {
 }
 
 /// 上架物品
-public entry fun list_item(
+public fun list_item(
     market: &mut Market,
     storage_unit: &mut StorageUnit,
     character: &Character,
@@ -77,7 +77,7 @@ public entry fun list_item(
 }
 
 /// 购买物品
-public entry fun buy_item(
+public fun buy_item(
     market: &mut Market,
     storage_unit: &mut StorageUnit,
     character: &Character,

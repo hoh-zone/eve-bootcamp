@@ -2,7 +2,7 @@ module chapter_20::snippet_02;
 
 use sui::random::{Self, Random};
 
-public entry fun open_loot_box(
+public fun open_loot_box(
     loot_box: &mut LootBox,
     random: &Random,   // Sui 系统提供的随机数对象
     ctx: &mut TxContext,

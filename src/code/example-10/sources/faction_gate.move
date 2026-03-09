@@ -10,7 +10,7 @@ public struct AlphaGateAuth has drop {}
 public struct BetaGateAuth has drop {}
 
 /// Alpha 联盟星门：只允许 Alpha 成员通过
-public entry fun alpha_gate_jump(
+public fun alpha_gate_jump(
     source_gate: &Gate,
     dest_gate: &Gate,
     character: &Character,
@@ -26,7 +26,7 @@ public entry fun alpha_gate_jump(
 }
 
 /// Beta 联盟星门
-public entry fun beta_gate_jump(
+public fun beta_gate_jump(
     source_gate: &Gate,
     dest_gate: &Gate,
     character: &Character,

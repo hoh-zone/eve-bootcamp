@@ -187,7 +187,7 @@ export function TollOverlay() {
 // src/overlay/JumpPanel.tsx
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useSuiClient } from '@mysten/dapp-kit'
+import { useCurrentClient } from '@mysten/dapp-kit-react'
 import { useDAppKit } from '@mysten/dapp-kit-react'
 import { Transaction } from '@mysten/sui/transactions'
 import { GateAproachEvent } from '../lib/gameEvents'
@@ -200,7 +200,7 @@ interface JumpPanelProps {
 }
 
 export function JumpPanel({ gateEvent, onSuccess, onDismiss }: JumpPanelProps) {
-  const client = useSuiClient()
+  const client = useCurrentClient()
   const dAppKit = useDAppKit()
   const [buying, setBuying] = useState(false)
 

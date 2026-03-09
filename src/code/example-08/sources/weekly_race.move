@@ -62,7 +62,7 @@ fun init(ctx: &mut TxContext) {
 }
 
 /// 创建新一届竞赛
-public entry fun create_race(
+public fun create_race(
     _cap: &RaceAdminCap,
     season: u64,
     clock: &Clock,
@@ -84,7 +84,7 @@ public entry fun create_race(
 }
 
 /// 充值奖池
-public entry fun fund_prize_pool(
+public fun fund_prize_pool(
     race: &mut Race,
     _cap: &RaceAdminCap,
     coin: Coin<SUI>,
@@ -94,7 +94,7 @@ public entry fun fund_prize_pool(
 
 // ── 积分上报（由赛事服务器或炮塔/星门扩展调用） ────────────
 
-public entry fun report_score(
+public fun report_score(
     race: &mut Race,
     player: address,
     score_delta: u64,    // 本次增加的积分
@@ -122,7 +122,7 @@ public entry fun report_score(
 
 // ── 结算（需要链下算出前三名后传入）────────────────────────
 
-public entry fun settle_race(
+public fun settle_race(
     race: &mut Race,
     _cap: &RaceAdminCap,
     first: address,

@@ -16,7 +16,7 @@ public struct TollAuth has drop {}
 const PERMIT_DURATION_MS: u64 = 15 * 60 * 1000;
 
 /// 支付通行费并获得跳跃许可
-public entry fun pay_toll_and_get_permit(
+public fun pay_toll_and_get_permit(
     source_gate: &Gate,
     destination_gate: &Gate,
     character: &Character,

@@ -106,7 +106,7 @@ dapp/
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { SuiClientProvider, WalletProvider } from "@mysten/dapp-kit";
+import { SuiClientProvider, WalletProvider } from "@mysten/dapp-kit-react";
 import { EveFrontierProvider } from "@evefrontier/dapp-kit";
 import { getFullnodeUrl } from "@mysten/sui/client";
 import { EVE_VAULT_WALLET } from "@evefrontier/dapp-kit";
@@ -185,11 +185,11 @@ export const useAppStore = create<AppStore>((set) => ({
 ```typescript
 // hooks/useGate.ts
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSuiClient } from "@mysten/dapp-kit";
+import { useCurrentClient } from "@mysten/dapp-kit-react";
 import { Transaction } from "@mysten/sui/transactions";
 
 export function useGate(gateId: string) {
-  const client = useSuiClient();
+  const client = useCurrentClient();
 
   return useQuery({
     queryKey: ["gate", gateId],
@@ -257,13 +257,13 @@ export function useJumpGate(gateId: string) {
 ```typescript
 // hooks/useEvents.ts
 import { useEffect, useRef, useState } from "react";
-import { useSuiClient } from "@mysten/dapp-kit";
+import { useCurrentClient } from "@mysten/dapp-kit-react";
 
 export function useRealtimeEvents<T>(
   eventType: string,
   options?: { maxEvents?: number }
 ) {
-  const client = useSuiClient();
+  const client = useCurrentClient();
   const [events, setEvents] = useState<T[]>([]);
   const unsubRef = useRef<(() => void) | null>(null);
   const maxEvents = options?.maxEvents ?? 50;

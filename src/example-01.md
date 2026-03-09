@@ -81,7 +81,7 @@ fun init(ctx: &mut TxContext) {
 }
 
 /// 颁发矿区通行证（只有持有 AdminCap 才能调用）
-public entry fun issue_pass(
+public fun issue_pass(
     _admin_cap: &AdminCap,             // 验证调用者是管理员
     recipient: address,                 // 接收者地址
     holder_name: vector<u8>,
@@ -109,7 +109,7 @@ public entry fun issue_pass(
 /// 撤销通行证
 /// Owner 可以通过 admin_cap 销毁指定角色的通行证
 /// （实际上，你可以设计成"收回+销毁"，这里简化为让持有者自行烧毁）
-public entry fun revoke_pass(
+public fun revoke_pass(
     _admin_cap: &AdminCap,
     pass: MiningPass,
 ) {
@@ -144,7 +144,7 @@ const PROTECTED_ZONE_ID: u64 = 1;
 /// 
 /// 注意：实际炮塔的"不开火"逻辑由游戏服务器执行，
 /// 这里的合约用于验证和记录许可意图
-public entry fun request_safe_passage(
+public fun request_safe_passage(
     turret: &mut Turret,
     character: &Character,
     pass: &MiningPass,           // 必须持有通行证

@@ -140,13 +140,13 @@ public struct GoodMarket has key {
 
 ```move
 // 拍卖结束后，删除 Listing 获得 Gas 退款
-public entry fun end_auction(auction: DutchAuction) {
+public fun end_auction(auction: DutchAuction) {
     let DutchAuction { id, .. } = auction;
     id.delete(); // 删除对象 → 存储退款
 }
 
 // 领取完毕后，删除 DividendClaim 对象
-public entry fun close_claim_record(record: DividendClaim) {
+public fun close_claim_record(record: DividendClaim) {
     let DividendClaim { id, .. } = record;
     id.delete();
 }
@@ -293,7 +293,7 @@ Market_Shard_3 (shared) ← 物品 type_id % 4 == 3 的交易
 
 ```move
 // 分片路由
-public entry fun buy_item_sharded(
+public fun buy_item_sharded(
     shards: &mut vector<MarketShard>,
     item_type_id: u64,
     payment: Coin<SUI>,

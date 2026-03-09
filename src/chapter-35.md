@@ -118,7 +118,7 @@ public fun jump(
 ```move
 use sui::random::{Self, Random};
 
-public entry fun open_loot_box(
+public fun open_loot_box(
     loot_box: &mut LootBox,
     random: &Random,   // Sui 系统提供的随机数对象
     ctx: &mut TxContext,
@@ -203,7 +203,7 @@ EVE Frontier 玩家拥有稀有矿石 (Sui)
 
 ```move
 // 未来：费率参数由 DAO 投票决定
-public entry fun update_energy_cost_via_dao(
+public fun update_energy_cost_via_dao(
     new_cost: u64,
     dao_proposal: &ExecutedProposal,  // 已通过的 DAO 提案凭证
     energy_config: &mut EnergyConfig,

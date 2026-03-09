@@ -55,7 +55,7 @@ use sui::event;
 public struct LogisticsAuth has drop {}
 
 /// 一次购买多跳路线
-public entry fun purchase_route(
+public fun purchase_route(
     source_gate: &Gate,
     hop1_dest: &Gate,       // 第一跳目的
     hop2_source: &Gate,     // 第二跳起点（= hop1_dest 的链接门）
@@ -108,7 +108,7 @@ public entry fun purchase_route(
 }
 
 /// 通用 N 跳路由（接受可变长度路线）
-public entry fun purchase_route_n_hops(
+public fun purchase_route_n_hops(
     gates: vector<&Gate>,          // 星门列表 [A, B, C, D, ...]
     character: &Character,
     mut payment: Coin<SUI>,

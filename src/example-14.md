@@ -86,7 +86,7 @@ public struct LoanLiquidated has copy, drop {
 
 // ── 初始化借贷池 ──────────────────────────────────────────
 
-public entry fun create_pool(ctx: &mut TxContext) {
+public fun create_pool(ctx: &mut TxContext) {
     transfer::share_object(LendingPool {
         id: object::new(ctx),
         liquidity: balance::zero(),
@@ -96,7 +96,7 @@ public entry fun create_pool(ctx: &mut TxContext) {
 }
 
 /// 出借方向池中注入流动性
-public entry fun deposit_liquidity(
+public fun deposit_liquidity(
     pool: &mut LendingPool,
     coin: Coin<SUI>,
     _ctx: &TxContext,
@@ -108,7 +108,7 @@ public entry fun deposit_liquidity(
 
 /// 由 Oracle/Admin 评估并发起贷款
 /// （实际场景中，collateral_value 需要通过链下价格预言机确定）
-public entry fun create_loan<T: key + store>(
+public fun create_loan<T: key + store>(
     pool: &mut LendingPool,
     collateral: T,
     collateral_value_sui: u64,    // 价格预言机或 Admin 确认的估值
@@ -153,7 +153,7 @@ public entry fun create_loan<T: key + store>(
 
 // ── 还款（归还借款 + 利息，取回抵押物）──────────────────
 
-public entry fun repay_loan<T: key + store>(
+public fun repay_loan<T: key + store>(
     pool: &mut LendingPool,
     loan: &mut Loan,
     mut repayment: Coin<SUI>,
@@ -188,7 +188,7 @@ public entry fun repay_loan<T: key + store>(
 
 // ── 清算（到期未还，清算人取走抵押物）──────────────────
 
-public entry fun liquidate<T: key + store>(
+public fun liquidate<T: key + store>(
     pool: &mut LendingPool,
     loan: &mut Loan,
     mut liquidation_payment: Coin<SUI>, // 清算人支付 collateral_value * 95%
@@ -238,13 +238,13 @@ const EInsufficientPayment: u64 = 5;
 ```tsx
 // LendingDashboard.tsx
 import { useQuery } from '@tanstack/react-query'
-import { useSuiClient } from '@mysten/dapp-kit'
+import { useCurrentClient } from '@mysten/dapp-kit-react'
 
 const LENDING_PKG = "0x_LENDING_PACKAGE_"
 const POOL_ID = "0x_POOL_ID_"
 
 export function LendingDashboard() {
-  const client = useSuiClient()
+  const client = useCurrentClient()
 
   const { data: pool } = useQuery({
     queryKey: ['lending-pool'],

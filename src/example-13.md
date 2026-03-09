@@ -98,7 +98,7 @@ fun init(ctx: &mut TxContext) {
 
 // ── 购买订阅 ──────────────────────────────────────────────
 
-public entry fun purchase_pass(
+public fun purchase_pass(
     mgr: &mut SubscriptionManager,
     plan: u8,
     mut payment: Coin<SUI>,
@@ -143,7 +143,7 @@ public entry fun purchase_pass(
 }
 
 /// 续费（延长已有 Pass 的有效期）
-public entry fun renew_pass(
+public fun renew_pass(
     mgr: &mut SubscriptionManager,
     pass: &mut GatePassNFT,
     mut payment: Coin<SUI>,
@@ -183,7 +183,7 @@ public fun is_pass_valid(pass: &GatePassNFT, clock: &Clock): bool {
 }
 
 /// 星门跳跃（持有有效 Pass 无限跳）
-public entry fun subscriber_jump(
+public fun subscriber_jump(
     gate: &Gate,
     dest_gate: &Gate,
     character: &Character,
@@ -201,7 +201,7 @@ public entry fun subscriber_jump(
 public struct SubscriberAuth has drop {}
 
 /// 管理员提款
-public entry fun withdraw_revenue(
+public fun withdraw_revenue(
     mgr: &mut SubscriptionManager,
     amount: u64,
     ctx: &TxContext,

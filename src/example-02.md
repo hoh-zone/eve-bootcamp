@@ -126,7 +126,7 @@ public fun deposit_toll(
 }
 
 /// 提取金库 LUX（只有持有 TreasuryOwnerCap 才能调用）
-public entry fun withdraw(
+public fun withdraw(
     treasury: &mut TollTreasury,
     _cap: &TreasuryOwnerCap,
     amount: u64,
@@ -142,7 +142,7 @@ public entry fun withdraw(
 }
 
 /// 修改票价（Owner 调用）
-public entry fun set_toll_amount(
+public fun set_toll_amount(
     treasury: &mut TollTreasury,
     _cap: &TreasuryOwnerCap,
     new_amount: u64,
@@ -182,7 +182,7 @@ public struct TollAuth has drop {}
 const PERMIT_DURATION_MS: u64 = 15 * 60 * 1000;
 
 /// 支付通行费并获得跳跃许可
-public entry fun pay_toll_and_get_permit(
+public fun pay_toll_and_get_permit(
     source_gate: &Gate,
     destination_gate: &Gate,
     character: &Character,

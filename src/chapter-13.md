@@ -146,7 +146,7 @@ public struct EvolvingShip has key, store {
 }
 
 /// 记录战斗结果（由炮塔合约调用）
-public entry fun record_kill(
+public fun record_kill(
     ship: &mut EvolvingShip,
     ctx: &TxContext,
 ) {
@@ -234,7 +234,7 @@ public struct NFTAttribute has store, copy, drop {
 }
 
 /// 铸造勋章（追踪编号和总量）
-public entry fun mint_badge(
+public fun mint_badge(
     collection: &mut BadgeCollection,
     recipient: address,
     tier: u8,
@@ -287,7 +287,7 @@ Collection 的价值，不只是“把一批 NFT 归个类”，而是让系列�
 
 ```move
 // 使用 NFT 检查权限的方式
-public entry fun enter_restricted_zone(
+public fun enter_restricted_zone(
     gate: &Gate,
     character: &Character,
     badge: &AllianceBadge,   // 持有勋章才能调用
@@ -388,7 +388,7 @@ public struct Ship has key {
 }
 
 // 为飞船装备物品
-public entry fun equip(
+public fun equip(
     ship: &mut Ship,
     equipment: Equipment,  // Equipment 从玩家钱包移入 Ship
     ctx: &TxContext,

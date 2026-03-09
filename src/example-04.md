@@ -74,7 +74,7 @@ public struct QuestCompleted has copy, drop {
 }
 
 /// 部署：创建任务注册表
-public entry fun create_registry(
+public fun create_registry(
     gate_id: ID,
     ctx: &mut TxContext,
 ) {
@@ -94,7 +94,7 @@ public entry fun create_registry(
 }
 
 /// 管理员标记任务完成（由联盟 Leader 或管理脚本调用）
-public entry fun mark_quest_complete(
+public fun mark_quest_complete(
     registry: &mut QuestRegistry,
     cap: &QuestAdminCap,
     player: address,
@@ -157,7 +157,7 @@ use sui::tx_context::TxContext;
 public struct QuestGateAuth has drop {}
 
 /// 任务完成后申请跳跃许可
-public entry fun quest_jump(
+public fun quest_jump(
     source_gate: &Gate,
     dest_gate: &Gate,
     character: &Character,

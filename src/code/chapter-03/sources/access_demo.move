@@ -7,7 +7,7 @@ module example::access_demo {
     public(package) fun package_only() { }
 
     // Entry：可以直接作为交易（Transaction）的顶层调用
-    public entry fun user_action(ctx: &mut TxContext) { }
+    public fun user_action(ctx: &mut TxContext) { }
 
     // 公开：任何模块都可以调用
     public fun read_data(): u64 { 42 }

@@ -63,7 +63,7 @@ public struct TollConfig has store {
 }
 
 /// 租户注册（任意 Builder 都可以把自己的星门注册进来）
-public entry fun register_gate(
+public fun register_gate(
     platform: &mut TollPlatform,
     gate: &Gate,
     owner_cap: &OwnerCap<Gate>,          // 证明你是这个星门的 Owner
@@ -86,7 +86,7 @@ public entry fun register_gate(
 }
 
 /// 调整租户配置（只有自己的配置才能修改）
-public entry fun update_toll(
+public fun update_toll(
     platform: &mut TollPlatform,
     gate: &Gate,
     owner_cap: &OwnerCap<Gate>,
@@ -102,7 +102,7 @@ public entry fun update_toll(
 }
 
 /// 多租户跳跃（收费逻辑复用，但配置各自独立）
-public entry fun multi_tenant_jump(
+public fun multi_tenant_jump(
     platform: &mut TollPlatform,
     source_gate: &Gate,
     dest_gate: &Gate,
@@ -313,7 +313,7 @@ public struct ObjectRegistry has key {
 }
 
 /// 注册一个命名对象
-public entry fun register(
+public fun register(
     registry: &mut ObjectRegistry,
     name: vector<u8>,
     object_id: ID,

@@ -16,7 +16,7 @@ const PROTECTED_ZONE_ID: u64 = 1;
 /// 
 /// 注意：实际炮塔的"不开火"逻辑由游戏服务器执行，
 /// 这里的合约用于验证和记录许可意图
-public entry fun request_safe_passage(
+public fun request_safe_passage(
     turret: &mut Turret,
     character: &Character,
     pass: &MiningPass,           // 必须持有通行证

@@ -20,7 +20,7 @@ public fun deposit(vault: &mut MultiVault, coin: Coin<SUI>) {
 }
 
 /// 按比例分配给多个地址
-public entry fun distribute(
+public fun distribute(
     vault: &mut MultiVault,
     recipients: vector<address>,
     shares: vector<u64>,  // 份额（百分比，总和需等于 100）

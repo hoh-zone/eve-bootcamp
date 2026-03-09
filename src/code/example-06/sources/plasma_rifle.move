@@ -82,7 +82,7 @@ fun init(witness: PLASMA_RIFLE, ctx: &mut TxContext) {
 
 // ── 铸造初始武器 ──────────────────────────────────────────
 
-public entry fun forge_rifle(
+public fun forge_rifle(
     _admin: &ForgeAdminCap,
     recipient: address,
     ctx: &mut TxContext,
@@ -103,7 +103,7 @@ public entry fun forge_rifle(
 
 // ── 记录击杀（炮塔扩展调用此函数）────────────────────────
 
-public entry fun record_kill(
+public fun record_kill(
     rifle: &mut PlasmaRifle,
     ctx: &TxContext,
 ) {

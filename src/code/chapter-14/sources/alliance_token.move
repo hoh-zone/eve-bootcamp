@@ -28,7 +28,7 @@ fun init(witness: ALLIANCE_TOKEN, ctx: &mut TxContext) {
 }
 
 /// 铸造代币（只有持有 TreasuryCap 才能调用）
-public entry fun mint(
+public fun mint(
     treasury: &mut TreasuryCap<ALLIANCE_TOKEN>,
     amount: u64,
     recipient: address,
@@ -39,7 +39,7 @@ public entry fun mint(
 }
 
 /// 销毁代币（降低总供应量）
-public entry fun burn(
+public fun burn(
     treasury: &mut TreasuryCap<ALLIANCE_TOKEN>,
     coin: Coin<ALLIANCE_TOKEN>,
 ) {

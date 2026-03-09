@@ -7,7 +7,7 @@ use world::character::Character;
 public struct CombatAuth has drop {}
 
 /// 炮塔击杀事件（炮塔扩展调用）
-public entry fun on_kill(
+public fun on_kill(
     turret: &Turret,
     killer: &Character,
     weapon: &mut PlasmaRifle,       // 玩家使用的武器

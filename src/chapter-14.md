@@ -79,7 +79,7 @@ fun init(witness: ALLIANCE_TOKEN, ctx: &mut TxContext) {
 }
 
 /// 铸造代币（只有持有 TreasuryCap 才能调用）
-public entry fun mint(
+public fun mint(
     treasury: &mut TreasuryCap<ALLIANCE_TOKEN>,
     amount: u64,
     recipient: address,
@@ -90,7 +90,7 @@ public entry fun mint(
 }
 
 /// 销毁代币（降低总供应量）
-public entry fun burn(
+public fun burn(
     treasury: &mut TreasuryCap<ALLIANCE_TOKEN>,
     coin: Coin<ALLIANCE_TOKEN>,
 ) {
@@ -207,7 +207,7 @@ public struct ItemSold has copy, drop {
 }
 
 /// 上架物品
-public entry fun list_item(
+public fun list_item(
     market: &mut Market,
     storage_unit: &mut StorageUnit,
     character: &Character,
@@ -237,7 +237,7 @@ public entry fun list_item(
 }
 
 /// 购买物品
-public entry fun buy_item(
+public fun buy_item(
     market: &mut Market,
     storage_unit: &mut StorageUnit,
     character: &Character,
@@ -477,7 +477,7 @@ public fun deposit(vault: &mut MultiVault, coin: Coin<SUI>) {
 }
 
 /// 按比例分配给多个地址
-public entry fun distribute(
+public fun distribute(
     vault: &mut MultiVault,
     recipients: vector<address>,
     shares: vector<u64>,  // 份额（百分比，总和需等于 100）

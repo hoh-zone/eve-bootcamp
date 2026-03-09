@@ -9,7 +9,7 @@ public struct VersionedConfig has key {
 }
 
 // 升级时调用迁移函数
-public entry fun migrate_v1_to_v2(
+public fun migrate_v1_to_v2(
     config: &mut VersionedConfig,
     _cap: &UpgradeCap,
 ) {

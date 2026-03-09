@@ -1,7 +1,7 @@
 module chapter_15::snippet_03;
 
 // 资产只在特定位置哈希处有效
-public entry fun claim_resource(
+public fun claim_resource(
     claim: &mut ResourceClaim,
     claimant_location_hash: vector<u8>,  // 服务器证明的位置
     admin_acl: &AdminACL,

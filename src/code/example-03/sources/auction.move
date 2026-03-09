@@ -72,7 +72,7 @@ public fun ms_until_next_drop(auction: &DutchAuction, clock: &Clock): u64 {
 
 // ── 创建拍卖 ─────────────────────────────────────────────
 
-public entry fun create_auction(
+public fun create_auction(
     storage_unit: &StorageUnit,
     item_type_id: u64,
     start_price: u64,
@@ -112,7 +112,7 @@ public entry fun create_auction(
 
 // ── 竞拍：支付当前价格获得物品 ──────────────────────────
 
-public entry fun buy_now(
+public fun buy_now(
     auction: &mut DutchAuction,
     storage_unit: &mut StorageUnit,
     character: &Character,
@@ -155,7 +155,7 @@ public entry fun buy_now(
 
 // ── Owner：提取拍卖收益 ──────────────────────────────────
 
-public entry fun withdraw_proceeds(
+public fun withdraw_proceeds(
     auction: &mut DutchAuction,
     ctx: &mut TxContext,
 ) {
@@ -169,7 +169,7 @@ public entry fun withdraw_proceeds(
 
 // ── Owner：取消拍卖 ──────────────────────────────────────
 
-public entry fun cancel_auction(
+public fun cancel_auction(
     auction: &mut DutchAuction,
     storage_unit: &mut StorageUnit,
     character: &Character,

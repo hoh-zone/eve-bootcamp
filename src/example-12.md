@@ -94,7 +94,7 @@ public struct ApplicationResolved has copy, drop {
 
 // ── 初始化 ────────────────────────────────────────────────
 
-public entry fun create_alliance(
+public fun create_alliance(
     name: vector<u8>,
     ctx: &mut TxContext,
 ) {
@@ -127,7 +127,7 @@ public entry fun create_alliance(
 
 // ── 申请加入 ──────────────────────────────────────────────
 
-public entry fun apply(
+public fun apply(
     dao: &mut AllianceDAO,
     mut deposit: Coin<SUI>,
     clock: &Clock,
@@ -158,7 +158,7 @@ public entry fun apply(
 
 // ── 成员投票 ──────────────────────────────────────────────
 
-public entry fun vote(
+public fun vote(
     dao: &mut AllianceDAO,
     applicant: address,
     approve: bool,
@@ -255,7 +255,7 @@ fun resolve_application(
 }
 
 /// 创始人一票否决
-public entry fun veto(
+public fun veto(
     dao: &mut AllianceDAO,
     applicant: address,
     _cap: &FounderCap,
@@ -289,7 +289,7 @@ const EAlreadyVoted: u64 = 7;
 ```tsx
 // src/RecruitmentPanel.tsx
 import { useState } from 'react'
-import { useSuiClient, useCurrentAccount } from '@mysten/dapp-kit'
+import { useCurrentClient, useCurrentAccount } from '@mysten/dapp-kit-react'
 import { useQuery } from '@tanstack/react-query'
 import { Transaction } from '@mysten/sui/transactions'
 import { useDAppKit } from '@mysten/dapp-kit-react'
@@ -308,7 +308,7 @@ interface PendingApp {
 export function RecruitmentPanel({ isMember, isFounder }: {
   isMember: boolean, isFounder: boolean
 }) {
-  const client = useSuiClient()
+  const client = useCurrentClient()
   const dAppKit = useDAppKit()
   const account = useCurrentAccount()
   const [status, setStatus] = useState('')

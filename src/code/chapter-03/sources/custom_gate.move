@@ -4,7 +4,7 @@ module my_extension::custom_gate {
     public struct Auth has drop {}
 
     // 调用星门 API 时，把 Auth {} 作为凭证传入
-    public entry fun request_jump(
+    public fun request_jump(
         gate: &mut Gate,
         character: &Character,
         ctx: &mut TxContext,

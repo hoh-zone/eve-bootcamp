@@ -54,7 +54,7 @@ public struct Market has key {
 
 // V1 → V2：用动态字段追加 expiry_ms
 // （升级包发布后，在迁移脚本中调用）
-public entry fun add_expiry_field(
+public fun add_expiry_field(
     market: &mut Market,
     expiry_ms: u64,
 ) {
@@ -95,7 +95,7 @@ public fun get_expiry(market: &Market): u64 {
 module my_market::market;
 
 /// V1 API（永远保持向后兼容）
-public entry fun buy_item_v1(
+public fun buy_item_v1(
     market: &mut Market,
     payment: Coin<SUI>,
     item_type_id: u64,
@@ -105,7 +105,7 @@ public entry fun buy_item_v1(
 }
 
 /// V2 API（新功能：支持折扣码）
-public entry fun buy_item_v2(
+public fun buy_item_v2(
     market: &mut Market,
     payment: Coin<SUI>,
     item_type_id: u64,
@@ -167,7 +167,7 @@ public struct TimelockWrapper has key {
 }
 
 /// 第一步：公告升级意图（开始计时）
-public entry fun announce_upgrade(
+public fun announce_upgrade(
     wrapper: &mut TimelockWrapper,
     _admin: &AdminCap,
     clock: &Clock,
@@ -216,7 +216,7 @@ public struct MigrationState has key {
 }
 
 /// 每次迁移一批（避免一笔交易超出计算限制）
-public entry fun migrate_batch(
+public fun migrate_batch(
     old_market: &mut MarketV1,
     new_market: &mut MarketV2,
     state: &mut MigrationState,

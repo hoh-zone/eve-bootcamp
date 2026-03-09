@@ -407,7 +407,7 @@ module my_extension::custom_gate {
     public struct Auth has drop {}
 
     // 调用星门 API 时，把 Auth {} 作为凭证传入
-    public entry fun request_jump(
+    public fun request_jump(
         gate: &mut Gate,
         character: &Character,
         ctx: &mut TxContext,
@@ -486,7 +486,7 @@ module example::access_demo {
     public(package) fun package_only() { }
 
     // Entry：可以直接作为交易（Transaction）的顶层调用
-    public entry fun user_action(ctx: &mut TxContext) { }
+    public fun user_action(ctx: &mut TxContext) { }
 
     // 公开：任何模块都可以调用
     public fun read_data(): u64 { 42 }
@@ -511,7 +511,7 @@ use sui::tx_context::TxContext;
 public struct VaultAuth has drop {}
 
 /// 任何人都可以存入物品（开放存款）
-public entry fun deposit_item(
+public fun deposit_item(
     storage_unit: &mut StorageUnit,
     character: &Character,
     item: Item,
@@ -528,7 +528,7 @@ public entry fun deposit_item(
 }
 
 /// 只有拥有特定 Badge（NFT）的角色才能取出物品
-public entry fun withdraw_item_with_badge(
+public fun withdraw_item_with_badge(
     storage_unit: &mut StorageUnit,
     character: &Character,
     _badge: &MemberBadge,  // 必须持有成员勋章才能调用

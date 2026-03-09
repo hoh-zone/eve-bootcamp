@@ -106,7 +106,7 @@ fun init(ctx: &mut TxContext) {
 
 // ── 购买保险 ──────────────────────────────────────────────
 
-public entry fun purchase_policy(
+public fun purchase_policy(
     pool: &mut InsurancePool,
     insured_item_id: ID,         // 被保物品的 ObjectID
     insured_value: u64,           // 声明保额
@@ -166,7 +166,7 @@ public entry fun purchase_policy(
 
 // ── 理赔（需要游戏服务器签名证明物品已损毁）────────────
 
-public entry fun file_claim(
+public fun file_claim(
     pool: &mut InsurancePool,
     policy: &mut PolicyNFT,
     admin_acl: &AdminACL,   // 游戏服务器验证物品确实损毁
@@ -200,7 +200,7 @@ public entry fun file_claim(
 }
 
 /// 管理员从准备金补充理赔池（当理赔池不足时）
-public entry fun replenish_claims_pool(
+public fun replenish_claims_pool(
     pool: &mut InsurancePool,
     amount: u64,
     ctx: &TxContext,

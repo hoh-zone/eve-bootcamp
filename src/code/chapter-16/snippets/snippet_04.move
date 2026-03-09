@@ -8,7 +8,7 @@ public struct BaseZone has key {
 }
 
 // 授权组件只对在基地范围内的玩家开放
-public entry fun base_service(
+public fun base_service(
     zone: &BaseZone,
     service: &mut StorageUnit,
     player_in_zone_proof: vector<u8>,  // 服务器证明"玩家在基地范围内"

@@ -60,7 +60,7 @@ public struct BreachReported has copy, drop { treaty_id: ID, breaching_party: ad
 
 // ── 发起条约提案 ──────────────────────────────────────────
 
-public entry fun propose_treaty(
+public fun propose_treaty(
     counterparty: address,
     treaty_type: u8,
     duration_days: u64,
@@ -88,7 +88,7 @@ public entry fun propose_treaty(
 
 // ── 接受提案（发起方签署 + 押金）────────────────────────
 
-public entry fun accept_and_sign_a(
+public fun accept_and_sign_a(
     proposal: &TreatyProposal,
     mut deposit: Coin<SUI>,
     clock: &Clock,
@@ -130,7 +130,7 @@ public entry fun accept_and_sign_a(
 }
 
 /// 对方联盟签署（条约正式生效）
-public entry fun countersign(
+public fun countersign(
     treaty: &mut Treaty,
     mut deposit: Coin<SUI>,
     clock: &Clock,
@@ -178,7 +178,7 @@ public fun is_protected_by_treaty(
 
 // ── 提交撕约通知（24 小时后生效）───────────────────────
 
-public entry fun give_termination_notice(
+public fun give_termination_notice(
     treaty: &mut Treaty,
     clock: &Clock,
     ctx: &TxContext,
@@ -190,7 +190,7 @@ public entry fun give_termination_notice(
 }
 
 /// 通知期满后正式终止条约，双方取回押金
-public entry fun finalize_termination(
+public fun finalize_termination(
     treaty: &mut Treaty,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -213,7 +213,7 @@ public entry fun finalize_termination(
 
 // ── 举报违约（由游戏服务器验证并签名）──────────────────
 
-public entry fun report_breach(
+public fun report_breach(
     treaty: &mut Treaty,
     breaching_party: address,  // 违约联盟的 Leader 地址
     admin_acl: &AdminACL,

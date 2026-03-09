@@ -81,7 +81,7 @@ public struct FactionNFT has key, store {
 
 public struct WarAdminCap has key, store { id: UID }
 
-public entry fun enlist(
+public fun enlist(
     _admin: &WarAdminCap,
     faction: u8,
     member_name: vector<u8>,
@@ -140,7 +140,7 @@ public struct AlphaGateAuth has drop {}
 public struct BetaGateAuth has drop {}
 
 /// Alpha 联盟星门：只允许 Alpha 成员通过
-public entry fun alpha_gate_jump(
+public fun alpha_gate_jump(
     source_gate: &Gate,
     dest_gate: &Gate,
     character: &Character,
@@ -156,7 +156,7 @@ public entry fun alpha_gate_jump(
 }
 
 /// Beta 联盟星门
-public entry fun beta_gate_jump(
+public fun beta_gate_jump(
     source_gate: &Gate,
     dest_gate: &Gate,
     character: &Character,
@@ -209,7 +209,7 @@ public struct ResourceMined has copy, drop {
 }
 
 /// 采矿（同时检查势力 NFT 并发放 WAR Token 奖励）
-public entry fun mine(
+public fun mine(
     depot: &mut MiningDepot,
     storage_unit: &mut StorageUnit,
     character: &Character,
@@ -269,7 +269,7 @@ const EInsufficientResource: u64 = 0;
 // src/WarDashboard.tsx
 import { useState, useEffect } from 'react'
 import { useRealtimeEvents } from './hooks/useRealtimeEvents'
-import { useSuiClient } from '@mysten/dapp-kit'
+import { useCurrentClient } from '@mysten/dapp-kit-react'
 import { useConnection } from '@evefrontier/dapp-kit'
 
 const WAR_PKG = "0x_WAR_PACKAGE_"
@@ -294,7 +294,7 @@ const FACTION_NAME = { '0': 'Alpha 联盟', '1': 'Beta 联盟' }
 
 export function WarDashboard() {
   const { isConnected, currentAddress } = useConnection()
-  const client = useSuiClient()
+  const client = useCurrentClient()
   const [depot, setDepot] = useState<DepotState | null>(null)
   const [nextRefreshIn, setNextRefreshIn] = useState(0)
 

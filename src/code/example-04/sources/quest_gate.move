@@ -10,7 +10,7 @@ use sui::tx_context::TxContext;
 public struct QuestGateAuth has drop {}
 
 /// 任务完成后申请跳跃许可
-public entry fun quest_jump(
+public fun quest_jump(
     source_gate: &Gate,
     dest_gate: &Gate,
     character: &Character,

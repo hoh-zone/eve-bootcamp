@@ -80,7 +80,7 @@ fun init(ctx: &mut TxContext) {
 }
 
 /// 铸造基础碎片（Admin only，比如任务奖励）
-public entry fun mint_fragment(
+public fun mint_fragment(
     _cap: &ForgeAdminCap,
     recipient: address,
     ctx: &mut TxContext,
@@ -97,7 +97,7 @@ public entry fun mint_fragment(
 
 // ── 合成：3 个低级 → 1 个高级（带随机成功率）────────────
 
-public entry fun craft(
+public fun craft(
     input1: ForgeItem,
     input2: ForgeItem,
     input3: ForgeItem,
@@ -163,7 +163,7 @@ public entry fun craft(
 
 // ── 拆解：1 个高级 → 多个低级 ────────────────────────────
 
-public entry fun disassemble(
+public fun disassemble(
     item: ForgeItem,
     ctx: &mut TxContext,
 ) {
@@ -219,7 +219,7 @@ const ECannotDisassembleFragment: u64 = 2;
 ```tsx
 // ForgingStation.tsx
 import { useState } from 'react'
-import { useSuiClient, useCurrentAccount } from '@mysten/dapp-kit'
+import { useCurrentClient, useCurrentAccount } from '@mysten/dapp-kit-react'
 import { useQuery } from '@tanstack/react-query'
 import { Transaction } from '@mysten/sui/transactions'
 import { useDAppKit } from '@mysten/dapp-kit-react'
@@ -229,7 +229,7 @@ const TIER_NAMES = ['💎 碎片', '⚙️ 精炼组件', '🌟 传世神器']
 const CRAFT_RATES = ['60%', '30%', '—']
 
 export function ForgingStation() {
-  const client = useSuiClient()
+  const client = useCurrentClient()
   const dAppKit = useDAppKit()
   const account = useCurrentAccount()
   const [selected, setSelected] = useState<string[]>([])

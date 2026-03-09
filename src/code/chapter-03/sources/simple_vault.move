@@ -9,7 +9,7 @@ use sui::tx_context::TxContext;
 public struct VaultAuth has drop {}
 
 /// 任何人都可以存入物品（开放存款）
-public entry fun deposit_item(
+public fun deposit_item(
     storage_unit: &mut StorageUnit,
     character: &Character,
     item: Item,
@@ -26,7 +26,7 @@ public entry fun deposit_item(
 }
 
 /// 只有拥有特定 Badge（NFT）的角色才能取出物品
-public entry fun withdraw_item_with_badge(
+public fun withdraw_item_with_badge(
     storage_unit: &mut StorageUnit,
     character: &Character,
     _badge: &MemberBadge,  // 必须持有成员勋章才能调用

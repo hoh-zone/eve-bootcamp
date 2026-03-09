@@ -84,7 +84,7 @@ public fun deposit_toll(
 }
 
 /// 提取金库 LUX（只有持有 TreasuryOwnerCap 才能调用）
-public entry fun withdraw(
+public fun withdraw(
     treasury: &mut TollTreasury,
     _cap: &TreasuryOwnerCap,
     amount: u64,
@@ -100,7 +100,7 @@ public entry fun withdraw(
 }
 
 /// 修改票价（Owner 调用）
-public entry fun set_toll_amount(
+public fun set_toll_amount(
     treasury: &mut TollTreasury,
     _cap: &TreasuryOwnerCap,
     new_amount: u64,

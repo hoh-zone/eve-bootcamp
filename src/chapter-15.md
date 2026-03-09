@@ -133,7 +133,7 @@ module my_market::ally_market;
 use ally_oracle::oracle::{Self, PriceOracle};
 use ally_dao::ally_token::ALLY_TOKEN;
 
-public entry fun buy_with_ally(
+public fun buy_with_ally(
     storage_unit: &mut world::storage_unit::StorageUnit,
     character: &Character,
     price_oracle: &PriceOracle,     // 外部 Builder A 的价格预言机

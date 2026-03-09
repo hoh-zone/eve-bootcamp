@@ -112,7 +112,7 @@ fun init(witness: PLASMA_RIFLE, ctx: &mut TxContext) {
 
 // ── 铸造初始武器 ──────────────────────────────────────────
 
-public entry fun forge_rifle(
+public fun forge_rifle(
     _admin: &ForgeAdminCap,
     recipient: address,
     ctx: &mut TxContext,
@@ -133,7 +133,7 @@ public entry fun forge_rifle(
 
 // ── 记录击杀（炮塔扩展调用此函数）────────────────────────
 
-public entry fun record_kill(
+public fun record_kill(
     rifle: &mut PlasmaRifle,
     ctx: &TxContext,
 ) {
@@ -194,7 +194,7 @@ use world::character::Character;
 public struct CombatAuth has drop {}
 
 /// 炮塔击杀事件（炮塔扩展调用）
-public entry fun on_kill(
+public fun on_kill(
     turret: &Turret,
     killer: &Character,
     weapon: &mut PlasmaRifle,       // 玩家使用的武器
@@ -215,7 +215,7 @@ public entry fun on_kill(
 ```tsx
 // src/WeaponDisplay.tsx
 import { useState, useEffect } from 'react'
-import { useSuiClient } from '@mysten/dapp-kit'
+import { useCurrentClient } from '@mysten/dapp-kit-react'
 import { useRealtimeEvents } from './hooks/useRealtimeEvents'
 
 const DYNAMIC_NFT_PKG = "0x_DYNAMIC_NFT_PACKAGE_"
@@ -238,7 +238,7 @@ const TIER_COLORS = {
 const TIER_LABELS = { '1': 'Basic', '2': 'Elite', '3': 'Legendary' }
 
 export function WeaponDisplay({ rifleId }: { rifleId: string }) {
-  const client = useSuiClient()
+  const client = useCurrentClient()
   const [rifle, setRifle] = useState<RifleData | null>(null)
   const [justEvolved, setJustEvolved] = useState(false)
 

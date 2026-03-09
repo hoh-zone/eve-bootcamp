@@ -187,7 +187,7 @@ export async function aggregatePrices(
 import { useState, useEffect } from 'react'
 import { useConnection } from '@evefrontier/dapp-kit'
 import { useDAppKit } from '@mysten/dapp-kit-react'
-import { useSuiClient } from '@mysten/dapp-kit'
+import { useCurrentClient } from '@mysten/dapp-kit-react'
 import { Transaction } from '@mysten/sui/transactions'
 import { aggregatePrices, MyMarketAdapter, BobMarketAdapter, AliceMarketAdapter, MarketListing } from '../lib/marketAdapters'
 
@@ -205,7 +205,7 @@ const ITEM_TYPES = [
 
 export function AggregatedMarket() {
   const { isConnected, handleConnect } = useConnection()
-  const client = useSuiClient()
+  const client = useCurrentClient()
   const dAppKit = useDAppKit()
   const [selectedItem, setSelectedItem] = useState<number | null>(null)
   const [listings, setListings] = useState<MarketListing[]>([])

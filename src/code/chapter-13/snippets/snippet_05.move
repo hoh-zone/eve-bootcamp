@@ -1,7 +1,7 @@
 module chapter_14::snippet_05;
 
 // 使用 NFT 检查权限的方式
-public entry fun enter_restricted_zone(
+public fun enter_restricted_zone(
     gate: &Gate,
     character: &Character,
     badge: &AllianceBadge,   // 持有勋章才能调用

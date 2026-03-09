@@ -7,7 +7,7 @@ public struct ObjectRegistry has key {
 }
 
 /// 注册一个命名对象
-public entry fun register(
+public fun register(
     registry: &mut ObjectRegistry,
     name: vector<u8>,
     object_id: ID,

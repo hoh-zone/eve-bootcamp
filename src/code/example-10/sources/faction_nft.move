@@ -20,7 +20,7 @@ public struct FactionNFT has key, store {
 
 public struct WarAdminCap has key, store { id: UID }
 
-public entry fun enlist(
+public fun enlist(
     _admin: &WarAdminCap,
     faction: u8,
     member_name: vector<u8>,

@@ -136,7 +136,7 @@ public struct DividendClaimed has copy, drop {
 
 // ── 初始化 ────────────────────────────────────────────────
 
-public entry fun create_treasury(
+public fun create_treasury(
     total_ally_supply: u64,
     ctx: &mut TxContext,
 ) {
@@ -161,7 +161,7 @@ public fun deposit_revenue(treasury: &mut AllianceTreasury, coin: Coin<SUI>) {
 
 /// 管理员触发：将当前金库余额按比例准备分红
 /// 需要存储每轮的快照
-public entry fun trigger_distribution(
+public fun trigger_distribution(
     treasury: &mut AllianceTreasury,
     ctx: &TxContext,
 ) {
@@ -196,7 +196,7 @@ public entry fun trigger_distribution(
 // ── 持有者领取分红 ────────────────────────────────────────
 
 /// 持有者提供自己的 ALLY Token（不消耗，只读取数量）来领取分红
-public entry fun claim_dividends(
+public fun claim_dividends(
     treasury: &mut AllianceTreasury,
     ally_coin: &Coin<ALLY_TOKEN>,    // 持有者的 ALLY Token（只读）
     claim_record: &mut DividendClaim,
@@ -237,7 +237,7 @@ public entry fun claim_dividends(
 }
 
 /// 创建领取凭证（每个持有者创建一次）
-public entry fun create_claim_record(ctx: &mut TxContext) {
+public fun create_claim_record(ctx: &mut TxContext) {
     let record = DividendClaim {
         id: object::new(ctx),
         holder: ctx.sender(),
@@ -278,7 +278,7 @@ public struct Proposal has key {
 }
 
 /// 创建提案（需要持有最少 1000 ALLY Token）
-public entry fun create_proposal(
+public fun create_proposal(
     ally_coin: &Coin<ALLY_TOKEN>,
     description: vector<u8>,
     voting_duration_ms: u64,
@@ -302,7 +302,7 @@ public entry fun create_proposal(
 }
 
 /// 投票（用 ALLY Token 数量加权）
-public entry fun vote(
+public fun vote(
     proposal: &mut Proposal,
     ally_coin: &Coin<ALLY_TOKEN>,
     support: bool,

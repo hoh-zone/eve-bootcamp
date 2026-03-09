@@ -100,7 +100,7 @@ public struct ItemReturned has copy, drop {
 // ── 出租者操作 ────────────────────────────────────────────
 
 /// 创建租赁挂单
-public entry fun create_listing(
+public fun create_listing(
     item_name: vector<u8>,
     tracked_item_id: ID,       // 物品的 Object ID（合约追踪，实际物品在 SSU 中）
     daily_rate_sui: u64,
@@ -123,7 +123,7 @@ public entry fun create_listing(
 }
 
 /// 下架（只有在物品未出租时才能撤回）
-public entry fun delist(
+public fun delist(
     listing: &mut RentalListing,
     ctx: &TxContext,
 ) {
@@ -135,7 +135,7 @@ public entry fun delist(
 // ── 租用者操作 ────────────────────────────────────────────
 
 /// 租用物品
-public entry fun rent_item(
+public fun rent_item(
     listing: &mut RentalListing,
     days: u64,
     mut payment: Coin<SUI>,
@@ -199,7 +199,7 @@ public fun verify_rental(
 }
 
 /// 提前归还（退押金）
-public entry fun return_early(
+public fun return_early(
     listing: &mut RentalListing,
     mut pass: RentalPass,
     clock: &Clock,
@@ -245,7 +245,7 @@ public entry fun return_early(
 }
 
 /// 租期到期后，出租者收回控制权
-public entry fun reclaim_after_expiry(
+public fun reclaim_after_expiry(
     listing: &mut RentalListing,
     clock: &Clock,
     ctx: &TxContext,
@@ -278,7 +278,7 @@ const ELeaseNotExpired: u64 = 9;
 ```tsx
 // src/RentalMarket.tsx
 import { useState } from 'react'
-import { useSuiClient } from '@mysten/dapp-kit'
+import { useCurrentClient } from '@mysten/dapp-kit-react'
 import { useQuery } from '@tanstack/react-query'
 import { Transaction } from '@mysten/sui/transactions'
 import { useDAppKit } from '@mysten/dapp-kit-react'
@@ -303,7 +303,7 @@ function DaysLeftBadge({ expireMs }: { expireMs: number }) {
 }
 
 export function RentalMarket() {
-  const client = useSuiClient()
+  const client = useCurrentClient()
   const dAppKit = useDAppKit()
   const [rentDays, setRentDays] = useState(1)
   const [status, setStatus] = useState('')

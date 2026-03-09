@@ -1,7 +1,7 @@
 module chapter_20::snippet_03;
 
 // 未来：费率参数由 DAO 投票决定
-public entry fun update_energy_cost_via_dao(
+public fun update_energy_cost_via_dao(
     new_cost: u64,
     dao_proposal: &ExecutedProposal,  // 已通过的 DAO 提案凭证
     energy_config: &mut EnergyConfig,

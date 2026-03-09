@@ -228,7 +228,7 @@ public fun verify_proximity_proof(
 
 ```move
 // 资产只在特定位置哈希处有效
-public entry fun claim_resource(
+public fun claim_resource(
     claim: &mut ResourceClaim,
     claimant_location_hash: vector<u8>,  // 服务器证明的位置
     admin_acl: &AdminACL,
@@ -265,7 +265,7 @@ public struct BaseZone has key {
 }
 
 // 授权组件只对在基地范围内的玩家开放
-public entry fun base_service(
+public fun base_service(
     zone: &BaseZone,
     service: &mut StorageUnit,
     player_in_zone_proof: vector<u8>,  // 服务器证明"玩家在基地范围内"

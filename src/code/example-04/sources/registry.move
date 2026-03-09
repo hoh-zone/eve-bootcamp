@@ -37,7 +37,7 @@ public struct QuestCompleted has copy, drop {
 }
 
 /// 部署：创建任务注册表
-public entry fun create_registry(
+public fun create_registry(
     gate_id: ID,
     ctx: &mut TxContext,
 ) {
@@ -57,7 +57,7 @@ public entry fun create_registry(
 }
 
 /// 管理员标记任务完成（由联盟 Leader 或管理脚本调用）
-public entry fun mark_quest_complete(
+public fun mark_quest_complete(
     registry: &mut QuestRegistry,
     cap: &QuestAdminCap,
     player: address,

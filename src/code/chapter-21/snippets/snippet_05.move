@@ -1,7 +1,7 @@
 module chapter_17::snippet_05;
 
 // 分片路由
-public entry fun buy_item_sharded(
+public fun buy_item_sharded(
     shards: &mut vector<MarketShard>,
     item_type_id: u64,
     payment: Coin<SUI>,

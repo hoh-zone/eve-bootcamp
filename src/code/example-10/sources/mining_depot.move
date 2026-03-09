@@ -30,7 +30,7 @@ public struct ResourceMined has copy, drop {
 }
 
 /// 采矿（同时检查势力 NFT 并发放 WAR Token 奖励）
-public entry fun mine(
+public fun mine(
     depot: &mut MiningDepot,
     storage_unit: &mut StorageUnit,
     character: &Character,
