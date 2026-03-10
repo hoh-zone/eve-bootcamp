@@ -1,7 +1,6 @@
 [book]
 authors = ["EVE Frontier Builders"]
 language = "zh-CN"
-multilingual = false
 src = "src"
 title = "EVE Frontier Builder Course"
 
