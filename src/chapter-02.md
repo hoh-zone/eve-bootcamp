@@ -151,7 +151,7 @@ sui client faucet
 
 1. 下载最新版 Chrome 扩展：
    ```
-   https://github.com/evefrontier/evevault/releases/download/v0.0.2/eve-vault-chrome.zip
+   https://github.com/evefrontier/evevault/releases/download/v0.0.6/eve-vault-chrome.zip
    ```
 2. 解压 zip 文件
 3. 打开 Chrome → 扩展管理 → 开启"开发者模式"→ "加载已解压的扩展程序" → 选择解压文件夹
