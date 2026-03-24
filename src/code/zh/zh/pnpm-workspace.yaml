@@ -1,0 +1,6 @@
+packages:
+  - example-*/dapp
+
+onlyBuiltDependencies:
+  - '@swc/core'
+  - esbuild

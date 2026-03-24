@@ -1,0 +1,10 @@
+[book]
+authors = ["EVE Frontier Builders"]
+language = "en"
+src = "src/en"
+title = "EVE Frontier Builder Course"
+
+[output.html]
+git-repository-url = "https://github.com/evefrontier/builder-course"
+edit-url-template = "https://github.com/evefrontier/builder-course/edit/main/{path}"
+mathjax-support = true

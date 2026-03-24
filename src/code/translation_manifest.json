@@ -1,0 +1,1006 @@
+{
+  "zh/idea": [
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_001.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_001.md",
+      "name": "idea_001.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_002.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_002.md",
+      "name": "idea_002.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_003.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_003.md",
+      "name": "idea_003.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_004.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_004.md",
+      "name": "idea_004.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_005.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_005.md",
+      "name": "idea_005.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_006.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_006.md",
+      "name": "idea_006.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_007.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_007.md",
+      "name": "idea_007.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_008.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_008.md",
+      "name": "idea_008.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_009.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_009.md",
+      "name": "idea_009.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_010.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_010.md",
+      "name": "idea_010.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_011.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_011.md",
+      "name": "idea_011.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_012.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_012.md",
+      "name": "idea_012.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_013.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_013.md",
+      "name": "idea_013.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_014.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_014.md",
+      "name": "idea_014.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_015.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_015.md",
+      "name": "idea_015.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_016.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_016.md",
+      "name": "idea_016.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_017.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_017.md",
+      "name": "idea_017.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_018.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_018.md",
+      "name": "idea_018.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_019.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_019.md",
+      "name": "idea_019.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_020.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_020.md",
+      "name": "idea_020.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_021.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_021.md",
+      "name": "idea_021.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_022.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_022.md",
+      "name": "idea_022.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_023.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_023.md",
+      "name": "idea_023.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_024.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_024.md",
+      "name": "idea_024.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_025.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_025.md",
+      "name": "idea_025.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_026.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_026.md",
+      "name": "idea_026.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_027.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_027.md",
+      "name": "idea_027.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_028.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_028.md",
+      "name": "idea_028.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_029.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_029.md",
+      "name": "idea_029.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_030.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_030.md",
+      "name": "idea_030.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_031.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_031.md",
+      "name": "idea_031.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_032.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_032.md",
+      "name": "idea_032.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_033.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_033.md",
+      "name": "idea_033.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_034.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_034.md",
+      "name": "idea_034.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_035.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_035.md",
+      "name": "idea_035.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_036.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_036.md",
+      "name": "idea_036.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_037.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_037.md",
+      "name": "idea_037.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_038.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_038.md",
+      "name": "idea_038.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_039.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_039.md",
+      "name": "idea_039.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_040.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_040.md",
+      "name": "idea_040.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_041.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_041.md",
+      "name": "idea_041.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_042.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_042.md",
+      "name": "idea_042.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_043.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_043.md",
+      "name": "idea_043.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_044.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_044.md",
+      "name": "idea_044.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_045.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_045.md",
+      "name": "idea_045.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_046.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_046.md",
+      "name": "idea_046.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_047.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_047.md",
+      "name": "idea_047.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_048.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_048.md",
+      "name": "idea_048.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_049.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_049.md",
+      "name": "idea_049.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_050.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_050.md",
+      "name": "idea_050.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_051.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_051.md",
+      "name": "idea_051.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_052.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_052.md",
+      "name": "idea_052.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_053.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_053.md",
+      "name": "idea_053.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_054.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_054.md",
+      "name": "idea_054.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_055.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_055.md",
+      "name": "idea_055.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_056.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_056.md",
+      "name": "idea_056.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_057.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_057.md",
+      "name": "idea_057.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_058.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_058.md",
+      "name": "idea_058.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_059.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_059.md",
+      "name": "idea_059.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_060.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_060.md",
+      "name": "idea_060.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_061.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_061.md",
+      "name": "idea_061.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_062.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_062.md",
+      "name": "idea_062.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_063.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_063.md",
+      "name": "idea_063.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_064.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_064.md",
+      "name": "idea_064.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_065.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_065.md",
+      "name": "idea_065.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_066.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_066.md",
+      "name": "idea_066.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_067.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_067.md",
+      "name": "idea_067.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_068.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_068.md",
+      "name": "idea_068.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_069.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_069.md",
+      "name": "idea_069.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_070.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_070.md",
+      "name": "idea_070.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_071.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_071.md",
+      "name": "idea_071.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_072.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_072.md",
+      "name": "idea_072.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_073.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_073.md",
+      "name": "idea_073.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_074.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_074.md",
+      "name": "idea_074.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_075.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_075.md",
+      "name": "idea_075.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_076.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_076.md",
+      "name": "idea_076.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_077.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_077.md",
+      "name": "idea_077.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_078.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_078.md",
+      "name": "idea_078.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_079.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_079.md",
+      "name": "idea_079.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_080.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_080.md",
+      "name": "idea_080.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_081.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_081.md",
+      "name": "idea_081.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_082.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_082.md",
+      "name": "idea_082.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_083.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_083.md",
+      "name": "idea_083.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_084.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_084.md",
+      "name": "idea_084.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_085.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_085.md",
+      "name": "idea_085.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_086.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_086.md",
+      "name": "idea_086.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_087.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_087.md",
+      "name": "idea_087.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_088.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_088.md",
+      "name": "idea_088.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_089.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_089.md",
+      "name": "idea_089.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_090.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_090.md",
+      "name": "idea_090.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_091.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_091.md",
+      "name": "idea_091.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_092.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_092.md",
+      "name": "idea_092.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_093.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_093.md",
+      "name": "idea_093.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_094.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_094.md",
+      "name": "idea_094.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_095.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_095.md",
+      "name": "idea_095.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_096.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_096.md",
+      "name": "idea_096.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_097.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_097.md",
+      "name": "idea_097.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_098.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_098.md",
+      "name": "idea_098.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_099.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_099.md",
+      "name": "idea_099.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea/idea_100.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea/idea_100.md",
+      "name": "idea_100.md"
+    }
+  ],
+  "zh/idea_general": [
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_001.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_001.md",
+      "name": "idea_001.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_002.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_002.md",
+      "name": "idea_002.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_003.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_003.md",
+      "name": "idea_003.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_004.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_004.md",
+      "name": "idea_004.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_005.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_005.md",
+      "name": "idea_005.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_006.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_006.md",
+      "name": "idea_006.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_007.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_007.md",
+      "name": "idea_007.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_008.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_008.md",
+      "name": "idea_008.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_009.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_009.md",
+      "name": "idea_009.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_010.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_010.md",
+      "name": "idea_010.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_011.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_011.md",
+      "name": "idea_011.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_012.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_012.md",
+      "name": "idea_012.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_013.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_013.md",
+      "name": "idea_013.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_014.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_014.md",
+      "name": "idea_014.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_015.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_015.md",
+      "name": "idea_015.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_016.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_016.md",
+      "name": "idea_016.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_017.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_017.md",
+      "name": "idea_017.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_018.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_018.md",
+      "name": "idea_018.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_019.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_019.md",
+      "name": "idea_019.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_020.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_020.md",
+      "name": "idea_020.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_021.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_021.md",
+      "name": "idea_021.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_022.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_022.md",
+      "name": "idea_022.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_023.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_023.md",
+      "name": "idea_023.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_024.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_024.md",
+      "name": "idea_024.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_025.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_025.md",
+      "name": "idea_025.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_026.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_026.md",
+      "name": "idea_026.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_027.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_027.md",
+      "name": "idea_027.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_028.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_028.md",
+      "name": "idea_028.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_029.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_029.md",
+      "name": "idea_029.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_030.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_030.md",
+      "name": "idea_030.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_031.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_031.md",
+      "name": "idea_031.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_032.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_032.md",
+      "name": "idea_032.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_033.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_033.md",
+      "name": "idea_033.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_034.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_034.md",
+      "name": "idea_034.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_035.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_035.md",
+      "name": "idea_035.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_036.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_036.md",
+      "name": "idea_036.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_037.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_037.md",
+      "name": "idea_037.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_038.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_038.md",
+      "name": "idea_038.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_039.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_039.md",
+      "name": "idea_039.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_040.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_040.md",
+      "name": "idea_040.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_041.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_041.md",
+      "name": "idea_041.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_042.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_042.md",
+      "name": "idea_042.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_043.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_043.md",
+      "name": "idea_043.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_044.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_044.md",
+      "name": "idea_044.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_045.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_045.md",
+      "name": "idea_045.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_046.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_046.md",
+      "name": "idea_046.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_047.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_047.md",
+      "name": "idea_047.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_048.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_048.md",
+      "name": "idea_048.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_049.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_049.md",
+      "name": "idea_049.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_050.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_050.md",
+      "name": "idea_050.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_051.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_051.md",
+      "name": "idea_051.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_052.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_052.md",
+      "name": "idea_052.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_053.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_053.md",
+      "name": "idea_053.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_054.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_054.md",
+      "name": "idea_054.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_055.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_055.md",
+      "name": "idea_055.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_056.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_056.md",
+      "name": "idea_056.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_057.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_057.md",
+      "name": "idea_057.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_058.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_058.md",
+      "name": "idea_058.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_059.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_059.md",
+      "name": "idea_059.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_060.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_060.md",
+      "name": "idea_060.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_061.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_061.md",
+      "name": "idea_061.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_062.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_062.md",
+      "name": "idea_062.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_063.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_063.md",
+      "name": "idea_063.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_064.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_064.md",
+      "name": "idea_064.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_065.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_065.md",
+      "name": "idea_065.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_066.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_066.md",
+      "name": "idea_066.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_067.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_067.md",
+      "name": "idea_067.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_068.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_068.md",
+      "name": "idea_068.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_069.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_069.md",
+      "name": "idea_069.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_070.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_070.md",
+      "name": "idea_070.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_071.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_071.md",
+      "name": "idea_071.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_072.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_072.md",
+      "name": "idea_072.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_073.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_073.md",
+      "name": "idea_073.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_074.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_074.md",
+      "name": "idea_074.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_075.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_075.md",
+      "name": "idea_075.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_076.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_076.md",
+      "name": "idea_076.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_077.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_077.md",
+      "name": "idea_077.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_078.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_078.md",
+      "name": "idea_078.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_079.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_079.md",
+      "name": "idea_079.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_080.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_080.md",
+      "name": "idea_080.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_081.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_081.md",
+      "name": "idea_081.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_082.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_082.md",
+      "name": "idea_082.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_083.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_083.md",
+      "name": "idea_083.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_084.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_084.md",
+      "name": "idea_084.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_085.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_085.md",
+      "name": "idea_085.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_086.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_086.md",
+      "name": "idea_086.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_087.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_087.md",
+      "name": "idea_087.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_088.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_088.md",
+      "name": "idea_088.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_089.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_089.md",
+      "name": "idea_089.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_090.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_090.md",
+      "name": "idea_090.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_091.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_091.md",
+      "name": "idea_091.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_092.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_092.md",
+      "name": "idea_092.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_093.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_093.md",
+      "name": "idea_093.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_094.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_094.md",
+      "name": "idea_094.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_095.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_095.md",
+      "name": "idea_095.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_096.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_096.md",
+      "name": "idea_096.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_097.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_097.md",
+      "name": "idea_097.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_098.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_098.md",
+      "name": "idea_098.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_099.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_099.md",
+      "name": "idea_099.md"
+    },
+    {
+      "source": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/zh/idea_general/idea_100.md",
+      "target": "/Users/henryduong/Documents/workspace/eve-bootcamp/src/en/idea_general/idea_100.md",
+      "name": "idea_100.md"
+    }
+  ]
+}
