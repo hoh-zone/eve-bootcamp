@@ -1,0 +1,12 @@
+[package]
+name = "example_02"
+edition = "2024"
+
+# NOTE: Requires EVE Frontier World contracts.
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
+World = { git = "https://github.com/evefrontier/world-contracts.git", subdir = "contracts/world", rev = "v0.0.14" }
+
+[addresses]
+toll_gate = "0x0"
+# world = "0x_WORLD_PACKAGE_ADDRESS_"
