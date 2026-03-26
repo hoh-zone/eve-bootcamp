@@ -1,26 +1,42 @@
 /**
  * Bilingual nav: jump to the same page in the other language (en <-> zh).
- * Works when the site is served as book/en/... and book/zh/..., or when each
- * book is served with mdbook serve (flat paths under one language root).
+ * Handles /prefix/en/..., /prefix/zh/..., and bare /prefix/en or /prefix/zh (no trailing path).
  */
 (function () {
+  function normalizePathname(path) {
+    if (!path || path === "/") return "/";
+    if (path.length > 1 && path.endsWith("/")) {
+      return path.slice(0, -1);
+    }
+    return path;
+  }
+
   function resolveSibling() {
-    var path = window.location.pathname;
-    var m = path.match(/^(.*)\/(en|zh)\/(.+)$/);
+    var path = normalizePathname(window.location.pathname);
+
+    // .../en[/...] or .../zh[/...] — last path segment before any file must be the lang code
+    var m = path.match(/^(.*)\/(en|zh)(?:\/(.*))?$/);
     if (m) {
       var prefix = m[1];
       var lang = m[2];
       var rest = m[3];
+      if (!rest || rest.length === 0) {
+        rest = "index.html";
+      }
       var other = lang === "en" ? "zh" : "en";
-      return { href: prefix + "/" + other + "/" + rest, targetLang: other };
+      var href = prefix + "/" + other + "/" + rest;
+      return { href: href, targetLang: other };
     }
+
+    // mdbook serve: book root is one language; no /en/ or /zh/ in pathname
     var htmlLang = (document.documentElement.lang || "en").toLowerCase();
     var fromEn = htmlLang.indexOf("zh") === -1;
     var other = fromEn ? "zh" : "en";
-    var parts = path.split("/").filter(Boolean);
-    var file = parts.length ? parts[parts.length - 1] : "index.html";
-    if (!file) file = "index.html";
-    return { href: "../" + other + "/" + file, targetLang: other };
+    var tail = path.replace(/^\/+/, "");
+    if (!tail) {
+      tail = "index.html";
+    }
+    return { href: "../" + other + "/" + tail, targetLang: other };
   }
 
   function run() {

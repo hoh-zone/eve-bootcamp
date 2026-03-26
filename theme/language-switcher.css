@@ -1,11 +1,11 @@
-/* Language switcher in mdBook top bar */
-.eve-lang-switch {
+/* Language switcher: match menu bar chrome; readable on dark themes */
+#mdbook-menu-bar .eve-lang-switch {
   display: inline-flex;
   align-items: center;
   margin-right: 0.35rem;
 }
 
-.eve-lang-switch-link {
+#mdbook-menu-bar .eve-lang-switch-link {
   display: inline-block;
   padding: 0.28rem 0.55rem;
   border-radius: 4px;
@@ -13,14 +13,16 @@
   font-weight: 600;
   line-height: 1.2;
   text-decoration: none;
-  color: var(--fg);
-  border: 1px solid var(--searchbar-border-color, rgba(127, 127, 127, 0.35));
-  background: var(--searchbar-bg, transparent);
+  /* Same family as other menu-bar controls (see chrome.css .menu-bar a .fa-svg) */
+  color: var(--icons-hover, var(--icons));
+  border: 1px solid var(--searchbar-border-color, rgba(127, 127, 127, 0.45));
+  background: var(--searchbar-bg, rgba(128, 128, 128, 0.12));
 }
 
-.eve-lang-switch-link:hover {
-  border-color: var(--icons, #ccc);
-  filter: brightness(1.05);
+#mdbook-menu-bar .eve-lang-switch-link:hover {
+  color: var(--icons-hover);
+  border-color: var(--icons-hover);
+  background: var(--theme-popup-bg, rgba(128, 128, 128, 0.18));
 }
 
 @media print {
