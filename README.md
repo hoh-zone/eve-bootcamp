@@ -13,11 +13,12 @@
 
 **Build Status:**
 ```bash
-# Build English version
-mdbook build --config-file book.en.toml
+# Build both languages + language picker (recommended)
+./build.sh
 
-# Build Chinese version
-mdbook build --config-file book.zh.toml
+# Or build one language (mdbook 0.4.x has no --config-file; use env overrides)
+mdbook build                                          # English → book/en/
+MDBOOK_BOOK__SRC=src/zh MDBOOK_BOOK__LANGUAGE=zh-CN MDBOOK_BUILD__BUILD_DIR=book/zh mdbook build
 ```
 
 ### Chapter Overview
@@ -197,11 +198,12 @@ mdbook build --config-file book.zh.toml
 
 **构建方式:**
 ```bash
-# 构建英文版
-mdbook build --config-file book.en.toml
+# 同时构建双语与入口页（推荐）
+./build.sh
 
-# 构建中文版
-mdbook build --config-file book.zh.toml
+# 或单独构建一种语言（mdbook 0.4.x 无 --config-file，用环境变量覆盖）
+mdbook build                                          # 英文 → book/en/
+MDBOOK_BOOK__SRC=src/zh MDBOOK_BOOK__LANGUAGE=zh-CN MDBOOK_BUILD__BUILD_DIR=book/zh mdbook build
 ```
 
 ### 章节主线

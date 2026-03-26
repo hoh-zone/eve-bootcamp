@@ -1,0 +1,30 @@
+/* Language switcher in mdBook top bar */
+.eve-lang-switch {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 0.35rem;
+}
+
+.eve-lang-switch-link {
+  display: inline-block;
+  padding: 0.28rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  color: var(--fg);
+  border: 1px solid var(--searchbar-border-color, rgba(127, 127, 127, 0.35));
+  background: var(--searchbar-bg, transparent);
+}
+
+.eve-lang-switch-link:hover {
+  border-color: var(--icons, #ccc);
+  filter: brightness(1.05);
+}
+
+@media print {
+  .eve-lang-switch {
+    display: none !important;
+  }
+}

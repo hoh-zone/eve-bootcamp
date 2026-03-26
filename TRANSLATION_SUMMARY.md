@@ -234,19 +234,19 @@ While AI-assisted translation was used, the following sections should be manuall
 # Build both languages
 ./build.sh
 
-# Or manually:
-mdbook build --config-file book.en.toml
-mdbook build --config-file book.zh.toml
+# Or manually (mdbook 0.4.x: no --config-file; use env overrides):
+MDBOOK_BOOK__SRC=src/en MDBOOK_BOOK__LANGUAGE=en MDBOOK_BUILD__BUILD_DIR=book/en mdbook build
+MDBOOK_BOOK__SRC=src/zh MDBOOK_BOOK__LANGUAGE=zh-CN MDBOOK_BUILD__BUILD_DIR=book/zh mdbook build
 ```
 
 ### Development
 
 ```bash
 # Live preview English (auto-reload)
-mdbook serve --config-file book.en.toml --port 3000
+mdbook serve --port 3000
 
 # Live preview Chinese
-mdbook serve --config-file book.zh.toml --port 3001
+MDBOOK_BOOK__SRC=src/zh MDBOOK_BOOK__LANGUAGE=zh-CN MDBOOK_BUILD__BUILD_DIR=book/zh mdbook serve --port 3001
 ```
 
 ### Output

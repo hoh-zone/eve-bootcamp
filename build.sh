@@ -11,15 +11,21 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Build English version
+# Build English version (MDBOOK_* overrides match book.en.toml; mdbook has no --config-file in 0.4.x)
 echo -e "${BLUE}📚 Building English version...${NC}"
-mdbook build --config-file book.en.toml
+MDBOOK_BOOK__SRC=src/en \
+MDBOOK_BOOK__LANGUAGE=en \
+MDBOOK_BUILD__BUILD_DIR=book/en \
+mdbook build
 echo -e "${GREEN}✓ English build complete${NC}"
 echo ""
 
 # Build Chinese version
 echo -e "${BLUE}📚 Building Chinese version...${NC}"
-mdbook build --config-file book.zh.toml
+MDBOOK_BOOK__SRC=src/zh \
+MDBOOK_BOOK__LANGUAGE=zh-CN \
+MDBOOK_BUILD__BUILD_DIR=book/zh \
+mdbook build
 echo -e "${GREEN}✓ Chinese build complete${NC}"
 echo ""
 
@@ -147,5 +153,5 @@ echo "   Chinese: book/zh/"
 echo "   Index:   book/index.html"
 echo ""
 echo "🌐 To preview locally:"
-echo "   mdbook serve --config-file book.en.toml --port 3000"
-echo "   mdbook serve --config-file book.zh.toml --port 3001"
+echo "   mdbook serve --port 3000"
+echo "   MDBOOK_BOOK__SRC=src/zh MDBOOK_BOOK__LANGUAGE=zh-CN MDBOOK_BUILD__BUILD_DIR=book/zh mdbook serve --port 3001"

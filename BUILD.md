@@ -80,20 +80,20 @@ mdbook --version
 
 ## Building the Book
 
+mdBook 0.4.x does **not** support `--config-file`. This repo uses the root `book.toml` (English) plus `MDBOOK_*` [environment overrides](https://rust-lang.github.io/mdBook/format/configuration/environment-variables.html) for Chinese. The `book.en.toml` / `book.zh.toml` files document the same settings.
+
 ### Build English Version
 
 ```bash
-# From repository root
-mdbook build --config-file book.en.toml
-
-# Output will be in: book/en/
+# From repository root (uses book.toml → src/en, output book/en/)
+mdbook build
 ```
 
 ### Build Chinese Version
 
 ```bash
 # From repository root
-mdbook build --config-file book.zh.toml
+MDBOOK_BOOK__SRC=src/zh MDBOOK_BOOK__LANGUAGE=zh-CN MDBOOK_BUILD__BUILD_DIR=book/zh mdbook build
 
 # Output will be in: book/zh/
 ```
@@ -101,29 +101,30 @@ mdbook build --config-file book.zh.toml
 ### Build Both Versions
 
 ```bash
-# Build both languages
-mdbook build --config-file book.en.toml && \
-mdbook build --config-file book.zh.toml
+# Recommended: script also writes book/index.html language picker
+./build.sh
 
-# Or use a build script (create build.sh):
-#!/bin/bash
-echo "Building English version..."
-mdbook build --config-file book.en.toml
-echo "Building Chinese version..."
-mdbook build --config-file book.zh.toml
-echo "Build complete!"
+# Or manually:
+MDBOOK_BOOK__SRC=src/en MDBOOK_BOOK__LANGUAGE=en MDBOOK_BUILD__BUILD_DIR=book/en mdbook build && \
+MDBOOK_BOOK__SRC=src/zh MDBOOK_BOOK__LANGUAGE=zh-CN MDBOOK_BUILD__BUILD_DIR=book/zh mdbook build
 ```
+
+### Language switcher (EN ↔ 中文)
+
+After building with `./build.sh`, open the site from the **`book/`** directory (e.g. `cd book && python3 -m http.server 8000`). Each chapter page includes a top-bar link (**中文** on English pages, **English** on Chinese pages) that jumps to the same path under the other language (`../zh/...` or `../en/...`).
+
+The scripts live in `theme/language-switcher.js` and `theme/language-switcher.css` (paths in `book.toml` are relative to the book root, i.e. the directory that contains `book.toml`).
 
 ## Development
 
 ### Live Preview with Auto-Reload
 
 ```bash
-# Serve English version (auto-reloads on file changes)
-mdbook serve --config-file book.en.toml --port 3000
+# Serve English (uses book.toml)
+mdbook serve --port 3000
 
-# Serve Chinese version (on different port)
-mdbook serve --config-file book.zh.toml --port 3001
+# Serve Chinese on another port (separate build dir so it does not overwrite English)
+MDBOOK_BOOK__SRC=src/zh MDBOOK_BOOK__LANGUAGE=zh-CN MDBOOK_BUILD__BUILD_DIR=book/zh mdbook serve --port 3001
 
 # Open in browser:
 # English: http://localhost:3000
@@ -133,89 +134,16 @@ mdbook serve --config-file book.zh.toml --port 3001
 ### Watch for Changes (Build Only)
 
 ```bash
-# Watch English version
-mdbook watch --config-file book.en.toml
+mdbook watch
 
-# Watch Chinese version
-mdbook watch --config-file book.zh.toml
+MDBOOK_BOOK__SRC=src/zh MDBOOK_BOOK__LANGUAGE=zh-CN MDBOOK_BUILD__BUILD_DIR=book/zh mdbook watch
 ```
 
 ## Deployment
 
 ### GitHub Pages
 
-Add to `.github/workflows/deploy.yml`:
-
-```yaml
-name: Deploy mdBook
-
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup mdBook
-        uses: peaceiris/actions-mdbook@v1
-        with:
-          mdbook-version: 'latest'
-
-      - name: Build English version
-        run: mdbook build --config-file book.en.toml
-
-      - name: Build Chinese version
-        run: mdbook build --config-file book.zh.toml
-
-      - name: Create index redirect
-        run: |
-          mkdir -p book
-          cat > book/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="utf-8">
-            <title>EVE Frontier Builder Course</title>
-            <style>
-              body { font-family: sans-serif; max-width: 600px; margin: 100px auto; text-align: center; }
-              a { display: inline-block; margin: 20px; padding: 20px 40px; background: #3F51B5; color: white; text-decoration: none; border-radius: 4px; }
-              a:hover { background: #303F9F; }
-            </style>
-          </head>
-          <body>
-            <h1>EVE Frontier Builder Course</h1>
-            <p>Choose your language / 选择语言:</p>
-            <a href="./en/">🇬🇧 English</a>
-            <a href="./zh/">🇨🇳 中文</a>
-          </body>
-          </html>
-          EOF
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./book
-
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-```
+The repository ships [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml): it runs `bash ./build.sh`, pins **mdBook 0.5.2** (matches `theme/` additional assets), uploads the `book/` directory, and deploys with `actions/deploy-pages@v4`. **Pull requests** run the build only; **push to `main` / `master`** uploads and deploys. Enable **GitHub Pages** in the repo settings (source: GitHub Actions) if you have not already.
 
 ### Static Hosting (Netlify, Vercel, etc.)
 
@@ -231,9 +159,7 @@ jobs:
 ### Self-Hosted
 
 ```bash
-# Build both versions
-mdbook build --config-file book.en.toml
-mdbook build --config-file book.zh.toml
+./build.sh
 
 # Serve with any web server
 cd book
@@ -301,6 +227,9 @@ language = "en"
 src = "src/en"
 title = "EVE Frontier Builder Course"
 
+[build]
+build-dir = "book/en"
+
 [output.html]
 git-repository-url = "https://github.com/evefrontier/builder-course"
 edit-url-template = "https://github.com/evefrontier/builder-course/edit/main/{path}"
@@ -315,6 +244,9 @@ authors = ["EVE Frontier Builders"]
 language = "zh-CN"
 src = "src/zh"
 title = "EVE Frontier Builder Course"
+
+[build]
+build-dir = "book/zh"
 
 [output.html]
 git-repository-url = "https://github.com/evefrontier/builder-course"
@@ -349,13 +281,13 @@ cat book.zh.toml | grep src
 rm -rf book/
 
 # Rebuild
-mdbook build --config-file book.en.toml
+./build.sh
 ```
 
 **Issue: Port already in use**
 ```bash
 # Use different port
-mdbook serve --config-file book.en.toml --port 4000
+mdbook serve --port 4000
 ```
 
 ## Performance Tips
@@ -365,8 +297,8 @@ mdbook serve --config-file book.en.toml --port 4000
 1. **Build only what changed**: mdBook automatically detects changes
 2. **Parallel builds**: Build EN and ZH in parallel
    ```bash
-   mdbook build --config-file book.en.toml & \
-   mdbook build --config-file book.zh.toml & \
+   (MDBOOK_BOOK__SRC=src/en MDBOOK_BOOK__LANGUAGE=en MDBOOK_BUILD__BUILD_DIR=book/en mdbook build) & \
+   (MDBOOK_BOOK__SRC=src/zh MDBOOK_BOOK__LANGUAGE=zh-CN MDBOOK_BUILD__BUILD_DIR=book/zh mdbook build) & \
    wait
    ```
 
